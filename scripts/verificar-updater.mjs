@@ -12,11 +12,15 @@ const electronExe = (await import('electron')).default
 const perfil = mkdtempSync(join(tmpdir(), 'erp-updater-'))
 const feedDir = mkdtempSync(join(tmpdir(), 'erp-feed-'))
 
+const paquete = JSON.parse(readFileSync(join(raiz, 'package.json'), 'utf8'))
+const [mayor, menor, parche] = paquete.version.split('.').map(Number)
+const versionFeed = `${mayor}.${menor}.${parche + 1}`
+
 const dummy = Buffer.from('instalador de prueba para el feed')
 writeFileSync(join(feedDir, 'actualizacion.exe'), dummy)
 const hash = createHash('sha512').update(dummy).digest('base64')
 writeFileSync(join(feedDir, 'latest.yml'), [
-  'version: 0.2.1',
+  `version: ${versionFeed}`,
   'files:',
   '  - url: actualizacion.exe',
   `    sha512: '${hash}'`,
@@ -86,10 +90,10 @@ try {
   const resultado = await pagina.evaluate(async () =>
     await window.api.invoke('update.verificar'))
   console.log(JSON.stringify(resultado, null, 2))
-  if (!resultado.disponible || resultado.version !== '0.2.1') {
-    throw new Error('El actualizador no detectó la versión publicada en el feed local.')
+  if (!resultado.disponible || resultado.version !== versionFeed) {
+    throw new Error(`El actualizador no detectó ${versionFeed} desde el feed local.`)
   }
-  console.log('VERIFICADO: electron-updater detectó 0.2.1 desde el feed local.')
+  console.log(`VERIFICADO: electron-updater detectó ${versionFeed} desde el feed local (versión instalada ${paquete.version}).`)
 } finally {
   await navegador?.close().catch(() => undefined)
   hijo.kill()

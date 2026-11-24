@@ -9,7 +9,8 @@ export type Operation = (typeof operations)[number]
 export const modules = [
   'dashboard', 'configuracion', 'seguridad', 'clientes', 'proveedores', 'productos', 'inventario', 'ventas',
   'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'gastos', 'vendedores',
-  'reportes', 'auditoria', 'respaldos'
+  'reportes', 'auditoria', 'respaldos',
+  'presupuestos', 'servicios', 'activos', 'crm', 'salud'
 ] as const
 
 export type ModuleKey = (typeof modules)[number]
@@ -20,10 +21,10 @@ const operationModules: Record<Operation, readonly ModuleKey[]> = {
   crear: modules.filter((m) => m !== 'dashboard'),
   modificar: modules.filter((m) => m !== 'dashboard'),
   eliminar: modules.filter((m) => m !== 'dashboard'),
-  anular: ['ventas', 'compras', 'cxc', 'cxp', 'cotizaciones', 'cajas', 'bancos', 'gastos'],
-  aprobar: ['cotizaciones', 'compras', 'ventas', 'gastos', 'configuracion'],
-  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'reportes'],
-  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cxp', 'vendedores', 'reportes', 'auditoria'],
+  anular: ['ventas', 'compras', 'cxc', 'cxp', 'cotizaciones', 'cajas', 'bancos', 'gastos', 'presupuestos', 'servicios'],
+  aprobar: ['cotizaciones', 'compras', 'ventas', 'gastos', 'configuracion', 'presupuestos', 'servicios'],
+  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'reportes', 'presupuestos', 'servicios', 'activos'],
+  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cxp', 'vendedores', 'reportes', 'auditoria', 'presupuestos', 'servicios', 'activos', 'crm', 'salud'],
   descuento: ['ventas', 'pos', 'cotizaciones'],
   precio: ['productos', 'ventas', 'pos', 'cotizaciones'],
   costo: ['productos', 'inventario', 'compras', 'reportes'],
@@ -51,6 +52,10 @@ const extraKeys = [
   'configuracion.respaldo.crear',
   'configuracion.respaldo.restaurar',
   'configuracion.empresa.crear',
+  'presupuestos.ejecutar',
+  'servicios.finalizar',
+  'activos.depreciar',
+  'crm.convertir',
   ...configResourceKeys
 ] as const
 
@@ -67,7 +72,9 @@ const spanishModules: Record<ModuleKey, string> = {
   ventas: 'Ventas', pos: 'Punto de Venta', cotizaciones: 'Cotizaciones',
   compras: 'Compras', cxc: 'Cuentas por Cobrar', cxp: 'Cuentas por Pagar',
   bancos: 'Bancos', cajas: 'Cajas', gastos: 'Gastos', vendedores: 'Vendedores',
-  reportes: 'Reportes', auditoria: 'Auditoría', respaldos: 'Respaldos'
+  reportes: 'Reportes', auditoria: 'Auditoría', respaldos: 'Respaldos',
+  presupuestos: 'Presupuestos', servicios: 'Servicios', activos: 'Activos fijos',
+  crm: 'CRM', salud: 'Salud del sistema'
 }
 
 const spanishOps: Record<string, string> = {
@@ -90,7 +97,11 @@ const extraLabels: Record<string, string> = {
   'seguridad.permiso.modificar': 'Seguridad — Modificar permisos',
   'seguridad.sesion.consultar': 'Seguridad — Consultar sesiones',
   'configuracion.respaldo.crear': 'Respaldos — Crear copia',
-  'configuracion.respaldo.restaurar': 'Respaldos — Restaurar copia'
+  'configuracion.respaldo.restaurar': 'Respaldos — Restaurar copia',
+  'presupuestos.ejecutar': 'Presupuestos — Registrar ejecución',
+  'servicios.finalizar': 'Servicios — Finalizar orden',
+  'activos.depreciar': 'Activos — Registrar depreciación',
+  'crm.convertir': 'CRM — Convertir oportunidad en cliente'
 }
 
 export const permissionCatalog: PermissionDef[] = [
@@ -105,7 +116,10 @@ export const permissionCatalog: PermissionDef[] = [
       }))
   ),
   ...extraKeys.map((key) => {
-    const [module, resource, operation] = key.split('.')
+    const partes = key.split('.')
+    const [module, resource] = partes
+    // Los permisos de acción de dos segmentos usan su propia palabra como operación.
+    const operation = partes[2] ?? partes[partes.length - 1]
     const label = extraLabels[key] ??
       `Configuración — ${resourceLabels[resource] ?? resource}: ${operation === 'modificar' ? 'Modificar' : 'Consultar'}`
     return { key, module: module as ModuleKey, operation, label }
@@ -141,6 +155,9 @@ export const seedRoles: { name: string; description: string; permissionFilter: (
       key.startsWith('ventas.') ||
       key.startsWith('pos.') ||
       key.startsWith('cotizaciones.') ||
+      key.startsWith('crm.consultar') ||
+      key.startsWith('crm.crear') ||
+      key.startsWith('crm.modificar') ||
       (!key.includes('.costo') && !key.includes('.ganancia') &&
         ['cxc.consultar', 'reportes.consultar'].includes(key))
   }

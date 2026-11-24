@@ -66,6 +66,21 @@ export const moduleGroups: ModuleGroup[] = [
         available: true,
         description: 'Tema y comportamiento de la interfaz.',
         features: []
+      },
+      {
+        id: 'dashboard-ejecutivo',
+        label: 'Panel ejecutivo',
+        icon: BarChart3,
+        permission: 'dashboard.consultar',
+        phase: 13,
+        available: true,
+        description: 'Indicadores, tendencias y alertas calculados sobre documentos reales.',
+        features: [
+          'KPIs de ventas, compras, cobros y pagos del período',
+          'Utilidad solo para perfiles con permiso reportes.ganancia',
+          'Series mensuales, formas de pago y principales clientes',
+          'Exportación CSV y filtro por período'
+        ]
       }
     ]
   },
@@ -352,6 +367,72 @@ export const moduleGroups: ModuleGroup[] = [
     ]
   },
   {
+    id: 'planificacion',
+    label: 'Planificación y CRM',
+    modules: [
+      {
+        id: 'presupuestos',
+        label: 'Presupuestos',
+        icon: Calculator,
+        permission: 'presupuestos.consultar',
+        phase: 13,
+        available: true,
+        description: 'Presupuestos internos por periodo y centro de costo.',
+        features: [
+          'Presupuestos por líneas con importes en centavos',
+          'Aprobación con permiso dedicado y ejecución distribuida',
+          'Control de disponible y alertas en el panel ejecutivo',
+          'Auditoría de cada cambio de estado'
+        ]
+      },
+      {
+        id: 'servicios',
+        label: 'Servicios',
+        icon: ReceiptText,
+        permission: 'servicios.consultar',
+        phase: 13,
+        available: true,
+        description: 'Catálogo de servicios y órdenes de trabajo.',
+        features: [
+          'Catálogo con precio y duración',
+          'Órdenes con cliente real, técnico e ITBIS por línea',
+          'Estados con permisos específicos para finalizar y anular',
+          'Auditoría de creación y cambios de estado'
+        ]
+      },
+      {
+        id: 'activos',
+        label: 'Activos fijos',
+        icon: Package,
+        permission: 'activos.consultar',
+        phase: 13,
+        available: true,
+        description: 'Alta, depreciación lineal y baja de activos.',
+        features: [
+          'Valor de adquisición, residual y vida útil en meses',
+          'Depreciación mensual con control de duplicados por periodo',
+          'Valor neto calculado desde asientos reales de depreciación',
+          'Baja con auditoría y motivo'
+        ]
+      },
+      {
+        id: 'crm',
+        label: 'CRM',
+        icon: Users,
+        permission: 'crm.consultar',
+        phase: 13,
+        available: true,
+        description: 'Oportunidades, seguimientos y conversión a clientes.',
+        features: [
+          'Embudo de oportunidades con probabilidad y valor estimado',
+          'Seguimientos fechados por oportunidad',
+          'Conversión a cliente real sin duplicar códigos',
+          'Permiso exclusivo para convertir'
+        ]
+      }
+    ]
+  },
+  {
     id: 'admin',
     label: 'Administración',
     modules: [
@@ -399,6 +480,36 @@ export const moduleGroups: ModuleGroup[] = [
           'Numeración de documentos',
           'Almacenes, cajas y formatos de impresión',
           'Multi-empresa'
+        ]
+      },
+      {
+        id: 'configuracion-avanzada',
+        label: 'Configuración avanzada',
+        icon: Settings,
+        permission: 'configuracion.consultar',
+        phase: 13,
+        available: true,
+        description: 'Preferencias de interfaz, impresión, seguridad y paneles.',
+        features: [
+          'Interfaz, densidad, fuente y acento',
+          'Formatos de impresión y PDF',
+          'Preferencias de actualizaciones y seguridad de la estación',
+          'Recordatorios de respaldos y parámetros fiscales de presentación'
+        ]
+      },
+      {
+        id: 'salud',
+        label: 'Salud del sistema',
+        icon: ShieldCheck,
+        permission: 'salud.consultar',
+        phase: 13,
+        available: true,
+        description: 'Diagnóstico de solo lectura de la base de datos y el proceso.',
+        features: [
+          'Integridad SQLite y de claves foráneas',
+          'Espacio disponible, sesiones y respaldos',
+          'Versión de Electron/Node y uso de memoria',
+          'Informe descargable sin exposición de SQL'
         ]
       },
       {

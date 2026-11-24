@@ -61,7 +61,7 @@ Aplicación de escritorio Electron con tres procesos/capas:
 | Excel/CSV | ExcelJS + export CSV propio | Importación de productos y export de reportes. |
 | Gráficos | Recharts · Iconos: Lucide | Requisitos del proyecto. |
 | Pruebas | Vitest (services/repos sobre SQLite real) + CDP de Electron para UI real | Las reglas financieras se prueban sin mocks de BD. Playwright sigue aprobado pero **no instalado**; no se añadió dependencia solo para e2e. |
-| Instalador | electron-builder@26.18.0 → NSIS (Win 10/11 x64) | Instala en `%LOCALAPPDATA%\Programs`, datos en `%APPDATA%\enterprise-pro-erp`, desinstalación pregunta antes de borrarlos. Implementado en Fase 12. |
+| Instalador | electron-builder@26.18.1 → NSIS (Win 10/11 x64) | Instala en `%LOCALAPPDATA%\Programs`, datos en `%APPDATA%\enterprise-pro-erp`, desinstalación pregunta antes de borrarlos. Implementado en Fase 12 y actualizado en 0.3.0. |
 
 ## 4. Estructura de carpetas propuesta
 

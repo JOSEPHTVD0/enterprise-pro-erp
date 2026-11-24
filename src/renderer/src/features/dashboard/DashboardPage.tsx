@@ -23,8 +23,9 @@ const phases = [
   { n: 8, label: 'Finanzas', done: true },
   { n: 9, label: 'Reportes', done: true },
   { n: 10, label: 'Auditoría y respaldos', done: true },
-  { n: 11, label: 'Pruebas integrales', done: false },
-  { n: 12, label: 'Instalador Windows', done: false }
+  { n: 11, label: 'Pruebas integrales', done: true },
+  { n: 12, label: 'Instalador Windows', done: true },
+  { n: 13, label: 'Panel ejecutivo y módulos 2026', done: true }
 ]
 
 interface Resumen {
@@ -96,12 +97,18 @@ export function DashboardPage(): React.JSX.Element {
         title="Inicio"
         subtitle="Panel principal alimentado por datos reales de SQLite."
         actions={
-          conReportes && (
+          <div className="flex gap-2">
             <Button variant="secondary" size="sm"
-              onClick={() => useAppStore.getState().setActiveView('reportes')}>
-              <BarChart3 size={14} /> Abrir reportes
+              onClick={() => useAppStore.getState().setActiveView('dashboard-ejecutivo')}>
+              <BarChart3 size={14} /> Panel ejecutivo
             </Button>
-          )
+            {conReportes && (
+              <Button variant="secondary" size="sm"
+                onClick={() => useAppStore.getState().setActiveView('reportes')}>
+                <BarChart3 size={14} /> Abrir reportes
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -193,7 +200,7 @@ export function DashboardPage(): React.JSX.Element {
                 <span className={p.done ? '' : 'text-slate-500 dark:text-slate-400'}>
                   Fase {p.n} · {p.label}
                 </span>
-                {p.n === 10 && <Badge tone="accent">Siguiente</Badge>}
+                {p.n === 13 && <Badge tone="accent">Actual</Badge>}
               </li>
             ))}
           </ol>

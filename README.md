@@ -19,10 +19,12 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 | 10 | Auditoría y respaldos | ✅ Completa y verificada |
 | 11 | Pruebas integrales | ✅ Completa y verificada |
 | 12 | Instalador Windows | ✅ Completa y verificada |
+| 13 | Ampliaciones 2026 y correcciones de desarrollo | ✅ Completa y verificada |
 
-**Entrega final:** [docs/06-entrega-final.md](docs/06-entrega-final.md) ·
-`dist\EnterpriseProERP-Setup-0.2.0.exe` · SHA-256
-`DBAA5D31DCBD3C17D5B62094F649CF57ACF155D047DF9DAD2992D6B86746728F` ·
+**Versión actual: 0.3.0.** [Novedades](docs/09-novedades-0.3.0.md) ·
+[Entrega final](docs/06-entrega-final.md) ·
+`EnterpriseProERP-Setup-0.3.0.exe` · SHA-256
+`D508A61277EC5971A04A5AD0D9E970D07160F09CE4851A99E3FFBB18D3728C75` ·
 instalador **firmado de forma autofirmada** (SmartScreen no desaparece sin CA confiable).
 Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md).
 
@@ -32,7 +34,7 @@ Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cie
 npm.cmd install
 npm.cmd run dev        # aplicación Electron en modo desarrollo
 npm.cmd run build      # compilar main + preload + renderer
-npm.cmd test           # 190 pruebas (seguridad, IPC, BD real, PDF, maestros, inventario, ventas, POS, compras, finanzas, reportes, auditoría, respaldos, impresión, rendimiento, persistencia, Excel, UI)
+npm.cmd test           # 200 pruebas (seguridad, IPC, BD real, PDF, maestros, inventario, ventas, POS, compras, finanzas, reportes, auditoría, respaldos, impresión, rendimiento, persistencia, Excel, UI, módulos 0.3.0)
 npm.cmd run test:e2e   # 4 pruebas reales en Electron por CDP (Playwright)
 npm.cmd run test:updater # verifica el feed local de electron-updater
 npm.cmd run typecheck  # TypeScript estricto
@@ -51,9 +53,9 @@ y se almacena hasheado (SHA-256) en la tabla `sesiones`.
 
 ## Cierre de limitaciones (posterior a Fase 12)
 
-- **Auditoría:** `zod@4.6.7` + `overrides.uuid=11.1.1`. `npm.cmd audit --omit=dev` → 0
-  vulnerabilidades. Quedan 11 avisos de desarrollo que exigen actualizaciones mayores no
-  autorizadas (Electron 45, Vitest 5, electron-builder 25).
+- **Auditoría:** `zod@4.6.7` + `overrides.uuid=11.1.1`. En 0.3.0 se actualizaron las
+  dependencias mayores autorizadas: Electron 45.4.1, Vitest 5.1.1 y electron-builder 26.18.1.
+  `npm.cmd audit` y `npm.cmd audit --omit=dev` → **0 vulnerabilidades**.
 - **PDF nativo:** pdfmake genera archivos reales en el proceso principal; hay botones
   «Guardar PDF» en ventas, compras, finanzas y reportes. La impresión nativa sigue disponible.
 - **E2E:** Playwright se conecta por CDP a Electron; `npm.cmd run test:e2e` valida login, IPC de
@@ -65,6 +67,19 @@ y se almacena hasheado (SHA-256) en la tabla `sesiones`.
   `scripts\firmar-instalador.ps1`. SmartScreen **no desaparece** sin certificado de CA pública.
 - **Git:** repositorio inicializado con un único commit; artefactos y claves ignorados.
 - **e-CF:** solo preparación; no hay emisión ni certificación DGII.
+
+## Novedades 0.3.0
+
+- **Correcciones de desarrollo:** dependencias mayores actualizadas, `audit` en cero y
+  compatibilidad de electron-builder 26 con Node 24 mediante `scripts/dist-win.mjs`.
+- **Preferencias avanzadas:** interfaz, impresión, actualizaciones, seguridad, respaldos,
+  fiscal y panel, persistidas y validadas con Zod; los defaults se derivan del esquema.
+- **Panel ejecutivo:** KPIs, series y ranking calculados sobre documentos reales, con
+  utilidad oculta si no existe `reportes.ganancia`; exportación CSV.
+- **Salud del sistema:** integridad SQLite, conteos, permisos y estado de respaldos.
+- **Módulos nuevos:** presupuestos, órdenes de servicio, activos fijos con depreciación y CRM
+  con conversión a cliente real. Migración 007, series nuevas y permisos verificados en backend.
+- **30 módulos activos**, 0 pendientes. Detalle: [docs/09-novedades-0.3.0.md](docs/09-novedades-0.3.0.md).
 
 ### Verificación de la Fase 3 (real, no simulada)
 
@@ -264,15 +279,15 @@ inicio muestra indicadores y gráfica con datos reales.
 - Informe completo: [docs/04-informe-pruebas-fase11.md](docs/04-informe-pruebas-fase11.md).
 ### Fase 12 — Instalador Windows
 
-- `npm.cmd run dist:win` genera `dist\EnterpriseProERP-Setup-0.2.0.exe` (124.221.568 bytes,
-  SHA-256 `DBAA5D31DCBD3C17D5B62094F649CF57ACF155D047DF9DAD2992D6B86746728F`),
+- `npm.cmd run dist:win` genera `EnterpriseProERP-Setup-0.3.0.exe` (145.429.840 bytes,
+  SHA-256 `D508A61277EC5971A04A5AD0D9E970D07160F09CE4851A99E3FFBB18D3728C75`),
   NSIS x64 per-usuario, con icono original, accesos directos y carpeta configurable.
-- `electron-builder@26.18.0` se instaló como dependencia de desarrollo; `npm.cmd run build`,
-  `npm.cmd run typecheck` y `npm.cmd test` siguen limpios; la suite final es de **190/190** en 29 archivos.
+- `electron-builder@26.18.1` se instaló como dependencia de desarrollo; `npm.cmd run build`,
+  `npm.cmd run typecheck` y `npm.cmd test` siguen limpios; la suite final es de **200/200** en 30 archivos.
 - El paquete incluye `app.asar` y deja `better-sqlite3` fuera de ASAR (`asarUnpack`). Se usa
-  `npmRebuild:false` porque los prebuilds Node-API del módulo funcionan en Electron 37.10.3;
+  `npmRebuild:false` porque los prebuilds Node-API del módulo funcionan en Electron 45.4.1;
   así se evita añadir `electron-rebuild`. Verificado arrancando el exe instalado con perfil
-  aislado: BD creada, `integrity_check` = `ok`, versión 0.2.0 y sin errores de consola propios.
+  aislado: BD creada, `integrity_check` = `ok`, versión 0.3.0 y sin errores de consola propios.
 - Desinstalación: pregunta **Sí/No** antes de borrar `%APPDATA%\enterprise-pro-erp`. Se probaron
   ambas ramas con un centinela: **No conserva** y **Sí elimina** solo el directorio de datos;
   las actualizaciones no preguntan porque usan `${isUpdated}`.
@@ -283,6 +298,18 @@ inicio muestra indicadores y gráfica con datos reales.
 - Decisión técnica: [docs/adr/0003-instalador-nsis.md](docs/adr/0003-instalador-nsis.md).
 - Con esta fase, **las 12 fases del plan quedan completas**; no hay botones decorativos ni
   datos simulados.
+
+### Fase 13 — Ampliaciones 2026 (0.3.0)
+
+- Correcciones de dependencias de desarrollo y `audit` en cero; `electron-builder@26.18.1`
+  funciona en Node 24 gracias al shim de `execFile` en `scripts/dist-win.mjs`.
+- Migración `007` con presupuestos, servicios, activos y CRM; series `PRE-`, `OS-`, `ACT-` y
+  `LED-`, índices y permisos nuevos validados en backend.
+- Panel ejecutivo y de salud del sistema con datos reales; preferencias avanzadas persistidas;
+  **30 módulos activos, 0 pendientes**.
+- `npm.cmd test`: **200/200**; `npm.cmd run test:e2e`: **4/4**; `npm.cmd run test:updater`:
+  detecta `0.3.1` desde un feed efímero. Informe:
+  [docs/09-novedades-0.3.0.md](docs/09-novedades-0.3.0.md).
 
 ## Documentación
 
@@ -295,6 +322,7 @@ inicio muestra indicadores y gráfica con datos reales.
 - [docs/06-entrega-final.md](docs/06-entrega-final.md) — Estado final, artefacto, hash, verificación y limitaciones.
 - [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md) — PDF, E2E, updater, firma, Git y e-CF.
 - [docs/08-guia-uso-y-publicacion.md](docs/08-guia-uso-y-publicacion.md) — Guía de instalación, uso, compilación, firma y publicación.
+- [docs/09-novedades-0.3.0.md](docs/09-novedades-0.3.0.md) — Cambios, verificación y artefacto de 0.3.0.
 
 ## Stack aprobado (Fase 1)
 
@@ -303,8 +331,8 @@ Zod · Lucide · ExcelJS · Vitest · Recharts · electron-builder/NSIS (instala
 en Fase 9, electron-builder en Fase 12 y pdfmake/Playwright/electron-updater en el cierre posterior).
 La impresión nativa usa `window.print()` y CSS de Electron; además hay PDF real generado con
 pdfmake y E2E de Playwright por CDP.
-`npm.cmd audit --omit=dev` reporta **0 vulnerabilidades de producción**; los 11 avisos de
-desarrollo requieren cambios mayores no autorizados.
+`npm.cmd audit` y `npm.cmd audit --omit=dev` reportan **0 vulnerabilidades** desde 0.3.0,
+tras autorizarse las actualizaciones mayores y los overrides necesarios.
 
 ## Principios
 

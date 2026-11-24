@@ -36,3 +36,11 @@
   ramas del desinstalador con un centinela. Evidencia en
   `C:\Users\ferre\AppData\Local\Temp\opencode\cdp-fase12-result.json` y
   `C:\Users\ferre\AppData\Local\Temp\opencode\desinstalacion-fase12-result.json`.
+
+## Actualización 0.3.0
+La decisión sigue vigente. Las versiones de referencia se actualizaron a Electron 45.4.1 y
+electron-builder 26.18.1; `npmRebuild:false` continúa siendo válido porque `better-sqlite3`
+sigue usando prebuilds N-API. `scripts/dist-win.mjs` añadió limpieza de `dist/win-unpacked`
+y el shim `compat-execfile.cjs` para Node 24. Los avisos de desarrollo quedaron en cero con
+los overrides `uuid`, `minimatch` y `@electron/universal`. El artefacto firmado vigente es
+`EnterpriseProERP-Setup-0.3.0.exe`; véase [docs/09-novedades-0.3.0.md](../09-novedades-0.3.0.md).

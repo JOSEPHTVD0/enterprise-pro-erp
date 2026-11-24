@@ -21,7 +21,7 @@ const themePreview = {
 } as const
 
 export function AparienciaPage(): React.JSX.Element {
-  const { theme, sidebarCollapsed, setTheme, setSidebarCollapsed } = useAppStore()
+  const { theme, sidebarCollapsed, settings, setTheme, setSidebarCollapsed } = useAppStore()
   const [saving, setSaving] = useState(false)
   const Preview = themePreview[theme].icon
 
@@ -29,7 +29,7 @@ export function AparienciaPage(): React.JSX.Element {
   async function verifyPersistence(): Promise<void> {
     setSaving(true)
     try {
-      const expected: Settings = { theme, sidebarCollapsed }
+      const expected: Settings = settings
       const saved = await window.api.settings.set(expected)
       const stored = await window.api.settings.get()
       if (stored.theme === saved.theme && stored.sidebarCollapsed === saved.sidebarCollapsed) {

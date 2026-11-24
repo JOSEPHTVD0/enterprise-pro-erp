@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ShieldAlert } from 'lucide-react'
-import { resolveTheme } from '@shared/settings'
+import { defaultSettings, resolveTheme } from '@shared/settings'
 import { useAppStore } from '@/app/store'
 import { findModule, modulePermission } from '@/app/modules'
 import { Sidebar } from '@/app/Sidebar'
@@ -11,12 +11,16 @@ import { Toaster, toast } from '@/components/ui/Toast'
 import { Card } from '@/components/ui/Card'
 import { ModulePlaceholder } from '@/components/ui/ModulePlaceholder'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { DashboardEjecutivoPage } from '@/features/dashboard/DashboardEjecutivoPage'
 import { AparienciaPage } from '@/features/apariencia/AparienciaPage'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { ChangePasswordModal } from '@/features/auth/ChangePasswordModal'
 import { UsuariosPage } from '@/features/usuarios/UsuariosPage'
 import { RolesPage } from '@/features/usuarios/RolesPage'
 import { ConfiguracionPage } from '@/features/configuracion/ConfiguracionPage'
+import { ConfiguracionAvanzadaPage } from '@/features/configuracion/ConfiguracionAvanzadaPage'
+import { SaludPage } from '@/features/sistema/SaludPage'
+import { Modulos2026Page } from '@/features/modulos2026/Modulos2026Page'
 import { AuditoriaPage } from '@/features/auditoria/AuditoriaPage'
 import { ClientesPage } from '@/features/maestros/ClientesPage'
 import { ProveedoresPage } from '@/features/maestros/ProveedoresPage'
@@ -72,10 +76,16 @@ function ActiveView(): React.JSX.Element {
   if (permiso && !ctx?.permisos.includes(permiso)) return <AccessDenied />
 
   if (activeView === 'dashboard') return <DashboardPage />
+  if (activeView === 'dashboard-ejecutivo') return <DashboardEjecutivoPage />
   if (activeView === 'apariencia') return <AparienciaPage />
   if (activeView === 'usuarios') return <UsuariosPage />
   if (activeView === 'roles') return <RolesPage />
   if (activeView === 'configuracion') return <ConfiguracionPage />
+  if (activeView === 'configuracion-avanzada') return <ConfiguracionAvanzadaPage />
+  if (activeView === 'salud') return <SaludPage />
+  if (activeView === 'presupuestos' || activeView === 'servicios' || activeView === 'activos' || activeView === 'crm') {
+    return <Modulos2026Page modulo={activeView} />
+  }
   if (activeView === 'auditoria') return <AuditoriaPage />
   if (activeView === 'clientes') return <ClientesPage />
   if (activeView === 'proveedores') return <ProveedoresPage />
@@ -111,7 +121,7 @@ export default function App(): React.JSX.Element {
       .get()
       .then(hydrate)
       .catch(() => {
-        hydrate({ theme: 'system', sidebarCollapsed: false })
+        hydrate(defaultSettings)
         toast.error('No se pudieron leer las preferencias; se usan valores por defecto.')
       })
   }, [hydrate])

@@ -1,4 +1,4 @@
-# Guía de uso, compilación y publicación — ENTERPRISE PRO ERP 0.2.0
+# Guía de uso, compilación y publicación — ENTERPRISE PRO ERP 0.3.0
 
 Esta guía complementa [docs/06-entrega-final.md](06-entrega-final.md) y
 [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md). Está escrita para el usuario final
@@ -15,14 +15,14 @@ que instala el ERP y para el mantenedor que quiere reconstruirlo o publicarlo en
 - Espacio libre aproximado: 400 MB durante la instalación.
 
 ### Obtener e instalar
-1. Descargar `EnterpriseProERP-Setup-0.2.0.exe` desde la sección *Releases* de este repositorio.
+1. Descargar `EnterpriseProERP-Setup-0.3.0.exe` desde la sección *Releases* de este repositorio.
 2. Comprobar el hash (opcional pero recomendado):
 
    ```powershell
-   Get-FileHash .\EnterpriseProERP-Setup-0.2.0.exe -Algorithm SHA256
+   Get-FileHash .\EnterpriseProERP-Setup-0.3.0.exe -Algorithm SHA256
    ```
 
-   Valor esperado: `DBAA5D31DCBD3C17D5B62094F649CF57ACF155D047DF9DAD2992D6B86746728F`.
+   Valor esperado: `D508A61277EC5971A04A5AD0D9E970D07160F09CE4851A99E3FFBB18D3728C75`.
 
 3. Ejecutar el instalador. Es NSIS **por usuario**: no pide permisos de administrador.
    Se puede cambiar la carpeta de destino en el asistente.
@@ -32,7 +32,7 @@ que instala el ERP y para el mantenedor que quiere reconstruirlo o publicarlo en
 
 ### Instalación silenciosa (despliegue)
 ```powershell
-.\EnterpriseProERP-Setup-0.2.0.exe /S /ND /NM /D=C:\ERP\EnterprisePro
+.\EnterpriseProERP-Setup-0.3.0.exe /S /ND /NM /D=C:\ERP\EnterprisePro
 ```
 - `/S`: sin interfaz.
 - `/ND`: sin acceso directo de escritorio.
@@ -119,9 +119,9 @@ npm.cmd run release:serve
 | Script | Qué hace |
 |---|---|
 | `npm.cmd run typecheck` | TypeScript estricto (`tsc --noEmit`). |
-| `npm.cmd test` | 190 pruebas unitarias y de integración sobre SQLite real. |
+| `npm.cmd test` | 200 pruebas unitarias y de integración sobre SQLite real. |
 | `npm.cmd run test:e2e` | 4 pruebas E2E con Playwright conectado por CDP a Electron. |
-| `npm.cmd run test:updater` | Levanta un feed efímero y verifica que `electron-updater` detecte `0.2.1`. |
+| `npm.cmd run test:updater` | Levanta un feed efímero y verifica que `electron-updater` detecte el parche siguiente a la versión instalada (`0.3.1`). |
 | `npm.cmd run dist:win` | Compila y genera el NSIS x64. Usa `scripts/dist-win.mjs` + `compat-execfile.cjs`. |
 | `npm.cmd run release:feed` | Copia el instalador a `release\`, calcula SHA-512 y escribe `latest.yml`. |
 | `npm.cmd run release:serve` | Sirve `release\` en `http://127.0.0.1:8080/` solo para pruebas. |
@@ -173,11 +173,11 @@ gh repo create enterprise-pro-erp --public --source=. --remote=origin --push
 Para publicar el instalador como *Release* (el binario no se versiona en Git):
 
 ```powershell
-gh release create v0.2.0 `
-  dist\EnterpriseProERP-Setup-0.2.0.exe `
+gh release create v0.3.0 `
+  dist\EnterpriseProERP-Setup-0.3.0.exe `
   release\latest.yml `
-  --title "ENTERPRISE PRO ERP 0.2.0" `
-  --notes-file docs\06-entrega-final.md
+  --title "ENTERPRISE PRO ERP 0.3.0" `
+  --notes-file docs\09-novedades-0.3.0.md
 ```
 
 > Antes de publicar una versión nueva, actualiza el hash en `README.md`, `docs/05` y `docs/06`,
@@ -203,6 +203,6 @@ gh release create v0.2.0 `
 - **No se afirma certificación DGII ni emisión de e-CF.** Solo hay preparación arquitectónica,
   NCF y libros 606/607 derivados de documentos reales.
 - **SmartScreen permanece** mientras se use el certificado autofirmado.
-- **Auditoría:** 0 vulnerabilidades de producción; 11 avisos de desarrollo que requieren
-  actualizaciones mayores no autorizadas (Electron 45, Vitest 5, electron-builder 25).
+- **Auditoría:** 0 vulnerabilidades tanto en producción como en desarrollo tras las
+  actualizaciones mayores y los overrides aplicados en 0.3.0.
 - Cual cambio de esquema, BD, dependencias mayores o flujos financieros requiere autorización previa.

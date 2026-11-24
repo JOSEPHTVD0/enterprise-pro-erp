@@ -3,9 +3,10 @@
 > Fase 1 · Cada fase se entrega funcional, probada y documentada antes de avanzar.
 >
 > Nota: los números de pruebas y las decisiones por fase corresponden a su momento histórico.
-> El estado final, con 190 pruebas y cierre de limitaciones, está en
-> [docs/06-entrega-final.md](06-entrega-final.md) y
-> [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md).
+> El estado final, con 200 pruebas, Fase 13 y cierre de limitaciones, está en
+> [docs/06-entrega-final.md](06-entrega-final.md),
+> [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md) y
+> [docs/09-novedades-0.3.0.md](09-novedades-0.3.0.md).
 
 ## Fases y criterios de aceptación
 
@@ -235,13 +236,24 @@ desinstalador pregunta Sí/No antes de borrarlos y no pregunta durante actualiza
 instalación silenciosa y arranque real del exe instalado con perfil aislado (Electron 37.10.3,
 SQLite íntegro, versión 0.2.0, sin errores propios de consola); desinstalación verificada en
 ambas ramas con centinela. Documentación en `docs/05-instalacion-mantenimiento.md` y decisión
-en `docs/adr/0003-instalador-nsis.md`. El instalador queda sin firmar digitalmente.
+en `docs/adr/0003-instalador-nsis.md`. El instalador quedó sin firmar digitalmente; después se
+firmó con certificado autofirmado y en 0.3.0 se actualizó a electron-builder 26.18.1.
+
+### FASE 13 — Ampliaciones 2026 (completa y verificada, versión 0.3.0)
+Con autorización para cambios de esquema, dependencias mayores y flujos financieros, se añadió
+la migración `007` (presupuestos, servicios, activos y CRM), preferencias avanzadas, panel
+ejecutivo y panel de salud. Las dependencias mayores pendientes se actualizaron a Electron
+45.4.1, Vitest 5.1.1 y electron-builder 26.18.1, con `audit` en cero.
+
+**Aceptación:** suite verde **200/200** en 30 archivos, `typecheck` y `build` limpios,
+E2E 4/4, updater detectando `0.3.1`, 30 módulos activos, instalador 0.3.0 firmado y feed
+regenerado tras la firma. Detalle en `docs/09-novedades-0.3.0.md`.
 
 ## Riesgos identificados y mitigaciones
 
 | # | Riesgo | Mitigación |
 |---|--------|-----------|
-| 1 | **better-sqlite3 es módulo nativo**: requiere rebuild para Electron | Versión `^13.2.0` verificada con Node 24 y Electron 37.10.3 mediante prebuilds Node-API (`NAPI_VERSION=10`). El paquete usa `asarUnpack` y `npmRebuild:false`, verificado arrancando el exe instalado; no hizo falta `electron-rebuild`. Alternativa de respaldo: `node:sqlite` (Node 22+). |
+| 1 | **better-sqlite3 es módulo nativo**: requiere rebuild para Electron | Versión `^13.2.0` verificada con Node 24 y Electron 45.4.1 mediante prebuilds Node-API (`NAPI_VERSION=10`). El paquete usa `asarUnpack` y `npmRebuild:false`, verificado arrancando el exe instalado; no hizo falta `electron-rebuild`. Alternativa de respaldo: `node:sqlite` (Node 22+). |
 | 2 | Errores de redondeo en ITBIS/dinero | Centavos enteros + módulo `core/dinero` único con reglas de redondeo, cubierto por pruebas antes de usarse. |
 | 3 | Costo promedio corrupto por operaciones fuera de orden | Cálculo centralizado, transacciones inmediatas, kardex inmutable como fuente de verdad reconciliable. |
 | 4 | Impresión térmica variable según impresora | Formatos 58/80 mm con CSS de impresión dedicado; pruebas con PDF como referencia; configuración por caja. |

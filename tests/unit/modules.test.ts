@@ -12,7 +12,7 @@ describe('catálogo de módulos', () => {
       expect(m.label.length).toBeGreaterThan(0)
       expect(m.description.length).toBeGreaterThan(0)
       expect(m.phase).toBeGreaterThanOrEqual(2)
-      expect(m.phase).toBeLessThanOrEqual(12)
+      expect(m.phase).toBeLessThanOrEqual(13)
     }
   })
 
@@ -22,14 +22,22 @@ describe('catálogo de módulos', () => {
     }
   })
 
-  it('los módulos activos al cierre de la Fase 10 son los previstos', () => {
+  it('los módulos activos en 0.3.0 son los previstos', () => {
     const active = allModules.filter((m) => m.available).map((m) => m.id)
     expect(active.sort()).toEqual([
-      'apariencia', 'auditoria', 'bancos', 'cajas', 'catalogos', 'clientes', 'compras',
-      'configuracion', 'cotizaciones', 'cxc', 'cxp', 'dashboard', 'facturacion', 'gastos',
-      'inventario', 'pos', 'productos', 'proveedores', 'reportes', 'respaldos', 'roles',
-      'usuarios', 'vendedores'
+      'activos', 'apariencia', 'auditoria', 'bancos', 'cajas', 'catalogos', 'clientes', 'compras',
+      'configuracion', 'configuracion-avanzada', 'cotizaciones', 'crm', 'cxc', 'cxp',
+      'dashboard', 'dashboard-ejecutivo', 'facturacion', 'gastos', 'inventario', 'pos',
+      'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos', 'roles',
+      'salud', 'servicios', 'usuarios', 'vendedores'
     ])
+  })
+
+  it('todo módulo disponible con permiso existe en el catálogo de permisos', async () => {
+    const { permissionKeys } = await import('@shared/permissions')
+    for (const m of allModules.filter((x) => x.available && x.permission)) {
+      expect(permissionKeys).toContain(m.permission)
+    }
   })
 
   it('findModule encuentra todos los módulos del catálogo', () => {

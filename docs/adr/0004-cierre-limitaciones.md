@@ -27,8 +27,9 @@ alterar el bloque genérico del IPC, el preload, la BD ni los flujos financieros
 
 - Positivas: 0 vulnerabilidades de producción, PDF real, regresiones E2E reproducibles, feed
   probado, instalador firmado localmente e historial versionado.
-- Negativas / pendientes: 11 avisos de desarrollo requieren cambios mayores no autorizados; el
-  feed de pruebas es local; la firma autofirmada no genera reputación en SmartScreen.
+- Negativas / pendientes: en su momento quedaban 11 avisos de desarrollo; en 0.3.0 se
+  autorizaron las actualizaciones mayores y los overrides, quedando `audit` en cero. El feed de
+  pruebas sigue siendo local y la firma autofirmada no genera reputación en SmartScreen.
 - Riesgo mitigado: las nuevas rutas IPC no amplían permisos; `pdf.generar` delega en servicios
   autorizados y los canales `update.*` usan `isTrusted`.
 - e-CF sigue en preparación arquitectónica, sin certificación DGII.

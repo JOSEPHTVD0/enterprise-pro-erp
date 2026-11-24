@@ -17,6 +17,9 @@ import { createFinanzasService } from '../services/finanzas.service'
 import { createReportesService } from '../services/reportes.service'
 import { createBackupsService } from '../services/backups.service'
 import { generarPdf } from '../services/pdf.service'
+import { createDashboardEjecutivoService } from '../services/dashboard-ejecutivo.service'
+import { createSaludService } from '../services/salud.service'
+import { createModulos2026Service } from '../services/modulos2026.service'
 import { serializeError, errors, encodeIpcError } from '@shared/errors'
 import { assertCanProceed } from './policy'
 import {
@@ -61,6 +64,13 @@ import {
   respaldosCrearSchema, respaldosHistorialSchema, respaldosIntegridadSchema, respaldosRestaurarSchema
 } from '@shared/schemas/respaldos'
 import { pdfGenerarSchema } from '@shared/schemas/pdf'
+import { dashboardEjecutivoSchema } from '@shared/schemas/paneles'
+import {
+  idModuloSchema, filtroModulosSchema, cambiarEstadoSchema, presupuestoCrearSchema,
+  presupuestoEjecutarSchema, servicioCatalogoSchema, ordenServicioCrearSchema,
+  activoCrearSchema, activoDepreciarSchema, leadCrearSchema, leadEstadoSchema,
+  seguimientoCrearSchema, leadConvertirSchema
+} from '@shared/schemas/modulos2026'
 
 interface Route {
   /** Permiso requerido en el backend. Si se omite, el service verifica uno más específico. */
@@ -119,6 +129,9 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
   const compras = createComprasService(db, inventario)
   const finanzas = createFinanzasService(db)
   const reportes = createReportesService(db)
+  const ejecutivo = createDashboardEjecutivoService(db)
+  const salud = createSaludService(db)
+  const modulos2026 = createModulos2026Service(db)
   const backups = createBackupsService({
     db,
     userDataPath: app.getPath('userData'),
@@ -707,6 +720,104 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     'respaldos.restaurar': route(
       (ctx, input) => backups.restaurar(ctx, input as never),
       { schema: respaldosRestaurarSchema, permission: 'configuracion.respaldo.restaurar' }
+    ),
+
+    // v0.3.0 — Panel ejecutivo, salud del sistema y módulos nuevos.
+    'dashboard.ejecutivo': route(
+      (ctx, input) => ejecutivo.resumen(ctx, input as never),
+      { schema: dashboardEjecutivoSchema, permission: 'dashboard.consultar' }
+    ),
+    'salud.resumen': route(
+      (ctx) => salud.resumen(ctx),
+      { permission: 'salud.consultar' }
+    ),
+
+    'presupuestos.list': route(
+      (ctx, input) => modulos2026.presupuestos(ctx, input as never),
+      { schema: filtroModulosSchema, permission: 'presupuestos.consultar' }
+    ),
+    'presupuestos.detalle': route(
+      (ctx, input) => modulos2026.presupuestoDetalle(ctx, input as number),
+      { schema: idModuloSchema, permission: 'presupuestos.consultar' }
+    ),
+    'presupuestos.crear': route(
+      (ctx, input) => modulos2026.presupuestoCrear(ctx, input as never),
+      { schema: presupuestoCrearSchema, permission: 'presupuestos.crear' }
+    ),
+    'presupuestos.estado': route(
+      (ctx, input) => modulos2026.cambiarPresupuestoEstado(ctx, input as never),
+      { schema: cambiarEstadoSchema }
+    ),
+    'presupuestos.ejecutar': route(
+      (ctx, input) => modulos2026.presupuestoEjecutar(ctx, input as never),
+      { schema: presupuestoEjecutarSchema, permission: 'presupuestos.ejecutar' }
+    ),
+
+    'servicios.catalogo': route(
+      (ctx) => modulos2026.serviciosCatalogo(ctx),
+      { permission: 'servicios.consultar' }
+    ),
+    'servicios.catalogo.crear': route(
+      (ctx, input) => modulos2026.servicioCatalogoCrear(ctx, input as never),
+      { schema: servicioCatalogoSchema, permission: 'servicios.crear' }
+    ),
+    'servicios.ordenes': route(
+      (ctx, input) => modulos2026.ordenesServicio(ctx, input as never),
+      { schema: filtroModulosSchema, permission: 'servicios.consultar' }
+    ),
+    'servicios.orden.detalle': route(
+      (ctx, input) => modulos2026.ordenServicioDetalle(ctx, input as number),
+      { schema: idModuloSchema, permission: 'servicios.consultar' }
+    ),
+    'servicios.orden.crear': route(
+      (ctx, input) => modulos2026.ordenServicioCrear(ctx, input as never),
+      { schema: ordenServicioCrearSchema, permission: 'servicios.crear' }
+    ),
+    'servicios.orden.estado': route(
+      (ctx, input) => modulos2026.ordenServicioEstado(ctx, input as never),
+      { schema: cambiarEstadoSchema }
+    ),
+
+    'activos.list': route(
+      (ctx, input) => modulos2026.activos(ctx, input as never),
+      { schema: filtroModulosSchema, permission: 'activos.consultar' }
+    ),
+    'activos.detalle': route(
+      (ctx, input) => modulos2026.activoDetalle(ctx, input as number),
+      { schema: idModuloSchema, permission: 'activos.consultar' }
+    ),
+    'activos.crear': route(
+      (ctx, input) => modulos2026.activoCrear(ctx, input as never),
+      { schema: activoCrearSchema, permission: 'activos.crear' }
+    ),
+    'activos.depreciar': route(
+      (ctx, input) => modulos2026.activoDepreciar(ctx, input as never),
+      { schema: activoDepreciarSchema, permission: 'activos.depreciar' }
+    ),
+    'activos.estado': route(
+      (ctx, input) => modulos2026.activoBaja(ctx, input as never),
+      { schema: cambiarEstadoSchema, permission: 'activos.modificar' }
+    ),
+
+    'crm.leads': route(
+      (ctx, input) => modulos2026.leads(ctx, input as never),
+      { schema: filtroModulosSchema, permission: 'crm.consultar' }
+    ),
+    'crm.lead.crear': route(
+      (ctx, input) => modulos2026.leadCrear(ctx, input as never),
+      { schema: leadCrearSchema, permission: 'crm.crear' }
+    ),
+    'crm.lead.estado': route(
+      (ctx, input) => modulos2026.leadEstado(ctx, input as never),
+      { schema: leadEstadoSchema, permission: 'crm.modificar' }
+    ),
+    'crm.seguimiento.crear': route(
+      (ctx, input) => modulos2026.seguimientoCrear(ctx, input as never),
+      { schema: seguimientoCrearSchema, permission: 'crm.crear' }
+    ),
+    'crm.lead.convertir': route(
+      (ctx, input) => modulos2026.leadConvertir(ctx, input as never),
+      { schema: leadConvertirSchema, permission: 'crm.convertir' }
     )
   }
 

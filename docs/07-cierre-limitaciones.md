@@ -7,9 +7,11 @@ esquemas de BD, flujos financieros ni el bloque genérico del router IPC.
 
 - `zod@4.6.7` y `overrides.uuid=11.1.1` corrigen los avisos de producción.
 - `npm.cmd audit --omit=dev` → **found 0 vulnerabilities**.
-- `npm.cmd audit` → 11 avisos de **desarrollo**. Sus correcciones son mayores: Electron 45,
-  Vitest 5 o electron-builder 25 (downgrade desde 26). No se aplicaron porque requieren
-  autorización y regresiones amplias. **No afectan al instalador ni a datos de producción.**
+- En su momento `npm.cmd audit` reportó 11 avisos de desarrollo. En 0.3.0, con autorización
+  explícita, se actualizaron Electron 45.4.1, Vitest 5.1.1 y electron-builder 26.18.1, y se
+  añadieron los overrides `minimatch`, `@electron/universal` y `uuid`. Resultado actual:
+  `npm.cmd audit` → **found 0 vulnerabilities**. Véase
+  [docs/09-novedades-0.3.0.md](09-novedades-0.3.0.md).
 
 ## 2. PDF nativo
 
@@ -67,8 +69,9 @@ Verificación automática:
 npm.cmd run test:updater
 ```
 
-El script levanta un feed efímero con versión `0.2.1`, lanza Electron con `ERP_UPDATE_URL` y
-comprueba que `update.verificar` devuelve `disponible: true` y `version: '0.2.1'`.
+El script calcula el parche siguiente de `package.json` (en 0.3.0 publica `0.3.1`), lanza
+Electron con `ERP_UPDATE_URL` y comprueba que `update.verificar` devuelve
+`disponible: true` y esa versión.
 
 **Producción:** publicar el instalador y `latest.yml` en un servidor HTTPS y reemplazar la URL.
 No usar el feed local en equipos de usuario final.

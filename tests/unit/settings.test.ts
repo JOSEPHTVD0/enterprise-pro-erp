@@ -6,9 +6,24 @@ describe('settingsSchema', () => {
     expect(settingsSchema.parse(defaultSettings)).toEqual(defaultSettings)
   })
 
-  it('acepta combinaciones válidas', () => {
-    const s = { theme: 'dark', sidebarCollapsed: true }
-    expect(settingsSchema.parse(s)).toEqual(s)
+  it('acepta combinaciones válidas y aplica defaults avanzados', () => {
+    const parsed = settingsSchema.parse({ theme: 'dark', sidebarCollapsed: true })
+    expect(parsed.theme).toBe('dark')
+    expect(parsed.sidebarCollapsed).toBe(true)
+    expect(parsed.interfaz.densidad).toBe('normal')
+    expect(parsed.fiscal.moneda).toBe('DOP')
+    expect(parsed.panel.filasDashboard).toBe(8)
+  })
+
+  it('valida los grupos avanzados', () => {
+    const parsed = settingsSchema.parse({
+      ...defaultSettings,
+      impresion: { ...defaultSettings.impresion, formato: 'TICKET80', copias: 2 },
+      seguridad: { ...defaultSettings.seguridad, enmascararRnc: true }
+    })
+    expect(parsed.impresion.formato).toBe('TICKET80')
+    expect(parsed.impresion.copias).toBe(2)
+    expect(parsed.seguridad.enmascararRnc).toBe(true)
   })
 
   it('rechaza temas desconocidos', () => {
@@ -18,7 +33,10 @@ describe('settingsSchema', () => {
   it('rechaza tipos incorrectos', () => {
     expect(settingsSchema.safeParse({ theme: 'light', sidebarCollapsed: 'yes' }).success).toBe(false)
     expect(settingsSchema.safeParse(null).success).toBe(false)
-    expect(settingsSchema.safeParse({}).success).toBe(false)
+    expect(settingsSchema.safeParse({
+      ...defaultSettings,
+      interfaz: { ...defaultSettings.interfaz, tamanoFuente: 'grande' }
+    }).success).toBe(false)
   })
 
   it('ignora claves extra (no permite inyección de campos)', () => {

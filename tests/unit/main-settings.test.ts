@@ -25,16 +25,23 @@ describe('persistencia de preferencias (proceso principal)', () => {
   })
 
   it('guarda y recupera los valores (sobrevive a reinicio)', () => {
-    saveSettings({ theme: 'dark', sidebarCollapsed: true })
-    expect(loadSettings()).toEqual({ theme: 'dark', sidebarCollapsed: true })
+    const esperado = { ...defaultSettings, theme: 'dark' as const, sidebarCollapsed: true }
+    saveSettings(esperado)
+    expect(loadSettings()).toEqual(esperado)
     // Segunda lectura simulando un nuevo arranque de la aplicación.
-    expect(loadSettings()).toEqual({ theme: 'dark', sidebarCollapsed: true })
+    expect(loadSettings()).toEqual(esperado)
   })
 
   it('escribe JSON válido en disco', () => {
-    saveSettings({ theme: 'light', sidebarCollapsed: false })
+    const esperado = {
+      ...defaultSettings,
+      theme: 'light' as const,
+      sidebarCollapsed: false,
+      impresion: { ...defaultSettings.impresion, formato: 'TICKET80' as const }
+    }
+    saveSettings(esperado)
     const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf-8'))
-    expect(raw).toEqual({ theme: 'light', sidebarCollapsed: false })
+    expect(raw).toEqual(esperado)
   })
 
   it('rechaza payloads inválidos sin escribir nada', () => {

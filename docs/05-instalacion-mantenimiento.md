@@ -1,15 +1,15 @@
-# Instalación y mantenimiento — ENTERPRISE PRO ERP 0.2.0
+# Instalación y mantenimiento — ENTERPRISE PRO ERP 0.3.0
 
 Windows 10/11 x64. El usuario final **no necesita Node.js ni instalar dependencias**: el
-instalador incluye Electron 37.10.3, el renderer compilado y el módulo SQLite nativo.
+instalador incluye Electron 45.4.1, el renderer compilado y el módulo SQLite nativo.
 
 ## 1. Obtener el instalador
 
 El artefacto generado es:
 
 ```text
-dist\EnterpriseProERP-Setup-0.2.0.exe   (124.221.568 bytes)
-SHA-256: DBAA5D31DCBD3C17D5B62094F649CF57ACF155D047DF9DAD2992D6B86746728F
+EnterpriseProERP-Setup-0.3.0.exe   (145.429.840 bytes)
+SHA-256: D508A61277EC5971A04A5AD0D9E970D07160F09CE4851A99E3FFBB18D3728C75
 ```
 
 Para regenerarlo desde el código fuente:
@@ -25,7 +25,7 @@ despliegues silenciosos, NSIS admite `/S`, `/D=ruta`, `/ND` (sin acceso directo 
 y `/NM` (sin acceso directo en menú), por ejemplo:
 
 ```powershell
-.\EnterpriseProERP-Setup-0.2.0.exe /S /ND /NM /D=C:\ERP\EnterprisePro
+.\EnterpriseProERP-Setup-0.3.0.exe /S /ND /NM /D=C:\ERP\EnterprisePro
 ```
 
 El instalador está firmado con un certificado **autofirmado** (SHA-256). Al ejecutarlo por
@@ -102,10 +102,10 @@ seguridad. Las actualizaciones nunca muestran la pregunta.
 
 | Comprobación | Resultado |
 |---|---|
-| `npm.cmd run typecheck` / `npm.cmd test` / `npm.cmd run build` | Limpios; 190/190 pruebas en 29 archivos. |
-| `npm.cmd run test:e2e` / `npm.cmd run test:updater` | 4/4 pruebas E2E; feed local detectó 0.2.1. |
+| `npm.cmd run typecheck` / `npm.cmd test` / `npm.cmd run build` | Limpios; 200/200 pruebas en 30 archivos. |
+| `npm.cmd run test:e2e` / `npm.cmd run test:updater` | 4/4 pruebas E2E; feed local detectó 0.3.1. |
 | `npm.cmd run dist:win` | NSIS x64 generado con `app.asar`, módulo nativo desempaquetado, icono y desinstalador. |
-| Instalación silenciosa y arranque del exe instalado | Electron 37.10.3, Node 22.21.1, BD creada, `integrity_check` = `ok`, versión 0.2.0, sin exponer token y sin errores de consola propios. Evidencia: `C:\Users\ferre\AppData\Local\Temp\opencode\cdp-fase12-result.json`. |
+| Instalación silenciosa y arranque del exe instalado | Electron 45.4.1, BD creada, `integrity_check` = `ok`, versión 0.3.0, sin exponer token y sin errores de consola propios. La verificación de desinstalación de la Fase 12 se conserva en `C:\Users\ferre\AppData\Local\Temp\opencode\desinstalacion-fase12-result.json`. |
 | Respuesta **No** al desinstalar | Un centinela en el directorio de datos permaneció intacto. |
 | Respuesta **Sí** al desinstalar | El mismo centinela fue eliminado; los datos reales de pruebas permanecieron presentes. Evidencia: `C:\Users\ferre\AppData\Local\Temp\opencode\desinstalacion-fase12-result.json`. |
 
@@ -120,7 +120,7 @@ manejada por la UI como "sesión no iniciada"; se separó del resto de errores e
   bloquea el resto de canales hasta que termine.
 - La actualización automática y la firma autofirmada se añadieron después de la Fase 12;
   véanse las secciones 4 y [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md).
-- `npm.cmd audit --omit=dev` reporta **0 vulnerabilidades de producción**. Los 11 avisos
-  restantes son de desarrollo y exigen cambios mayores no autorizados.
+- `npm.cmd audit` y `npm.cmd audit --omit=dev` reportan **0 vulnerabilidades** desde 0.3.0,
+  tras actualizar Electron, Vitest y electron-builder y aplicar los overrides documentados.
 - Decisiones técnicas: [ADR-0003](adr/0003-instalador-nsis.md) y
   [ADR-0004](adr/0004-cierre-limitaciones.md).

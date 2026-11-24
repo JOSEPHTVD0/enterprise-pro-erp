@@ -2,9 +2,11 @@
 
 Fecha: 24 de noviembre de 2026 · Proyecto: ENTERPRISE PRO ERP · Plataforma: Windows 10/11, Node.js, Electron 37, Vitest 3.2.
 
-> Informe histórico de la Fase 11. La suite final es de **190/190** pruebas e incluye E2E con
-> Playwright; véase [docs/06-entrega-final.md](06-entrega-final.md) y
-> [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md).
+> Informe histórico de la Fase 11 (Electron 37, Vitest 3.2). La suite final de 0.3.0 es de
+> **200/200** pruebas con Electron 45.4.1 y Vitest 5.1.1, e incluye E2E con Playwright;
+> véase [docs/06-entrega-final.md](06-entrega-final.md),
+> [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md) y
+> [docs/09-novedades-0.3.0.md](09-novedades-0.3.0.md).
 
 ## 1. Alcance
 

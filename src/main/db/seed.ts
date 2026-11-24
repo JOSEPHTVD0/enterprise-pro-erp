@@ -24,7 +24,11 @@ const series: { tipo: string; prefijo: string }[] = [
   { tipo: 'FACTURA_COMPRA', prefijo: 'FCO-' },
   { tipo: 'DEVOLUCION_COMPRA', prefijo: 'DCO-' },
   { tipo: 'PAGO_CXP', prefijo: 'PAG-' },
-  { tipo: 'GASTO', prefijo: 'GAS-' }
+  { tipo: 'GASTO', prefijo: 'GAS-' },
+  { tipo: 'PRESUPUESTO', prefijo: 'PRE-' },
+  { tipo: 'ORDEN_SERVICIO', prefijo: 'OS-' },
+  { tipo: 'ACTIVO', prefijo: 'ACT-' },
+  { tipo: 'LEAD', prefijo: 'LED-' }
 ]
 
 /** Configuración estructural de una empresa. Se reutiliza al crear empresas nuevas. */
@@ -40,7 +44,11 @@ export function seedCompany(db: Db, empresaId: number): void {
     ['backup_frecuencia', 'DIARIO'],
     ['backup_hora', '02:00'],
     ['backup_carpeta', ''],
-    ['backup_retencion_dias', '30']
+    ['backup_retencion_dias', '30'],
+    ['presupuesto_alerta_pct', '80'],
+    ['servicio_itbis_default', 'ITBIS18'],
+    ['crm_dias_seguimiento', '3'],
+    ['activos_depreciacion_mensual', 'true']
   ]
   const addParam = db.prepare('INSERT OR IGNORE INTO parametros (empresa_id, clave, valor) VALUES (?, ?, ?)')
   for (const [clave, valor] of params) addParam.run(empresaId, clave, valor)

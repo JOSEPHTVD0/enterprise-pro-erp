@@ -8,6 +8,7 @@ import { inventarioSql } from './migrations/003_inventario'
 import { ventasSql } from './migrations/004_ventas'
 import { comprasSql } from './migrations/005_compras'
 import { finanzasSql } from './migrations/006_finanzas'
+import { modulos2026Sql } from './migrations/007_modulos_2026'
 import { seed } from './seed'
 
 export type Db = Database.Database
@@ -18,7 +19,8 @@ const migrations: { version: number; nombre: string; sql: string }[] = [
   { version: 3, nombre: 'inventario', sql: inventarioSql },
   { version: 4, nombre: 'ventas', sql: ventasSql },
   { version: 5, nombre: 'compras', sql: comprasSql },
-  { version: 6, nombre: 'finanzas', sql: finanzasSql }
+  { version: 6, nombre: 'finanzas', sql: finanzasSql },
+  { version: 7, nombre: 'modulos_2026', sql: modulos2026Sql }
 ]
 
 export function configurePragmas(db: Db): void {
