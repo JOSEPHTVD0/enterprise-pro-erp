@@ -10,7 +10,7 @@ export const modules = [
   'dashboard', 'configuracion', 'seguridad', 'clientes', 'proveedores', 'productos', 'inventario', 'ventas',
   'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'gastos', 'vendedores',
   'reportes', 'auditoria', 'respaldos',
-  'presupuestos', 'servicios', 'activos', 'crm', 'salud'
+  'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad'
 ] as const
 
 export type ModuleKey = (typeof modules)[number]
@@ -21,10 +21,10 @@ const operationModules: Record<Operation, readonly ModuleKey[]> = {
   crear: modules.filter((m) => m !== 'dashboard'),
   modificar: modules.filter((m) => m !== 'dashboard'),
   eliminar: modules.filter((m) => m !== 'dashboard'),
-  anular: ['ventas', 'compras', 'cxc', 'cxp', 'cotizaciones', 'cajas', 'bancos', 'gastos', 'presupuestos', 'servicios'],
-  aprobar: ['cotizaciones', 'compras', 'ventas', 'gastos', 'configuracion', 'presupuestos', 'servicios'],
-  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'reportes', 'presupuestos', 'servicios', 'activos'],
-  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cxp', 'vendedores', 'reportes', 'auditoria', 'presupuestos', 'servicios', 'activos', 'crm', 'salud'],
+  anular: ['ventas', 'compras', 'cxc', 'cxp', 'cotizaciones', 'cajas', 'bancos', 'gastos', 'presupuestos', 'servicios', 'contabilidad'],
+  aprobar: ['cotizaciones', 'compras', 'ventas', 'gastos', 'configuracion', 'presupuestos', 'servicios', 'contabilidad'],
+  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'reportes', 'presupuestos', 'servicios', 'activos', 'contabilidad'],
+  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cxp', 'vendedores', 'reportes', 'auditoria', 'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad'],
   descuento: ['ventas', 'pos', 'cotizaciones'],
   precio: ['productos', 'ventas', 'pos', 'cotizaciones'],
   costo: ['productos', 'inventario', 'compras', 'reportes'],
@@ -56,6 +56,9 @@ const extraKeys = [
   'servicios.finalizar',
   'activos.depreciar',
   'crm.convertir',
+  'contabilidad.asiento.confirmar',
+  'contabilidad.periodo.cerrar',
+  'contabilidad.integrar',
   ...configResourceKeys
 ] as const
 
@@ -74,7 +77,7 @@ const spanishModules: Record<ModuleKey, string> = {
   bancos: 'Bancos', cajas: 'Cajas', gastos: 'Gastos', vendedores: 'Vendedores',
   reportes: 'Reportes', auditoria: 'Auditoría', respaldos: 'Respaldos',
   presupuestos: 'Presupuestos', servicios: 'Servicios', activos: 'Activos fijos',
-  crm: 'CRM', salud: 'Salud del sistema'
+  crm: 'CRM', salud: 'Salud del sistema', contabilidad: 'Contabilidad general'
 }
 
 const spanishOps: Record<string, string> = {
@@ -101,7 +104,10 @@ const extraLabels: Record<string, string> = {
   'presupuestos.ejecutar': 'Presupuestos — Registrar ejecución',
   'servicios.finalizar': 'Servicios — Finalizar orden',
   'activos.depreciar': 'Activos — Registrar depreciación',
-  'crm.convertir': 'CRM — Convertir oportunidad en cliente'
+  'crm.convertir': 'CRM — Convertir oportunidad en cliente',
+  'contabilidad.asiento.confirmar': 'Contabilidad — Confirmar asientos',
+  'contabilidad.periodo.cerrar': 'Contabilidad — Cerrar periodos',
+  'contabilidad.integrar': 'Contabilidad — Integrar documentos'
 }
 
 export const permissionCatalog: PermissionDef[] = [
@@ -142,7 +148,9 @@ export const seedRoles: { name: string; description: string; permissionFilter: (
       !key.startsWith('seguridad.') &&
       key !== 'configuracion.respaldo.restaurar' &&
       key !== 'configuracion.respaldo.crear' &&
-      key !== 'configuracion.parametros.modificar'
+      key !== 'configuracion.parametros.modificar' &&
+      key !== 'contabilidad.periodo.cerrar' &&
+      key !== 'contabilidad.integrar'
   },
   {
     name: 'Vendedor',

@@ -2,6 +2,7 @@ import type { Db } from './connection'
 import { hashPassword } from '../core/password'
 import { permissionCatalog, permissionKeys, seedRoles } from '@shared/permissions'
 import { documentTypes } from '@shared/document-types'
+import { seedPlanContable } from '../repositories/contabilidad.repo'
 
 /** Credencial de primer arranque. Debe cambiarse obligatoriamente en el primer login. */
 export const FIRST_RUN_USER = 'admin'
@@ -28,7 +29,8 @@ const series: { tipo: string; prefijo: string }[] = [
   { tipo: 'PRESUPUESTO', prefijo: 'PRE-' },
   { tipo: 'ORDEN_SERVICIO', prefijo: 'OS-' },
   { tipo: 'ACTIVO', prefijo: 'ACT-' },
-  { tipo: 'LEAD', prefijo: 'LED-' }
+  { tipo: 'LEAD', prefijo: 'LED-' },
+  { tipo: 'ASIENTO', prefijo: 'ASI-' }
 ]
 
 /** Configuración estructural de una empresa. Se reutiliza al crear empresas nuevas. */
@@ -78,6 +80,12 @@ export function seedCompany(db: Db, empresaId: number): void {
     .run(empresaId, 'PRINCIPAL', 'Almacén principal')
   db.prepare('INSERT OR IGNORE INTO cajas (empresa_id, codigo, nombre) VALUES (?, ?, ?)')
     .run(empresaId, 'PRINCIPAL', 'Caja principal')
+  seedPlanContable(db, empresaId)
+  db.prepare(`
+    WITH RECURSIVE meses(mes) AS (SELECT 1 UNION ALL SELECT mes + 1 FROM meses WHERE mes < 12)
+    INSERT OR IGNORE INTO periodos_contables (empresa_id, anio, mes, estado)
+    SELECT ?, CAST(strftime('%Y','now') AS INTEGER), mes, 'ABIERTO' FROM meses
+  `).run(empresaId)
 }
 
 /** Crea los roles y sus permisos para una empresa. */

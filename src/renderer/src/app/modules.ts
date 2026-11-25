@@ -20,6 +20,7 @@ import {
   Settings,
   ScrollText,
   DatabaseBackup,
+  BookOpen,
   type LucideIcon
 } from 'lucide-react'
 
@@ -342,6 +343,21 @@ export const moduleGroups: ModuleGroup[] = [
           'Gastos recurrentes con generación manual',
           'Comisiones de vendedores sobre ventas y su pago',
           'Sin impresión ni exportación'
+        ]
+      },
+      {
+        id: 'contabilidad',
+        label: 'Contabilidad general',
+        icon: BookOpen,
+        phase: 14,
+        available: true,
+        description: 'Plan de cuentas, asientos, libros, balances y periodos contables.',
+        features: [
+          'Plan de cuentas con naturaleza, nivel y estado',
+          'Asientos balanceados con numeración consecutiva y auditoría',
+          'Libro diario, mayor individual y balance de comprobación',
+          'Estado de resultados y balance general con importes en centavos',
+          'Apertura y cierre de periodos, con integración de documentos'
         ]
       }
     ]

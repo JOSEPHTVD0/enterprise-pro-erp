@@ -20,11 +20,12 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 | 11 | Pruebas integrales | ✅ Completa y verificada |
 | 12 | Instalador Windows | ✅ Completa y verificada |
 | 13 | Ampliaciones 2026 y correcciones de desarrollo | ✅ Completa y verificada |
+| 14 | Numeración consecutiva y contabilidad general | ✅ Completa y verificada |
 
-**Versión actual: 0.3.0.** [Novedades](docs/09-novedades-0.3.0.md) ·
-[Entrega final](docs/06-entrega-final.md) ·
-`EnterpriseProERP-Setup-0.3.0.exe` · SHA-256
-`D508A61277EC5971A04A5AD0D9E970D07160F09CE4851A99E3FFBB18D3728C75` ·
+**Versión actual: 0.4.0.** [Novedades](docs/10-novedades-0.4.0.md) ·
+[Entrega final](docs/11-entrega-final-0.4.0.md) ·
+`EnterpriseProERP-Setup-0.4.0.exe` · SHA-256
+`26654D42C6D66500E10233BCB7B64BE3C0D1014F5EC17E69644E5AE3CAC199E4` ·
 instalador **firmado de forma autofirmada** (SmartScreen no desaparece sin CA confiable).
 Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md).
 
@@ -34,7 +35,7 @@ Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cie
 npm.cmd install
 npm.cmd run dev        # aplicación Electron en modo desarrollo
 npm.cmd run build      # compilar main + preload + renderer
-npm.cmd test           # 200 pruebas (seguridad, IPC, BD real, PDF, maestros, inventario, ventas, POS, compras, finanzas, reportes, auditoría, respaldos, impresión, rendimiento, persistencia, Excel, UI, módulos 0.3.0)
+npm.cmd test           # 220 pruebas (seguridad, IPC, BD real, PDF, maestros, inventario, ventas, POS, compras, finanzas, reportes, auditoría, respaldos, impresión, rendimiento, persistencia, Excel, UI, módulos 0.4.0, series y contabilidad)
 npm.cmd run test:e2e   # 4 pruebas reales en Electron por CDP (Playwright)
 npm.cmd run test:updater # verifica el feed local de electron-updater
 npm.cmd run typecheck  # TypeScript estricto
@@ -67,6 +68,21 @@ y se almacena hasheado (SHA-256) en la tabla `sesiones`.
   `scripts\firmar-instalador.ps1`. SmartScreen **no desaparece** sin certificado de CA pública.
 - **Git:** repositorio inicializado con un único commit; artefactos y claves ignorados.
 - **e-CF:** solo preparación; no hay emisión ni certificación DGII.
+
+## Novedades 0.4.0
+
+- **Numeración consecutiva real:** prefijo + subserie + correlativo continuo sin saltos. La reserva centralizada ocurre dentro de la transacción del documento; una vista previa o un rollback no consume números.
+- **Control administrativo de series:** bloqueo de cambios de prefijo, subserie, longitud y correlativo cuando hay movimientos; alertas de serie inactiva, vencida, agotada o próxima a agotarse en el panel de salud.
+- **Contabilidad general:** plan de cuentas, periodos, asientos balanceados, libro diario, mayor, balance de comprobación, estado de resultados, balance general e integración real de ventas. Migración `008`, serie `ASI-`, permisos y auditoría en backend.
+- **31 módulos activos**, 0 pendientes. Detalle: [docs/10-novedades-0.4.0.md](docs/10-novedades-0.4.0.md).
+
+### Verificación de 0.4.0
+
+- `npm.cmd run typecheck`: sin errores.
+- `npm.cmd test`: **220/220** en 33 archivos.
+- `npm.cmd run test:e2e`: **4/4** pruebas reales en Electron.
+- `npm.cmd run test:updater`: feed local coherente con la versión.
+- `npm.cmd audit` y `npm.cmd audit --omit=dev`: **0 vulnerabilidades**.
 
 ## Novedades 0.3.0
 

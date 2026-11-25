@@ -7,15 +7,15 @@ import { buildContext } from '../../src/main/services/context'
 import { permissionKeys } from '@shared/permissions'
 
 describe('migraciones y datos estructurales', () => {
-  it('crea todas las tablas y migraciones hasta la 0.3.0', () => {
+  it('crea todas las tablas y migraciones hasta la 0.4.0', () => {
     const db = testDb()
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map((t) => t.name)
-    for (const t of ['empresas', 'usuarios', 'roles', 'permisos', 'sesiones', 'auditoria', 'series_documento', 'impuestos', 'almacenes', 'cajas']) {
+    for (const t of ['empresas', 'usuarios', 'roles', 'permisos', 'sesiones', 'auditoria', 'series_documento', 'impuestos', 'almacenes', 'cajas', 'plan_cuentas', 'periodos_contables', 'asientos', 'asiento_lineas']) {
       expect(tables).toContain(t)
     }
     const versions = (db.prepare('SELECT version FROM _migraciones ORDER BY version').all() as { version: number }[])
       .map((m) => m.version)
-    expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
     db.close()
   })
 

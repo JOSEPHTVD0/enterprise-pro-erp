@@ -20,6 +20,7 @@ import { generarPdf } from '../services/pdf.service'
 import { createDashboardEjecutivoService } from '../services/dashboard-ejecutivo.service'
 import { createSaludService } from '../services/salud.service'
 import { createModulos2026Service } from '../services/modulos2026.service'
+import { createContabilidadService } from '../services/contabilidad.service'
 import { serializeError, errors, encodeIpcError } from '@shared/errors'
 import { assertCanProceed } from './policy'
 import {
@@ -71,6 +72,11 @@ import {
   activoCrearSchema, activoDepreciarSchema, leadCrearSchema, leadEstadoSchema,
   seguimientoCrearSchema, leadConvertirSchema
 } from '@shared/schemas/modulos2026'
+import {
+  filtroContabilidadSchema, cuentaCrearSchema, cuentaModificarSchema, cuentaEstadoSchema,
+  periodoAbrirSchema, periodoCerrarSchema, asientoCrearSchema, asientoEstadoSchema,
+  mayorSchema, integrarSchema
+} from '@shared/schemas/contabilidad'
 
 interface Route {
   /** Permiso requerido en el backend. Si se omite, el service verifica uno más específico. */
@@ -132,6 +138,7 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
   const ejecutivo = createDashboardEjecutivoService(db)
   const salud = createSaludService(db)
   const modulos2026 = createModulos2026Service(db)
+  const contabilidad = createContabilidadService(db)
   const backups = createBackupsService({
     db,
     userDataPath: app.getPath('userData'),
@@ -324,7 +331,10 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     ),
     'config.tasa.save': route((ctx, input) => config.saveTasaCambio(ctx, input as never), { schema: tasaCambioSchema }),
     'config.formato.save': route((ctx, input) => config.saveFormato(ctx, input as never), { schema: formatoSchema }),
+    // El canal histórico "reservar" quedó convertido en vista previa: nunca consume correlativos.
     'config.serie.reservar': route((ctx, input) => config.reservarNumero(ctx, input as string), { schema: string.min(2) }),
+    'config.serie.preview': route((ctx, input) => config.vistaPreviaNumero(ctx, input as string), { schema: string.min(2) }),
+    'config.series.estado': route((ctx) => config.estadoSeries(ctx)),
     'config.backup.config': route(
       (ctx, input) => {
         const cfg = backupConfigSchema.parse(input)
@@ -818,6 +828,76 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     'crm.lead.convertir': route(
       (ctx, input) => modulos2026.leadConvertir(ctx, input as never),
       { schema: leadConvertirSchema, permission: 'crm.convertir' }
+    ),
+
+    // 0.4.0 — Contabilidad general. Permisos verificados también en el servicio.
+    'cont.cuentas': route(
+      (ctx, input) => contabilidad.cuentas(ctx, input as never),
+      { schema: filtroContabilidadSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.cuenta.crear': route(
+      (ctx, input) => contabilidad.cuentaCrear(ctx, input as never),
+      { schema: cuentaCrearSchema, permission: 'contabilidad.crear' }
+    ),
+    'cont.cuenta.modificar': route(
+      (ctx, input) => contabilidad.cuentaModificar(ctx, input as never),
+      { schema: cuentaModificarSchema, permission: 'contabilidad.modificar' }
+    ),
+    'cont.cuenta.estado': route(
+      (ctx, input) => contabilidad.cuentaEstado(ctx, input as never),
+      { schema: cuentaEstadoSchema, permission: 'contabilidad.modificar' }
+    ),
+    'cont.periodos': route(
+      (ctx, input) => contabilidad.periodos(ctx, input as never),
+      { schema: filtroContabilidadSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.periodo.abrir': route(
+      (ctx, input) => contabilidad.periodoAbrir(ctx, input as never),
+      { schema: periodoAbrirSchema, permission: 'contabilidad.crear' }
+    ),
+    'cont.periodo.cerrar': route(
+      (ctx, input) => contabilidad.periodoCerrar(ctx, input as never),
+      { schema: periodoCerrarSchema, permission: 'contabilidad.periodo.cerrar' }
+    ),
+    'cont.asientos': route(
+      (ctx, input) => contabilidad.asientos(ctx, input as never),
+      { schema: filtroContabilidadSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.asiento.crear': route(
+      (ctx, input) => contabilidad.asientoCrear(ctx, input as never),
+      { schema: asientoCrearSchema, permission: 'contabilidad.crear' }
+    ),
+    'cont.asiento.confirmar': route(
+      (ctx, input) => contabilidad.asientoConfirmar(ctx, input as never),
+      { schema: asientoEstadoSchema, permission: 'contabilidad.asiento.confirmar' }
+    ),
+    'cont.asiento.anular': route(
+      (ctx, input) => contabilidad.asientoAnular(ctx, input as never),
+      { schema: asientoEstadoSchema, permission: 'contabilidad.anular' }
+    ),
+    'cont.libroDiario': route(
+      (ctx, input) => contabilidad.libroDiario(ctx, input as never),
+      { schema: filtroContabilidadSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.mayor': route(
+      (ctx, input) => contabilidad.mayor(ctx, input as never),
+      { schema: mayorSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.balanceComprobacion': route(
+      (ctx, input) => contabilidad.balanceComprobacion(ctx, input as never),
+      { schema: filtroContabilidadSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.estadoResultados': route(
+      (ctx, input) => contabilidad.estadoResultados(ctx, input as never),
+      { schema: filtroContabilidadSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.balanceGeneral': route(
+      (ctx, input) => contabilidad.balanceGeneral(ctx, input as never),
+      { schema: filtroContabilidadSchema, permission: 'contabilidad.consultar' }
+    ),
+    'cont.integrar': route(
+      (ctx, input) => contabilidad.integrarDocumentos(ctx, input as never),
+      { schema: integrarSchema, permission: 'contabilidad.integrar' }
     )
   }
 

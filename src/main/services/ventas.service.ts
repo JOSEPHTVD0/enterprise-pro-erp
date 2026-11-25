@@ -4,7 +4,7 @@ import type { SessionContext } from './context'
 import { requirePermission } from './context'
 import { errors } from '@shared/errors'
 import { writeAudit } from '../repositories/auditoria.repo'
-import { getEmpresa, getSerie, nextSerieNumber } from '../repositories/configuracion.repo'
+import { getEmpresa, nextSerieNumber, nextSerieDetalle } from '../repositories/configuracion.repo'
 import * as repo from '../repositories/ventas.repo'
 import * as aux from '../repositories/auxiliares.repo'
 import { calcularLinea, resumenLineas } from '../core/impuestos'
@@ -64,21 +64,10 @@ export function createVentasService(db: Db, inventario: InventarioService) {
     return row.id
   }
 
+  /** La validación ocurre antes de reservar: un rechazo nunca consume un correlativo. */
   function numerar(empresaId: number, tipo: string, fecha: string): { numero: string; esNcf: boolean } {
-    const serie = getSerie(db, empresaId, tipo)
-    if (!serie || !serie.activa) throw errors.conflict(`No hay serie activa para ${tipo}. Configure una serie antes de facturar.`)
-    const numero = nextSerieNumber(db, empresaId, tipo)
-    if (!serie.es_ncf) return { numero, esNcf: false }
-    if (serie.vence_en && String(serie.vence_en) < fecha) {
-      throw errors.conflict('La serie NCF configurada está vencida.')
-    }
-    if (serie.rango_desde && numero < String(serie.rango_desde)) {
-      throw errors.conflict('El número reservado está fuera del rango NCF configurado.')
-    }
-    if (serie.rango_hasta && numero > String(serie.rango_hasta)) {
-      throw errors.conflict('Se agotó el rango NCF configurado.')
-    }
-    return { numero, esNcf: true }
+    const reserva = nextSerieDetalle(db, empresaId, tipo, fecha)
+    return { numero: reserva.numero, esNcf: reserva.esNcf }
   }
 
   function validarSerieYLote(empresaId: number, producto: repo.Fila, linea: { numeroSerie?: string; lote?: string; cantidad: number }, almacenId: number): void {

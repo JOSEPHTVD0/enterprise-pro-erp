@@ -4,6 +4,7 @@ import { createAuthService } from '../../src/main/services/auth.service'
 import { createConfiguracionService } from '../../src/main/services/configuracion.service'
 import { createSeguridadService } from '../../src/main/services/seguridad.service'
 import { FIRST_RUN_USER, FIRST_RUN_PASSWORD } from '../../src/main/db/seed'
+import { nextSerieNumber } from '../../src/main/repositories/configuracion.repo'
 
 function admin(db: ReturnType<typeof testDb>) {
   const auth = createAuthService(db)
@@ -46,14 +47,13 @@ describe('configuración y numeración', () => {
     db.close()
   })
 
-  it('reserva números consecutivos y únicos de forma atómica', () => {
+  it('la vista previa no consume y la reserva centralizada es consecutiva', () => {
     const { config, ctx, db } = admin(testDb())
-    const a = config.reservarNumero(ctx, 'FACTURA_CONTADO').numero
-    const b = config.reservarNumero(ctx, 'FACTURA_CONTADO').numero
-    const c = config.reservarNumero(ctx, 'COTIZACION').numero
-    expect(a).toBe('FAC-00000001')
-    expect(b).toBe('FAC-00000002')
-    expect(c).toMatch(/^COT-/)
+    const preview = config.vistaPreviaNumero(ctx, 'FACTURA_CONTADO').numero
+    expect(config.reservarNumero(ctx, 'FACTURA_CONTADO').numero).toBe(preview)
+    expect(nextSerieNumber(db, 1, 'FACTURA_CONTADO')).toBe('FAC-00000001')
+    expect(nextSerieNumber(db, 1, 'FACTURA_CONTADO')).toBe('FAC-00000002')
+    expect(config.vistaPreviaNumero(ctx, 'COTIZACION').numero).toMatch(/^COT-/)
     db.close()
   })
 

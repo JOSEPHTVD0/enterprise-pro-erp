@@ -3,6 +3,7 @@ import { statSync, statfsSync } from 'node:fs'
 import os from 'node:os'
 import type { Db } from '../db/connection'
 import type { SessionContext } from './context'
+import { alertasSeries } from '../repositories/series.repo'
 import { errors } from '@shared/errors'
 
 type Fila = Record<string, unknown>
@@ -82,6 +83,19 @@ export function createSaludService(db: Db) {
       detalle: `${sesionesActivas} sesión(es) abierta(s).`
     })
 
+    const series = alertasSeries(db, ctx.empresaId)
+    const seriesCriticas = series.filter((s) => ['AGOTADA', 'VENCIDA', 'INACTIVA'].includes(s.estado))
+    const seriesAlerta = series.filter((s) => s.estado === 'ALERTA')
+    comprobaciones.push({
+      nombre: 'Series consecutivas',
+      estado: seriesCriticas.length > 0 ? 'error' : seriesAlerta.length > 0 ? 'advertencia' : 'ok',
+      detalle: seriesCriticas.length > 0
+        ? `${seriesCriticas.length} serie(s) bloqueada(s): ${seriesCriticas.map((s) => s.tipoDoc).join(', ')}.`
+        : seriesAlerta.length > 0
+          ? `${seriesAlerta.length} serie(s) próxima(s) a agotarse: ${seriesAlerta.map((s) => s.tipoDoc).join(', ')}.`
+          : `${series.length} serie(s) con correlativo continuo disponible.`
+    })
+
     const errores = comprobaciones.filter((c) => c.estado === 'error').length
     const advertencias = comprobaciones.filter((c) => c.estado === 'advertencia').length
     const puntaje = Math.max(0, 100 - errores * 25 - advertencias * 8)
@@ -110,7 +124,7 @@ export function createSaludService(db: Db) {
         ultimoRespaldo: ultimoRespaldo ? String(ultimoRespaldo.fecha) : ''
       },
       proceso: {
-        aplicacion: typeof app?.getVersion === 'function' ? app.getVersion() : '0.3.0',
+        aplicacion: typeof app?.getVersion === 'function' ? app.getVersion() : '0.4.0',
         electron: process.versions.electron ?? 'desconocida',
         node: process.version,
         plataforma: `${os.platform()} ${os.arch()}`,

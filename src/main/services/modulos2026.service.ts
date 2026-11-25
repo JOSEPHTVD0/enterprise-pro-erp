@@ -2,6 +2,7 @@ import type { Db } from '../db/connection'
 import type { SessionContext } from './context'
 import { errors } from '@shared/errors'
 import { writeAudit } from '../repositories/auditoria.repo'
+import { nextSerieNumber } from '../repositories/configuracion.repo'
 import type {
   FiltroModulos, PresupuestoCrear, PresupuestoEjecutar, CambiarEstado,
   ServicioCatalogo, OrdenServicioCrear, ActivoCrear, ActivoDepreciar,
@@ -45,16 +46,13 @@ export function createModulos2026Service(db: Db) {
     writeAudit(db, ctx, operacion, entidad, id, antes, despues)
   }
 
+  /** Numeración centralizada: una sola reserva atómica, sin implementaciones paralelas. */
   function siguienteNumero(empresaId: number, tipo: string): string {
-    const serie = db.prepare(`
-      SELECT prefijo, siguiente, longitud FROM series_documento
-      WHERE empresa_id = ? AND tipo_doc = ? AND activa = 1
-    `).get(empresaId, tipo) as Fila | undefined
-    if (!serie) throw errors.validation(`No hay serie activa para ${tipo}.`)
-    const numero = `${txt(serie, 'prefijo')}${String(n(serie, 'siguiente')).padStart(n(serie, 'longitud') || 8, '0')}`
-    db.prepare('UPDATE series_documento SET siguiente = siguiente + 1 WHERE empresa_id = ? AND tipo_doc = ?')
-      .run(empresaId, tipo)
-    return numero
+    try {
+      return nextSerieNumber(db, empresaId, tipo)
+    } catch {
+      throw errors.validation(`No hay serie activa para ${tipo}.`)
+    }
   }
 
   function uno(sql: string, ...args: unknown[]): Fila | undefined {

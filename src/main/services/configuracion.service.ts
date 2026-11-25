@@ -2,6 +2,7 @@ import type { Db } from '../db/connection'
 import { seedCompany, seedRolesForCompany } from '../db/seed'
 import { writeAudit } from '../repositories/auditoria.repo'
 import * as repo from '../repositories/configuracion.repo'
+import { alertasSeries, vistaPreviaSerie } from '../repositories/series.repo'
 import { requirePermission, type SessionContext } from './context'
 import { errors } from '@shared/errors'
 
@@ -90,7 +91,24 @@ export function createConfiguracionService(db: Db) {
       requirePermission(ctx, permiso)
       if (!(tabla in mappings)) throw errors.validation('Catálogo desconocido.')
       const id = input.id as number | undefined
-      const antes = id ? db.prepare(`SELECT * FROM ${tabla} WHERE id = ? AND empresa_id = ?`).get(id, ctx.empresaId) : null
+      const antes = id ? db.prepare(`SELECT * FROM ${tabla} WHERE id = ? AND empresa_id = ?`).get(id, ctx.empresaId) as Record<string, unknown> | null : null
+      if (tabla === 'series_documento' && id && antes) {
+        const texto = (v: unknown): string => String(v ?? '')
+        if (Number(antes.siguiente) > 1) {
+          if (input.prefijo !== undefined && texto(input.prefijo) !== texto(antes.prefijo)) {
+            throw errors.conflict('No se puede cambiar el prefijo de una serie con movimientos; eso rompería la correlación de los documentos emitidos.')
+          }
+          if (input.serie !== undefined && texto(input.serie) !== texto(antes.serie)) {
+            throw errors.conflict('No se puede cambiar la subserie de una serie con movimientos.')
+          }
+          if (input.longitud !== undefined && Number(input.longitud) !== Number(antes.longitud)) {
+            throw errors.conflict('No se puede cambiar la longitud de una serie con movimientos.')
+          }
+        }
+        if (input.siguiente !== undefined && Number(input.siguiente) !== Number(antes.siguiente)) {
+          throw errors.conflict('El correlativo es automático y no se edita manualmente; usar una serie nueva para reiniciar la numeración.')
+        }
+      }
       const savedId = db.transaction(() => {
         const result = repo.upsertCatalog(db, tabla, ctx.empresaId, input, mappings[tabla as keyof typeof mappings])
         audit(ctx, id ? 'MODIFICAR' : 'CREAR', tabla, result, antes, input)
@@ -141,10 +159,21 @@ export function createConfiguracionService(db: Db) {
       return { ok: true }
     },
 
-    /** Reserva atómica de número: la usará facturación en fases posteriores. */
+    /** Solo lectura: nunca consume un correlativo. La reserva real la hace el documento. */
+    vistaPreviaNumero(ctx: SessionContext, tipoDoc: string) {
+      requirePermission(ctx, 'configuracion.series.consultar')
+      return vistaPreviaSerie(db, ctx.empresaId, tipoDoc)
+    },
+
+    /** Compatibilidad: el antiguo canal "reservar" ya no genera saltos. */
     reservarNumero(ctx: SessionContext, tipoDoc: string) {
       requirePermission(ctx, 'configuracion.series.consultar')
-      return { numero: repo.nextSerieNumber(db, ctx.empresaId, tipoDoc) }
+      return vistaPreviaSerie(db, ctx.empresaId, tipoDoc)
+    },
+
+    estadoSeries(ctx: SessionContext) {
+      requirePermission(ctx, 'configuracion.series.consultar')
+      return alertasSeries(db, ctx.empresaId)
     }
   }
 }

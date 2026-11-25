@@ -37,6 +37,7 @@ import { BancosPage } from '@/features/finanzas/BancosPage'
 import { CajasPage } from '@/features/finanzas/CajasPage'
 import { GastosPage } from '@/features/finanzas/GastosPage'
 import { ReportesPage } from '@/features/reportes/ReportesPage'
+import { ContabilidadPage } from '@/features/contabilidad/ContabilidadPage'
 import { RespaldosPage } from '@/features/respaldos/RespaldosPage'
 
 function useThemeEffect(): void {
@@ -102,6 +103,7 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'cajas') return <CajasPage />
   if (activeView === 'gastos') return <GastosPage />
   if (activeView === 'reportes') return <ReportesPage />
+  if (activeView === 'contabilidad') return <ContabilidadPage />
   if (activeView === 'respaldos') return <RespaldosPage />
   const module = findModule(activeView)
   if (module) return <ModulePlaceholder module={module} />

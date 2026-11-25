@@ -1,4 +1,5 @@
 import type { Db } from '../db/connection'
+import { obtenerSerie, numerarConsecutivo, type NumeroConsecutivo } from './series.repo'
 
 /** Lista blanca: el nombre de tabla nunca puede venir del renderer. */
 const CATALOG_TABLES = ['impuestos', 'monedas', 'series_documento', 'almacenes', 'cajas', 'impresoras'] as const
@@ -87,21 +88,19 @@ export function listCatalog(db: Db, table: string, empresaId: number): Record<st
 }
 
 export function getSerie(db: Db, empresaId: number, tipoDoc: string): Record<string, unknown> | undefined {
-  return db.prepare('SELECT * FROM series_documento WHERE empresa_id = ? AND tipo_doc = ?').get(empresaId, tipoDoc) as Record<string, unknown> | undefined
+  return obtenerSerie(db, empresaId, tipoDoc) as Record<string, unknown> | undefined
 }
 
-/** Numeración atómica: una sola sentencia evita duplicados bajo concurrencia. */
+/**
+ * Compatibilidad con los servicios existentes. La implementación canónica vive en
+ * `series.repo.ts`: prefijo + subserie + correlativo continuo, validado antes de reservar.
+ */
 export function nextSerieNumber(db: Db, empresaId: number, tipoDoc: string): string {
-  const update = db.prepare(`
-    UPDATE series_documento SET siguiente = siguiente + 1
-    WHERE empresa_id = ? AND tipo_doc = ? AND activa = 1
-    RETURNING prefijo, serie, siguiente, longitud
-  `)
-  const row = update.get(empresaId, tipoDoc) as { prefijo: string; serie: string; siguiente: number; longitud: number } | undefined
-  if (!row) throw new Error(`No existe serie activa para ${tipoDoc}`)
-  // RETURNING devuelve el valor ya incrementado: el número reservado es el anterior.
-  const numero = String(row.siguiente - 1).padStart(row.longitud, '0')
-  return `${row.prefijo}${row.serie}${numero}`
+  return numerarConsecutivo(db, empresaId, tipoDoc).numero
+}
+
+export function nextSerieDetalle(db: Db, empresaId: number, tipoDoc: string, fecha?: string): NumeroConsecutivo {
+  return numerarConsecutivo(db, empresaId, tipoDoc, { fecha })
 }
 
 export function getFormato(db: Db, empresaId: number, tipoDoc: string): Record<string, unknown> | undefined {

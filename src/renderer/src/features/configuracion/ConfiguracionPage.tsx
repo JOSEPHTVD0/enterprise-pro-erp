@@ -106,9 +106,18 @@ function EmpresaTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): R
   )
 }
 
+type EstadoSerie = { tipoDoc: string; numeroSiguiente: string; restantes: number; estado: string; detalle: string }
+
 function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): React.JSX.Element {
   const [edit, setEdit] = useState<ConfigRow | null>(null)
   const [saving, setSaving] = useState(false)
+  const [estados, setEstados] = useState<EstadoSerie[]>([])
+
+  useEffect(() => {
+    window.api.invoke<EstadoSerie[]>('config.series.estado')
+      .then((v) => setEstados(v ?? []))
+      .catch(() => setEstados([]))
+  }, [cfg.series])
 
   async function save(): Promise<void> {
     if (!edit) return
@@ -124,13 +133,24 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
   const columns: Column<ConfigRow>[] = [
     { key: 'tipoDoc', header: 'Documento', value: (r) => String(r.tipoDoc) },
     { key: 'prefijo', header: 'Prefijo', value: (r) => String(r.prefijo) },
-    { key: 'siguiente', header: 'Siguiente', value: (r) => Number(r.siguiente) },
+    { key: 'numeroSiguiente', header: 'Próximo número', value: (r) => estados.find((e) => e.tipoDoc === String(r.tipoDoc))?.numeroSiguiente ?? `Prefijo + ${Number(r.siguiente)}` },
+    { key: 'estado', header: 'Estado', render: (r) => {
+      const estado = estados.find((e) => e.tipoDoc === String(r.tipoDoc))?.estado ?? 'OK'
+      const tono = estado === 'OK' ? 'success' : estado === 'ALERTA' ? 'warning' : 'danger'
+      return <Badge tone={tono}>{estado}</Badge>
+    } },
     { key: 'esNcf', header: 'NCF', render: (r) => r.esNcf ? <Badge tone="accent">Sí</Badge> : <Badge>No</Badge> },
     { key: 'activa', header: 'Activa', render: (r) => r.activa ? <Badge tone="success">Sí</Badge> : <Badge tone="danger">No</Badge> }
   ]
 
   return (
     <div className="space-y-4">
+      <Card title="Numeración consecutiva" subtitle="Prefijo + subserie + correlativo continuo. El número se reserva solo al guardar el documento; si la operación falla, no deja hueco.">
+        <p className="text-sm text-slate-600 dark:text-slate-300">
+          El correlativo es automático y no se edita. Para reiniciar una secuencia, cree una serie nueva.
+          El panel de salud avisa cuando una serie está por agotarse, vence o se inactiva.
+        </p>
+      </Card>
       <Card title="Numeración de documentos y NCF" subtitle="Secuencias internas y rangos fiscales configurables por empresa.">
         <DataTable columns={columns} data={rows} rowKey={(r) => Number(r.id)} pageSize={10} actions={(r) => (
           <Button size="sm" variant="secondary" onClick={() => setEdit({ ...r })}>Editar</Button>
@@ -142,15 +162,15 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
         {edit && (
           <div className="grid gap-3 sm:grid-cols-2">
             {([
-              ['serie', 'Serie'], ['prefijo', 'Prefijo'], ['siguiente', 'Siguiente número'],
+              ['serie', 'Serie'], ['prefijo', 'Prefijo'],
               ['longitud', 'Longitud'], ['rangoDesde', 'Rango NCF desde'], ['rangoHasta', 'Rango NCF hasta'],
               ['venceEn', 'Vigencia (YYYY-MM-DD)'], ['alertaMin', 'Alerta mínima']
             ] as const).map(([k, label]) => (
               <Field key={k} label={label}>
                 <TextInput
-                  type={['siguiente', 'longitud', 'alertaMin'].includes(k) ? 'number' : 'text'}
+                  type={['longitud', 'alertaMin'].includes(k) ? 'number' : 'text'}
                   value={String(edit[k] ?? '')}
-                  onChange={(e) => setEdit({ ...edit, [k]: ['siguiente', 'longitud', 'alertaMin'].includes(k) ? Number(e.target.value) : e.target.value })}
+                  onChange={(e) => setEdit({ ...edit, [k]: ['longitud', 'alertaMin'].includes(k) ? Number(e.target.value) : e.target.value })}
                 />
               </Field>
             ))}
@@ -164,7 +184,7 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
         )}
       </Modal>
       <p className="text-xs text-slate-400">
-        ADVERTENCIA: modificar "Siguiente número" puede generar duplicados. Solo utilícese para corregir series nunca emitidas.
+        Prefijo, subserie y longitud quedan bloqueados cuando la serie ya tiene movimientos para preservar la correlación.
       </p>
     </div>
   )
