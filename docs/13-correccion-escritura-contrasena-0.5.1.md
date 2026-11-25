@@ -1,5 +1,7 @@
 # Corrección 0.5.1 — escritura continua en el cambio de contraseña
 
+Release: https://github.com/JOSEPHTVD0/enterprise-pro-erp/releases/tag/v0.5.1
+
 ## Problema
 Al iniciar por primera vez, el modal obligatorio de cambio de contraseña
 perdía el foco del campo después de cada carácter: el efecto de `Modal`
