@@ -5,6 +5,7 @@ import { X } from 'lucide-react'
 interface ModalProps {
   open: boolean
   title: string
+  subtitle?: string
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
@@ -15,6 +16,7 @@ interface ModalProps {
 export function Modal({
   open,
   title,
+  subtitle,
   onClose,
   children,
   footer,
@@ -49,8 +51,11 @@ export function Modal({
         aria-label={title}
         className={`animate-fade-in w-full ${width} rounded-xl border border-slate-200 bg-white shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-900`}
       >
-        <header className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5 dark:border-slate-800">
-          <h2 className="text-sm font-semibold">{title}</h2>
+        <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-5 py-3.5 dark:border-slate-800">
+          <div>
+            <h2 className="text-sm font-semibold">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-[11px] text-slate-400">{subtitle}</p>}
+          </div>
           <button
             onClick={onClose}
             className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200"

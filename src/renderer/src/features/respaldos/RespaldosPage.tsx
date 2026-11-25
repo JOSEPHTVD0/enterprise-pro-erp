@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
-import { Field, TextInput, inputClass } from '@/components/ui/Field'
+import { Field, NumberInput, TextInput, inputClass } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
@@ -286,8 +286,8 @@ export function RespaldosPage(): React.JSX.Element {
                 onChange={(e) => setConfig({ ...config, hora: e.target.value })} />
             </Field>
             <Field label="Retención (días)">
-              <TextInput type="number" value={config.retencionDias}
-                onChange={(e) => setConfig({ ...config, retencionDias: Number(e.target.value) })} />
+              <NumberInput label="Retención (días)" value={config.retencionDias} min={0} max={3650}
+                onChange={(valor) => setConfig({ ...config, retencionDias: valor })} />
             </Field>
           </div>
           <p className="mt-3 text-xs text-slate-400">

@@ -141,6 +141,29 @@ export function findRole(db: Db, empresaId: number, id: number): Record<string, 
   return db.prepare('SELECT * FROM roles WHERE empresa_id = ? AND id = ?').get(empresaId, id) as Record<string, unknown> | undefined
 }
 
+export function findRoleByName(db: Db, empresaId: number, nombre: string): Record<string, unknown> | undefined {
+  return db.prepare('SELECT * FROM roles WHERE empresa_id = ? AND nombre = ?').get(empresaId, nombre) as Record<string, unknown> | undefined
+}
+
+/** Cuenta roles activos que conservan un permiso, excluyendo el que se está editando. */
+export function countRolesWithPermission(
+  db: Db,
+  empresaId: number,
+  permiso: string,
+  excluirRolId?: number
+): number {
+  const filtro = excluirRolId ? ' AND r.id <> ?' : ''
+  const args = excluirRolId ? [empresaId, permiso, excluirRolId] : [empresaId, permiso]
+  const fila = db.prepare(`
+    SELECT COUNT(DISTINCT r.id) AS total
+    FROM roles r
+    JOIN rol_permisos rp ON rp.rol_id = r.id
+    JOIN permisos p ON p.id = rp.permiso_id
+    WHERE r.empresa_id = ? AND r.activo = 1 AND p.clave = ?${filtro}
+  `).get(...args) as { total: number }
+  return Number(fila.total)
+}
+
 export function insertRole(db: Db, empresaId: number, nombre: string, descripcion: string): number {
   return Number(db.prepare('INSERT INTO roles (empresa_id, nombre, descripcion) VALUES (?, ?, ?)').run(empresaId, nombre, descripcion).lastInsertRowid)
 }
@@ -163,6 +186,76 @@ export function permissionKeysForRole(db: Db, roleId: number): string[] {
   return (db.prepare(`
     SELECT p.clave FROM rol_permisos rp JOIN permisos p ON p.id = rp.permiso_id WHERE rp.rol_id = ?
   `).all(roleId) as { clave: string }[]).map((r) => r.clave)
+}
+
+export interface CustomPermissionRow {
+  id: number
+  clave: string
+  modulo: string
+  operacion: string
+  etiqueta: string
+  descripcion: string
+  critico: number
+  empresa_id: number | null
+  personalizado: number
+}
+
+const customPermissionColumns = `
+  id, clave, modulo, operacion, etiqueta, descripcion, critico, empresa_id, personalizado
+`
+
+export function listCustomPermissions(db: Db, empresaId: number): CustomPermissionRow[] {
+  return db.prepare(`
+    SELECT ${customPermissionColumns} FROM permisos
+     WHERE personalizado = 1 AND empresa_id = ?
+     ORDER BY modulo, etiqueta
+  `).all(empresaId) as CustomPermissionRow[]
+}
+
+export function findPermissionByKey(db: Db, clave: string): CustomPermissionRow | undefined {
+  return db.prepare(`
+    SELECT ${customPermissionColumns} FROM permisos WHERE clave = ?
+  `).get(clave) as CustomPermissionRow | undefined
+}
+
+export function insertCustomPermission(db: Db, input: {
+  clave: string
+  modulo: string
+  etiqueta: string
+  descripcion: string
+  critico: boolean
+  empresaId: number
+}): number {
+  const res = db.prepare(`
+    INSERT INTO permisos (clave, modulo, operacion, etiqueta, descripcion, critico, empresa_id, personalizado)
+    VALUES (?, ?, 'personalizado', ?, ?, ?, ?, 1)
+  `).run(input.clave, input.modulo, input.etiqueta, input.descripcion, input.critico ? 1 : 0, input.empresaId)
+  return Number(res.lastInsertRowid)
+}
+
+export function updateCustomPermission(db: Db, id: number, input: {
+  etiqueta: string
+  descripcion: string
+  modulo: string
+  critico: boolean
+}): void {
+  db.prepare(`
+    UPDATE permisos
+       SET etiqueta = ?, descripcion = ?, modulo = ?, critico = ?
+     WHERE id = ? AND personalizado = 1
+  `).run(input.etiqueta, input.descripcion, input.modulo, input.critico ? 1 : 0, id)
+}
+
+export function deleteCustomPermission(db: Db, id: number): void {
+  db.prepare('DELETE FROM permisos WHERE id = ? AND personalizado = 1').run(id)
+}
+
+/** El rol Administrador conserva acceso total, incluidos los permisos creados después. */
+export function grantPermissionToAdmin(db: Db, empresaId: number, permisoId: number): void {
+  db.prepare(`
+    INSERT OR IGNORE INTO rol_permisos (rol_id, permiso_id)
+    SELECT id, ? FROM roles WHERE empresa_id = ? AND nombre = 'Administrador'
+  `).run(permisoId, empresaId)
 }
 
 export function listDepartments(db: Db, empresaId: number): Record<string, unknown>[] {

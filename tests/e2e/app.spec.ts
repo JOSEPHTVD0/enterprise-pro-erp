@@ -140,6 +140,47 @@ test('el botón PDF de reportes descarga el archivo desde la UI', async () => {
   await expect(page.getByText('PDF del reporte descargado.')).toBeVisible()
 })
 
+test('el centro de control muestra permisos con descripción y ajustes auditables', async () => {
+  await page.getByRole('button', { name: 'Centro de control', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Centro de control administrativo' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Para qué sirve' }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Ajustes avanzados' }).click()
+  await expect(page.getByText('Umbral de stock bajo')).toBeVisible()
+})
+
+test('inteligencia operativa consulta datos reales desde la UI', async () => {
+  await page.getByRole('button', { name: 'Inteligencia operativa', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Inteligencia operativa' })).toBeVisible()
+  await expect(page.getByText('Envejecimiento de CxC y CxP')).toBeVisible()
+})
+
+test('el buscador global filtra módulos sin romper la navegación', async () => {
+  const buscador = page.getByRole('textbox', { name: 'Buscar módulos' })
+  await expect(buscador).toBeVisible()
+  await buscador.fill('centro de control')
+  await expect(page.getByRole('button', { name: 'Centro de control', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Reportes', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Centro de control', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Centro de control administrativo' })).toBeVisible()
+  await expect(buscador).toHaveValue('')
+})
+
+test('los permisos personalizados se crean con descripción y auditoría', async () => {
+  await page.getByRole('button', { name: 'Centro de control', exact: true }).click()
+  await page.getByRole('button', { name: 'Permisos', exact: true }).click()
+  await page.getByRole('button', { name: 'Crear permiso' }).click()
+
+  const modal = page.getByRole('dialog', { name: 'Crear permiso personalizado' })
+  await expect(modal).toBeVisible()
+  await modal.getByRole('textbox').nth(0).fill('Prueba E2E')
+  await modal.getByRole('textbox').nth(2).fill('Permite ver el panel de pruebas automatizadas del ERP.')
+  await modal.getByRole('button', { name: 'Guardar permiso' }).click()
+
+  await expect(page.getByText('Permiso personalizado guardado y auditado.')).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'Prueba E2E' }).last()).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'custom.prueba_e2e' }).last()).toBeVisible()
+})
+
 test('sin errores de consola inesperados', async () => {
   expect(erroresConsola).toEqual([])
 })

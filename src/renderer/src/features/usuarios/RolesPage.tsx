@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pencil, Plus, ShieldCheck } from 'lucide-react'
+import { Pencil, Plus, Search, ShieldCheck } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,10 +8,11 @@ import { Modal } from '@/components/ui/Modal'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Field, TextInput } from '@/components/ui/Field'
 import { toast } from '@/components/ui/Toast'
-import { errorInfo, useSessionStore } from '@/app/session'
+import { can, errorInfo, useSessionStore } from '@/app/session'
+import { moduleLabels, type PermissionDef } from '@shared/permissions'
 
 interface RoleRow { id: number; nombre: string; descripcion: string; total_permisos: number }
-interface PermDef { key: string; modulo: string; etiqueta: string }
+type PermDef = PermissionDef
 interface RoleDetail { id: number; nombre: string; descripcion: string; permisos: string[] }
 
 export function RolesPage(): React.JSX.Element {
@@ -19,13 +20,14 @@ export function RolesPage(): React.JSX.Element {
   const [roles, setRoles] = useState<RoleRow[]>([])
   const [catalog, setCatalog] = useState<PermDef[]>([])
   const [editing, setEditing] = useState<RoleDetail | null>(null)
+  const [filtroPermisos, setFiltroPermisos] = useState('')
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
     try {
       const [r, p] = await Promise.all([
         window.api.invoke<RoleRow[]>('seguridad.roles.list'),
-        window.api.invoke<PermDef[]>('seguridad.permissions.list')
+        window.api.invoke<PermDef[]>('seguridad.permissions.catalog')
       ])
       setRoles(r); setCatalog(p)
     } catch (e) { toast.error(errorInfo(e).message) }
@@ -61,10 +63,14 @@ export function RolesPage(): React.JSX.Element {
   }
 
   const grouped = useMemo(() => {
+    const q = filtroPermisos.trim().toLowerCase()
     const map = new Map<string, PermDef[]>()
-    for (const p of catalog) map.set(p.modulo, [...(map.get(p.modulo) ?? []), p])
+    for (const p of catalog) {
+      if (q && !`${p.label} ${p.descripcion} ${p.key}`.toLowerCase().includes(q)) continue
+      map.set(p.module, [...(map.get(p.module) ?? []), p])
+    }
     return [...map.entries()]
-  }, [catalog])
+  }, [catalog, filtroPermisos])
 
   const locked = editing?.nombre === 'Administrador'
 
@@ -108,7 +114,7 @@ export function RolesPage(): React.JSX.Element {
         width="max-w-4xl"
         footer={<>
           <Button variant="secondary" onClick={() => setEditing(null)}>Cancelar</Button>
-          {!locked && <Button onClick={() => void save()} disabled={saving}>{saving ? 'Guardando…' : 'Guardar permisos'}</Button>}
+          {!locked && <Button onClick={() => void save()} disabled={saving || !can('seguridad.permiso.modificar')}>{saving ? 'Guardando…' : 'Guardar permisos'}</Button>}
         </>}
       >
         {editing && (
@@ -126,22 +132,32 @@ export function RolesPage(): React.JSX.Element {
                 El rol Administrador posee todos los permisos del sistema y no puede modificarse.
               </p>
             )}
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+              <TextInput
+                className="pl-8"
+                value={filtroPermisos}
+                onChange={(e) => setFiltroPermisos(e.target.value)}
+                placeholder="Buscar por nombre, clave o descripción…"
+                aria-label="Buscar permisos"
+              />
+            </div>
             <div className="max-h-[45vh] overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800">
-                  <tr><th className="px-3 py-2 text-left">Módulo</th><th className="px-3 py-2 text-left">Permisos</th></tr>
+                  <tr><th className="px-3 py-2 text-left">Módulo</th><th className="px-3 py-2 text-left">Permisos (para qué sirven)</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {grouped.map(([modulo, perms]) => (
                     <tr key={modulo}>
-                      <td className="px-3 py-2 align-top font-medium capitalize">{modulo}</td>
+                      <td className="px-3 py-2 align-top font-medium">{moduleLabels[modulo as keyof typeof moduleLabels] ?? modulo}</td>
                       <td className="px-3 py-2">
                         <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
                           {perms.map((p) => (
                             <label key={p.key} className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300">
                               <input
                                 type="checkbox"
-                                disabled={locked}
+                                disabled={locked || !can('seguridad.permiso.modificar')}
                                 checked={editing.permisos.includes(p.key)}
                                 onChange={(e) => setEditing({
                                   ...editing,
@@ -150,7 +166,11 @@ export function RolesPage(): React.JSX.Element {
                                     : editing.permisos.filter((k) => k !== p.key)
                                 })}
                               />
-                              <span>{p.etiqueta}</span>
+                              <span>
+                                <span className="font-medium">{p.label}</span>
+                                {p.critico && <span className="ml-1 rounded bg-red-100 px-1 text-[9px] text-red-700 dark:bg-red-950/50 dark:text-red-300">crítico</span>}
+                                <span className="block text-[10px] text-slate-400">{p.descripcion}</span>
+                              </span>
                             </label>
                           ))}
                         </div>

@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
-import { Field, TextInput } from '@/components/ui/Field'
+import { Field, NumberInput, TextInput } from '@/components/ui/Field'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { toast } from '@/components/ui/Toast'
@@ -167,11 +167,16 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
               ['venceEn', 'Vigencia (YYYY-MM-DD)'], ['alertaMin', 'Alerta mínima']
             ] as const).map(([k, label]) => (
               <Field key={k} label={label}>
-                <TextInput
-                  type={['longitud', 'alertaMin'].includes(k) ? 'number' : 'text'}
-                  value={String(edit[k] ?? '')}
-                  onChange={(e) => setEdit({ ...edit, [k]: ['longitud', 'alertaMin'].includes(k) ? Number(e.target.value) : e.target.value })}
-                />
+                {['longitud', 'alertaMin'].includes(k) ? (
+                  <NumberInput
+                    label={label}
+                    value={Number(edit[k] ?? 0)}
+                    min={0}
+                    onChange={(valor) => setEdit({ ...edit, [k]: valor })}
+                  />
+                ) : (
+                  <TextInput value={String(edit[k] ?? '')} onChange={(e) => setEdit({ ...edit, [k]: e.target.value })} />
+                )}
               </Field>
             ))}
             {(['esNcf', 'activa'] as const).map((k) => (
@@ -213,7 +218,7 @@ function CatalogosTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }):
       <Card title="Tasas de cambio" subtitle="Registro histórico de tasas por moneda y fecha.">
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Moneda"><TextInput value={tasa.monedaCodigo} onChange={(e) => setTasa({ ...tasa, monedaCodigo: e.target.value.toUpperCase() })} /></Field>
-          <Field label="Tasa"><TextInput type="number" value={tasa.tasa} onChange={(e) => setTasa({ ...tasa, tasa: Number(e.target.value) })} /></Field>
+          <Field label="Tasa"><NumberInput label="Tasa" value={tasa.tasa} min={0} decimal onChange={(valor) => setTasa({ ...tasa, tasa: valor })} /></Field>
           <Field label="Fecha"><TextInput type="date" value={tasa.fecha} onChange={(e) => setTasa({ ...tasa, fecha: e.target.value })} /></Field>
         </div>
         <Button className="mt-3" size="sm" onClick={() => void (async () => {
@@ -255,7 +260,7 @@ function CatalogosTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }):
               {['CARTA', 'MEDIA_PAGINA', 'TICKET_80', 'TICKET_58'].map((v) => <option key={v}>{v}</option>)}
             </select>
           </Field>
-          <Field label="Copias"><TextInput type="number" value={formato.copias} onChange={(e) => setFormato({ ...formato, copias: Number(e.target.value) })} /></Field>
+          <Field label="Copias"><NumberInput label="Copias" value={formato.copias} min={1} max={20} onChange={(valor) => setFormato({ ...formato, copias: valor })} /></Field>
         </div>
         <Button className="mt-3" size="sm" onClick={() => void (async () => {
           try { await window.api.invoke('config.formato.save', formato); toast.success('Formato guardado.'); reload() }
@@ -320,7 +325,7 @@ function ParametrosTab({ cfg, reload }: { cfg: ConfigData; reload: () => void })
           </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Hora"><TextInput type="time" value={backup.hora} onChange={(e) => setBackup({ ...backup, hora: e.target.value })} /></Field>
-            <Field label="Retención (días)"><TextInput type="number" value={backup.retencionDias} onChange={(e) => setBackup({ ...backup, retencionDias: Number(e.target.value) })} /></Field>
+            <Field label="Retención (días)"><NumberInput label="Retención (días)" value={backup.retencionDias} min={0} max={3650} onChange={(valor) => setBackup({ ...backup, retencionDias: valor })} /></Field>
           </div>
           <Button size="sm" onClick={() => void saveBackup()}>Guardar configuración de respaldos</Button>
         </div>

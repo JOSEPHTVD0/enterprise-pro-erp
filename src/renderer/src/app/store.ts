@@ -8,17 +8,15 @@ interface AppState {
   sidebarCollapsed: boolean
   activeView: string
   hydrate: (settings: Settings) => void
-  setSettings: (settings: Settings) => void
+  setSettings: (settings: Settings) => Promise<void>
   setTheme: (theme: Settings['theme']) => void
   setSidebarCollapsed: (collapsed: boolean) => void
   setActiveView: (id: string) => void
 }
 
 /** Persiste preferencias vía IPC (el proceso principal escribe en disco). */
-function persist(settings: Settings): void {
-  void window.api.settings.set(settings).catch(() => {
-    // El fallo se reporta en Configuración avanzada; no interrumpe la navegación.
-  })
+async function persist(settings: Settings): Promise<void> {
+  await window.api.settings.set(settings)
 }
 
 function aplicar(set: (parcial: Partial<AppState>) => void, settings: Settings, extra: Partial<AppState> = {}): void {
@@ -32,19 +30,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarCollapsed: defaultSettings.sidebarCollapsed,
   activeView: 'dashboard',
   hydrate: (settings) => aplicar(set, settings, { hydrated: true }),
-  setSettings: (settings) => {
+  setSettings: async (settings) => {
+    await persist(settings)
     aplicar(set, settings)
-    persist(settings)
   },
   setTheme: (theme) => {
     const settings: Settings = { ...get().settings, theme }
     aplicar(set, settings)
-    persist(settings)
+    void persist(settings).catch(() => undefined)
   },
   setSidebarCollapsed: (sidebarCollapsed) => {
     const settings: Settings = { ...get().settings, sidebarCollapsed }
     aplicar(set, settings)
-    persist(settings)
+    void persist(settings).catch(() => undefined)
   },
   setActiveView: (activeView) => set({ activeView })
 }))

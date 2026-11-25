@@ -80,7 +80,7 @@ export function CarritoEditor({
                   <td className="px-2 py-1.5">
                     <input
                       className={`${inputClass} h-8 px-2`}
-                      type="number" min="0.0001" step="0.01"
+                      type="text" inputMode="decimal" min="0.0001" step="0.01"
                       value={linea.cantidad}
                       onChange={(e) => actualizar(linea.key, { cantidad: e.target.value })}
                       aria-label="Cantidad"
@@ -89,7 +89,7 @@ export function CarritoEditor({
                   <td className="px-2 py-1.5">
                     <input
                       className={`${inputClass} h-8 px-2`}
-                      type="number" min="0" step="0.01"
+                      type="text" inputMode="decimal" min="0" step="0.01"
                       disabled={!permitirPrecio}
                       value={linea.precioCent}
                       onChange={(e) => actualizar(linea.key, { precioCent: e.target.value })}
@@ -99,7 +99,7 @@ export function CarritoEditor({
                   <td className="px-2 py-1.5">
                     <input
                       className={`${inputClass} h-8 px-2`}
-                      type="number" min="0" max="100" step="0.01"
+                      type="text" inputMode="decimal" min="0" max="100" step="0.01"
                       disabled={!permitirDescuento}
                       value={linea.descuentoPct}
                       onChange={(e) => actualizar(linea.key, { descuentoPct: e.target.value })}

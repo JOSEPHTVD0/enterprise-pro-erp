@@ -91,7 +91,7 @@ export function BarraFiltros({
           </Field>
         )}
         <Field label="Límite">
-          <TextInput type="number" min="1" max="5000" value={filtro.limite}
+          <TextInput type="text" inputMode="decimal" min="1" max="5000" value={filtro.limite}
             onChange={(e) => onChange({ ...filtro, limite: e.target.value })} />
         </Field>
         <div className="flex items-end gap-2 lg:col-span-6">
@@ -381,7 +381,7 @@ export function AplicacionesEditor({
                   </td>
                   <td className="px-2 py-1.5 tabular-nums">{doc ? money(pendienteCent(doc)) : '—'}</td>
                   <td className="px-2 py-1.5">
-                    <input className={`${inputClass} h-8 px-2`} type="number" min="0" step="0.01"
+                    <input className={`${inputClass} h-8 px-2`} type="text" inputMode="decimal" min="0" step="0.01"
                       value={fila.monto} onChange={(e) => actualizar(fila.key, { monto: e.target.value })}
                       aria-label="Monto aplicado" />
                   </td>

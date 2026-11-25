@@ -4,10 +4,46 @@ import { writeAudit, listAudit, type AuditFilter } from '../repositories/auditor
 import * as repo from '../repositories/seguridad.repo'
 import { requirePermission, type SessionContext } from './context'
 import { errors } from '@shared/errors'
-import { permissionCatalog, permissionKeys } from '@shared/permissions'
-import type { CreateRoleInput, CreateUserInput, UpdateUserInput } from '@shared/schemas/auth'
+import {
+  customPermissionKeyPattern, modules as modulosSistema, moduleLabels,
+  permissionCatalog, permissionCriticalKeys, permissionKeys, type ModuleKey, type PermissionDef
+} from '@shared/permissions'
+import type {
+  CreateRoleInput, CreateUserInput, CustomPermissionInput, RolePermissionsReplaceInput, UpdateUserInput
+} from '@shared/schemas/auth'
+
+const clavesDelSistema = new Set(permissionKeys)
+const criticos = new Set(permissionCriticalKeys)
+const permisosDeGestion = ['seguridad.consultar', 'seguridad.permiso.modificar']
+const modulosValidos = new Set<string>(modulosSistema)
 
 export function createSeguridadService(db: Db) {
+  /** Catálogo real del sistema más los permisos creados para la empresa activa. */
+  function catalogoCompleto(ctx: SessionContext): PermissionDef[] {
+    const personalizados = repo.listCustomPermissions(db, ctx.empresaId).map((p) => ({
+      key: p.clave,
+      module: (modulosValidos.has(p.modulo) ? p.modulo : 'configuracion') as ModuleKey,
+      operation: p.operacion || 'personalizado',
+      label: p.etiqueta,
+      descripcion: p.descripcion || `Permiso personalizado de ${moduleLabels[(modulosValidos.has(p.modulo) ? p.modulo : 'configuracion') as ModuleKey]}.`,
+      critico: p.critico === 1,
+      personalizado: true
+    }))
+    return [...permissionCatalog, ...personalizados]
+  }
+
+  function validarClaves(ctx: SessionContext, keys: string[]): void {
+    const permitidas = new Set<string>([
+      ...clavesDelSistema,
+      ...repo.listCustomPermissions(db, ctx.empresaId).map((p) => p.clave)
+    ])
+    for (const clave of keys) {
+      if (!permitidas.has(clave)) {
+        throw errors.validation(`Permiso no disponible para esta empresa: ${clave}`)
+      }
+    }
+  }
+
   return {
     listUsers(ctx: SessionContext) {
       requirePermission(ctx, 'seguridad.consultar')
@@ -78,7 +114,142 @@ export function createSeguridadService(db: Db) {
 
     listPermissions(ctx: SessionContext) {
       requirePermission(ctx, 'seguridad.consultar')
-      return permissionCatalog
+      return catalogoCompleto(ctx)
+    },
+
+    /** Catálogo completo con la explicación de para qué sirve cada permiso. */
+    permissionCatalog(ctx: SessionContext) {
+      requirePermission(ctx, 'seguridad.consultar')
+      return catalogoCompleto(ctx)
+    },
+
+    listCustomPermissions(ctx: SessionContext) {
+      requirePermission(ctx, 'seguridad.consultar')
+      return repo.listCustomPermissions(db, ctx.empresaId)
+    },
+
+    /**
+     * Crea o edita un permiso `custom.*` de la empresa. Es una etiqueta auditada
+     * que puede asignarse a roles; nunca habilita rutas del sistema por sí sola.
+     */
+    saveCustomPermission(ctx: SessionContext, input: CustomPermissionInput) {
+      requirePermission(ctx, 'seguridad.permiso.modificar')
+      if (!customPermissionKeyPattern.test(input.key)) throw errors.validation('Clave de permiso personalizado inválida.')
+      if (!modulosValidos.has(input.module)) throw errors.validation('Módulo desconocido.')
+      const existente = repo.findPermissionByKey(db, input.key)
+      if (existente && (!existente.personalizado || existente.empresa_id !== ctx.empresaId)) {
+        throw errors.conflict('Ya existe un permiso con esa clave.')
+      }
+      const id = db.transaction(() => {
+        let permisoId: number
+        if (existente) {
+          repo.updateCustomPermission(db, existente.id, {
+            etiqueta: input.label,
+            descripcion: input.descripcion,
+            modulo: input.module,
+            critico: input.critico
+          })
+          permisoId = existente.id
+        } else {
+          permisoId = repo.insertCustomPermission(db, {
+            clave: input.key,
+            modulo: input.module,
+            etiqueta: input.label,
+            descripcion: input.descripcion,
+            critico: input.critico,
+            empresaId: ctx.empresaId
+          })
+          repo.grantPermissionToAdmin(db, ctx.empresaId, permisoId)
+        }
+        writeAudit(
+          db,
+          { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId },
+          existente ? 'MODIFICAR' : 'CREAR', 'permisos', permisoId,
+          existente ?? null, input
+        )
+        return permisoId
+      })()
+      return { id }
+    },
+
+    deleteCustomPermission(ctx: SessionContext, key: string) {
+      requirePermission(ctx, 'seguridad.permiso.modificar')
+      const permiso = repo.findPermissionByKey(db, key)
+      if (!permiso || !permiso.personalizado || permiso.empresa_id !== ctx.empresaId) {
+        throw errors.notFound('Permiso personalizado')
+      }
+      db.transaction(() => {
+        repo.deleteCustomPermission(db, permiso.id)
+        writeAudit(
+          db,
+          { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId },
+          'ELIMINAR', 'permisos', permiso.id, permiso, { clave: key }
+        )
+      })()
+      return { ok: true }
+    },
+
+    getRolePermissions(ctx: SessionContext, roleId: number) {
+      requirePermission(ctx, 'seguridad.consultar')
+      const role = repo.findRole(db, ctx.empresaId, roleId)
+      if (!role) throw errors.notFound('Rol')
+      const porClave = new Map(catalogoCompleto(ctx).map((p) => [p.key, p]))
+      const permisos = repo.permissionKeysForRole(db, roleId)
+        .map((key) => porClave.get(key))
+        .filter((p): p is NonNullable<typeof p> => Boolean(p))
+      return {
+        id: role.id,
+        nombre: role.nombre,
+        descripcion: role.descripcion,
+        bloqueado: role.nombre === 'Administrador',
+        permisos
+      }
+    },
+
+    /**
+     * Reemplaza los permisos de un rol dentro de una transacción. Audita el diff,
+     * exige confirmación para permisos críticos y evita quedarse sin gestión.
+     */
+    replaceRolePermissions(ctx: SessionContext, input: RolePermissionsReplaceInput) {
+      requirePermission(ctx, 'seguridad.permiso.modificar')
+      validarClaves(ctx, input.permisos)
+      const criticosAplicables = new Set([
+        ...criticos,
+        ...repo.listCustomPermissions(db, ctx.empresaId).filter((p) => p.critico === 1).map((p) => p.clave)
+      ])
+      const resultado = db.transaction(() => {
+        const role = repo.findRole(db, ctx.empresaId, input.rolId)
+        if (!role) throw errors.notFound('Rol')
+        if (role.nombre === 'Administrador') {
+          throw errors.validation('El rol Administrador siempre tiene acceso total y no se puede editar.')
+        }
+
+        const anteriores = new Set(repo.permissionKeysForRole(db, input.rolId))
+        const nuevos = new Set(input.permisos)
+        const agregados = [...nuevos].filter((k) => !anteriores.has(k))
+        const removidos = [...anteriores].filter((k) => !nuevos.has(k))
+
+        if (agregados.some((k) => criticosAplicables.has(k)) && !input.confirmarCriticos) {
+          throw errors.validation('Los permisos críticos requieren confirmación explícita antes de guardar.')
+        }
+        for (const clave of permisosDeGestion) {
+          if (anteriores.has(clave) && removidos.includes(clave) &&
+              repo.countRolesWithPermission(db, ctx.empresaId, clave, input.rolId) === 0) {
+            throw errors.validation(`Debe conservar otro rol activo con ${clave} para no perder la administración.`)
+          }
+        }
+
+        repo.setRolePermissions(db, input.rolId, input.permisos)
+        writeAudit(
+          db,
+          { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId },
+          'MODIFICAR', 'rol_permisos', input.rolId,
+          { permisos: [...anteriores] },
+          { permisos: input.permisos, agregados, removidos, motivo: input.motivo }
+        )
+        return { ok: true, agregados, removidos }
+      })()
+      return resultado
     },
 
     getRole(ctx: SessionContext, roleId: number) {
@@ -90,9 +261,16 @@ export function createSeguridadService(db: Db) {
 
     createRole(ctx: SessionContext, input: CreateRoleInput) {
       requirePermission(ctx, 'seguridad.crear')
+      validarClaves(ctx, input.permisos)
+      if (input.nombre.toLowerCase() === 'administrador') {
+        throw errors.validation('El nombre Administrador está reservado para el rol con acceso total.')
+      }
       const id = db.transaction(() => {
+        if (repo.findRoleByName(db, ctx.empresaId, input.nombre)) {
+          throw errors.conflict('Ya existe un rol con ese nombre.')
+        }
         const roleId = repo.insertRole(db, ctx.empresaId, input.nombre, input.descripcion)
-        repo.setRolePermissions(db, roleId, input.permisos.filter((p) => permissionKeys.includes(p)))
+        repo.setRolePermissions(db, roleId, input.permisos)
         writeAudit(db, { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId }, 'CREAR', 'roles', roleId, null, input)
         return roleId
       })()
@@ -101,12 +279,16 @@ export function createSeguridadService(db: Db) {
 
     updateRole(ctx: SessionContext, input: { id: number; nombre: string; descripcion: string; permisos: string[] }) {
       requirePermission(ctx, 'seguridad.permiso.modificar')
+      validarClaves(ctx, input.permisos)
       const role = repo.findRole(db, ctx.empresaId, input.id)
       if (!role) throw errors.notFound('Rol')
       if (role.nombre === 'Administrador') throw errors.validation('El rol Administrador no se puede modificar: siempre tiene acceso total.')
+      if (input.nombre.toLowerCase() === 'administrador') {
+        throw errors.validation('El nombre Administrador está reservado para el rol con acceso total.')
+      }
       db.transaction(() => {
         repo.updateRole(db, input.id, input.nombre, input.descripcion)
-        repo.setRolePermissions(db, input.id, input.permisos.filter((p) => permissionKeys.includes(p)))
+        repo.setRolePermissions(db, input.id, input.permisos)
         writeAudit(db, { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId }, 'MODIFICAR', 'roles', input.id, role, input)
       })()
       return { ok: true }

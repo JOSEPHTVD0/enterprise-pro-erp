@@ -5,7 +5,7 @@ import { useAppStore } from '@/app/store'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Field, TextInput, inputClass } from '@/components/ui/Field'
+import { Field, NumberInput, TextInput, inputClass } from '@/components/ui/Field'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
@@ -52,16 +52,7 @@ function Numero({
 }): React.JSX.Element {
   return (
     <Field label={label} hint={hint}>
-      <TextInput
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) => {
-          const n = Number(e.target.value)
-          if (Number.isFinite(n)) onChange(Math.min(max, Math.max(min, Math.trunc(n))))
-        }}
-      />
+      <NumberInput label={label} value={value} min={min} max={max} onChange={onChange} />
     </Field>
   )
 }
@@ -110,9 +101,13 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
   }
 
   const guardar = async (): Promise<void> => {
-    setSettings(borrador)
-    setGuardado(true)
-    toast.success('Preferencias guardadas en este equipo.')
+    try {
+      await setSettings(borrador)
+      setGuardado(true)
+      toast.success('Preferencias guardadas en este equipo.')
+    } catch {
+      toast.error('No se pudieron guardar las preferencias en este equipo.')
+    }
   }
 
   const restaurar = async (): Promise<void> => {

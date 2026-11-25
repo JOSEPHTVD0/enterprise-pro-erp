@@ -83,23 +83,23 @@ export function LineasEditor({ catalogos, lineas, onChange, permitirGasto = true
                     </select>
                   </td>
                   <td className="px-2 py-1.5">
-                    <input className={`${inputClass} h-8 px-2`} type="number" min="0.0001" step="0.01"
+                    <input className={`${inputClass} h-8 px-2`} type="text" inputMode="decimal" min="0.0001" step="0.01"
                       value={linea.cantidad} onChange={(e) => actualizar(linea.key, { cantidad: e.target.value })}
                       aria-label="Cantidad" />
                   </td>
                   <td className="px-2 py-1.5">
-                    <input className={`${inputClass} h-8 px-2`} type="number" min="0" step="0.01"
+                    <input className={`${inputClass} h-8 px-2`} type="text" inputMode="decimal" min="0" step="0.01"
                       value={linea.costo} onChange={(e) => actualizar(linea.key, { costo: e.target.value })}
                       aria-label="Costo" />
                   </td>
                   <td className="px-2 py-1.5">
-                    <input className={`${inputClass} h-8 px-2`} type="number" min="0" max="100" step="0.01"
+                    <input className={`${inputClass} h-8 px-2`} type="text" inputMode="decimal" min="0" max="100" step="0.01"
                       value={linea.descuentoPct} onChange={(e) => actualizar(linea.key, { descuentoPct: e.target.value })}
                       aria-label="Descuento porcentual" />
                   </td>
                   {permitirGasto && (
                     <td className="px-2 py-1.5">
-                      <input className={`${inputClass} h-8 px-2`} type="number" min="0" step="0.01"
+                      <input className={`${inputClass} h-8 px-2`} type="text" inputMode="decimal" min="0" step="0.01"
                         value={linea.gasto} onChange={(e) => actualizar(linea.key, { gasto: e.target.value })}
                         aria-label="Gasto asociado" />
                     </td>
@@ -211,7 +211,7 @@ export function PagosEditor({
                   </select>
                 </td>
                 <td className="px-2 py-1.5">
-                  <input className={`${inputClass} h-8 px-2`} type="number" min="0" step="0.01"
+                  <input className={`${inputClass} h-8 px-2`} type="text" inputMode="decimal" min="0" step="0.01"
                     value={pago.monto} onChange={(e) => actualizar(pago.key, { monto: e.target.value })}
                     aria-label="Monto del pago" />
                 </td>
@@ -379,7 +379,7 @@ export function CantidadesEditor({
             <p className="truncate font-medium">{txt(linea.descripcion)}</p>
             <p className="text-xs text-slate-500">Disponible: {number(disponible(linea))}</p>
           </div>
-          <TextInput type="number" min="0" step="0.01" className="w-28"
+          <TextInput type="text" inputMode="decimal" min="0" step="0.01" className="w-28"
             value={cantidades[num(linea.id)] ?? ''}
             onChange={(e) => onChange({ ...cantidades, [num(linea.id)]: e.target.value })}
             aria-label={`Cantidad de ${txt(linea.descripcion)}`} />

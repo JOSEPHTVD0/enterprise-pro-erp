@@ -15,7 +15,7 @@ export function Card({
 }): React.JSX.Element {
   return (
     <section
-      className={`rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}
+      className={`erp-card rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}
     >
       {(title || subtitle || actions) && (
         <header className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-3 dark:border-slate-800">

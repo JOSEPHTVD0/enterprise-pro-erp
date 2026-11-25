@@ -21,6 +21,8 @@ import {
   ScrollText,
   DatabaseBackup,
   BookOpen,
+  SlidersHorizontal,
+  BrainCircuit,
   type LucideIcon
 } from 'lucide-react'
 
@@ -81,6 +83,36 @@ export const moduleGroups: ModuleGroup[] = [
           'Utilidad solo para perfiles con permiso reportes.ganancia',
           'Series mensuales, formas de pago y principales clientes',
           'Exportación CSV y filtro por período'
+        ]
+      },
+      {
+        id: 'centro-control',
+        label: 'Centro de control',
+        icon: SlidersHorizontal,
+        permission: 'configuracion.consultar',
+        phase: 14,
+        available: true,
+        description: 'Permisos explicados, ajustes auditados y módulos de la empresa.',
+        features: [
+          'Editor de permisos por rol con descripción y confirmación de críticos',
+          'Diez grupos de ajustes operativos con validación en backend',
+          'Widgets visibles, ordenables y con intervalo de actualización',
+          'Tema avanzado y activación de módulos opcionales'
+        ]
+      },
+      {
+        id: 'inteligencia',
+        label: 'Inteligencia operativa',
+        icon: BrainCircuit,
+        permission: 'inteligencia.consultar',
+        phase: 14,
+        available: true,
+        description: 'Paneles avanzados calculados sobre SQLite real de la empresa.',
+        features: [
+          'Tendencia mensual y envejecimiento de CxC/CxP',
+          'Rotación de inventario y rentabilidad por producto',
+          'Flujo proyectado a 28 días y actividad de auditoría',
+          'Radar de CRM, servicios y activos con permisos por subwidget'
         ]
       }
     ]

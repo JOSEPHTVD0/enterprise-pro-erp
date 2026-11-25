@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/Badge'
 import { Field, TextInput, inputClass } from '@/components/ui/Field'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { money, number } from '@/lib/format'
+import { useAjustesStore } from '@/app/ajustes-store'
+import { defaultAjustes, type WidgetId } from '@shared/schemas/ajustes'
 import { toast } from '@/components/ui/Toast'
 
 interface Kpis {
@@ -75,6 +77,11 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
   const [hasta, setHasta] = useState('')
   const [datos, setDatos] = useState<Datos | null>(null)
   const [cargando, setCargando] = useState(false)
+  const configuracion = useAjustesStore((s) => s.ajustes.widgets ?? defaultAjustes.widgets)
+  const widget = useAjustesStore((s) => s.widget)
+  const visible = (id: WidgetId): boolean => widget(id).visible
+  const orden = (id: WidgetId): number => widget(id).orden
+  const compacta = configuracion.densidad === 'compacta'
 
   const cargar = useCallback(async (): Promise<void> => {
     setCargando(true)
@@ -95,17 +102,23 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
 
   useEffect(() => { void cargar() }, [cargar])
 
+  // Refresco automático configurado en el centro de control (mínimo 30 s en backend).
+  useEffect(() => {
+    const id = window.setInterval(() => void cargar(), configuracion.intervaloActualizacionSeg * 1000)
+    return () => window.clearInterval(id)
+  }, [cargar, configuracion.intervaloActualizacionSeg])
+
   const kpis = datos?.kpis
-  const tarjetas = kpis ? [
-    { label: 'Ventas del período', valor: money(kpis.ventasCent), tono: 'accent' as const },
-    { label: 'Compras', valor: money(kpis.comprasCent), tono: 'neutral' as const },
-    { label: 'Utilidad bruta', valor: kpis.utilidadCent === null ? 'Sin permiso' : money(kpis.utilidadCent), tono: 'success' as const },
-    { label: 'Margen', valor: kpis.margenBp === null ? '—' : `${(kpis.margenBp / 100).toFixed(2)} %`, tono: 'info' as const },
-    { label: 'Cobros', valor: money(kpis.cobrosCent), tono: 'success' as const },
-    { label: 'Pagos', valor: money(kpis.pagosCent), tono: 'neutral' as const },
-    { label: 'CxC saldo', valor: money(kpis.cxcSaldoCent), tono: 'warning' as const },
-    { label: 'CxP saldo', valor: money(kpis.cxpSaldoCent), tono: 'warning' as const }
-  ] : []
+  const tarjetas = kpis ? ([
+    { id: 'kpi-ventas' as const, label: 'Ventas del período', valor: money(kpis.ventasCent), tono: 'accent' as const },
+    { id: 'kpi-compras' as const, label: 'Compras', valor: money(kpis.comprasCent), tono: 'neutral' as const },
+    { id: 'kpi-utilidad' as const, label: 'Utilidad bruta', valor: kpis.utilidadCent === null ? 'Sin permiso' : money(kpis.utilidadCent), tono: 'success' as const },
+    { id: 'kpi-margen' as const, label: 'Margen', valor: kpis.margenBp === null ? '—' : `${(kpis.margenBp / 100).toFixed(2)} %`, tono: 'info' as const },
+    { id: 'kpi-cobros' as const, label: 'Cobros', valor: money(kpis.cobrosCent), tono: 'success' as const },
+    { id: 'kpi-pagos' as const, label: 'Pagos', valor: money(kpis.pagosCent), tono: 'neutral' as const },
+    { id: 'kpi-cxc' as const, label: 'CxC saldo', valor: money(kpis.cxcSaldoCent), tono: 'warning' as const },
+    { id: 'kpi-cxp' as const, label: 'CxP saldo', valor: money(kpis.cxpSaldoCent), tono: 'warning' as const }
+  ].filter((t) => visible(t.id)).sort((a, b) => orden(a.id) - orden(b.id))) : []
 
   return (
     <div className="animate-fade-in">
@@ -149,11 +162,19 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
       </Card>
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {(tarjetas.length ? tarjetas : Array.from({ length: 8 }, (_, i) => ({
-          label: ['Ventas', 'Compras', 'Utilidad', 'Margen', 'Cobros', 'Pagos', 'CxC', 'CxP'][i],
-          valor: '—', tono: 'neutral' as const
+        {(tarjetas.length ? tarjetas : ([
+          { id: 'kpi-ventas' as const, label: 'Ventas' },
+          { id: 'kpi-compras' as const, label: 'Compras' },
+          { id: 'kpi-utilidad' as const, label: 'Utilidad' },
+          { id: 'kpi-margen' as const, label: 'Margen' },
+          { id: 'kpi-cobros' as const, label: 'Cobros' },
+          { id: 'kpi-pagos' as const, label: 'Pagos' },
+          { id: 'kpi-cxc' as const, label: 'CxC' },
+          { id: 'kpi-cxp' as const, label: 'CxP' }
+        ] as const).filter((t) => visible(t.id)).sort((a, b) => orden(a.id) - orden(b.id)).map((t) => ({
+          ...t, valor: '—', tono: 'neutral' as const
         }))).map((t) => (
-          <div key={t.label} className="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900">
+          <div key={t.label} className={`erp-card rounded-xl border border-slate-200 bg-white ${compacta ? 'p-2.5' : 'p-3.5'} dark:border-slate-800 dark:bg-slate-900`}>
             <p className="text-xs text-slate-500 dark:text-slate-400">{t.label}</p>
             <p className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">{t.valor}</p>
             <div className="mt-1"><Badge tone={t.tono}>Real</Badge></div>
@@ -164,7 +185,8 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
       {datos && (
         <>
           <div className="mb-4 grid gap-4 lg:grid-cols-2">
-            <Card title="Ventas mensuales" subtitle="Últimos 12 meses hasta el período seleccionado.">
+            {visible('tendencia') && <div style={{ order: orden('tendencia') }}>
+            <Card className={compacta ? 'p-2' : ''} title="Ventas mensuales" subtitle="Últimos 12 meses hasta el período seleccionado.">
               <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={datos.serieMensual} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
@@ -178,8 +200,10 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                 </ResponsiveContainer>
               </div>
             </Card>
+            </div>}
 
-            <Card title="Formas de pago" subtitle="Distribución de los cobros del período.">
+            {visible('formas-pago') && <div style={{ order: orden('formas-pago') }}>
+            <Card className={compacta ? 'p-2' : ''} title="Formas de pago" subtitle="Distribución de los cobros del período.">
               <div className="h-[260px]">
                 {datos.porFormaPago.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -196,10 +220,12 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                 )}
               </div>
             </Card>
+            </div>}
           </div>
 
           <div className="mb-4 grid gap-4 lg:grid-cols-2">
-            <Card title="Principales clientes" subtitle="Por importe facturado en el período.">
+            {visible('top-clientes') && <div style={{ order: orden('top-clientes') }}>
+            <Card className={compacta ? 'p-2' : ''} title="Principales clientes" subtitle="Por importe facturado en el período.">
               <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={datos.topClientes.slice(0, 8)} layout="vertical" margin={{ left: 10, right: 16 }}>
@@ -212,8 +238,10 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                 </ResponsiveContainer>
               </div>
             </Card>
+            </div>}
 
-            <Card title="Alertas y módulos 2026" subtitle="Señales tempranas con datos reales.">
+            {visible('alertas') && <div style={{ order: orden('alertas') }}>
+            <Card className={compacta ? 'p-2' : ''} title="Alertas y módulos 2026" subtitle="Señales tempranas con datos reales.">
               <div className="space-y-2 text-sm">
                 {datos.alertas.length === 0 && <p className="text-slate-400">Sin alertas activas.</p>}
                 {datos.alertas.map((a, i) => (
@@ -241,9 +269,11 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                 </p>
               </div>
             </Card>
+            </div>}
           </div>
 
-          <Card title="Productos más facturados" subtitle="Top 10 del período seleccionado.">
+          {visible('top-productos') && <div style={{ order: orden('top-productos') }}>
+          <Card className={compacta ? 'p-2' : ''} title="Productos más facturados" subtitle="Top 10 del período seleccionado.">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-xs uppercase text-slate-500">
@@ -262,6 +292,7 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
               </table>
             </div>
           </Card>
+          </div>}
         </>
       )}
     </div>

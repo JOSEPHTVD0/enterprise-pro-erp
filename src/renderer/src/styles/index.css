@@ -6,6 +6,30 @@
   --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 
+/* Variables administradas desde el centro de control (valores validados por Zod). */
+:root {
+  --erp-escala: 1;
+  --erp-radio: 10px;
+  --erp-acento: #4f46e5;
+  --erp-font: var(--font-sans);
+}
+
+.erp-card { border-radius: var(--erp-radio); }
+.erp-acento { color: var(--erp-acento); }
+body { font-family: var(--erp-font); font-size: calc(14px * var(--erp-escala)); }
+
+.erp-reducir-movimiento *,
+.erp-reducir-movimiento *::before,
+.erp-reducir-movimiento *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+.erp-alto-contraste .erp-card {
+  border-width: 2px;
+  border-color: var(--erp-acento);
+}
+
 html,
 body,
 #root {

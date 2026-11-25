@@ -1,6 +1,28 @@
 import { z } from 'zod'
+import { customPermissionKeyPattern, modules, permissionKeys } from '../permissions'
 
 const id = z.number().int().positive()
+/**
+ * Claves del catálogo fijo o del espacio reservado `custom.*`.
+ * La existencia real de un permiso personalizado se comprueba en el servicio.
+ */
+export const permissionKeySchema = z.string().refine(
+  (key) => permissionKeys.includes(key) || customPermissionKeyPattern.test(key),
+  'Permiso desconocido.'
+)
+export const customPermissionKeySchema = z.string().regex(
+  customPermissionKeyPattern,
+  'La clave debe empezar por custom. y usar letras minúsculas, números o guion bajo (3-40 caracteres).'
+)
+const moduloSchema = z.enum(modules as unknown as [(typeof modules)[number], ...(typeof modules)[number][]])
+
+export const customPermissionCreateSchema = z.object({
+  key: customPermissionKeySchema,
+  label: z.string().trim().min(3).max(80),
+  descripcion: z.string().trim().min(10, 'Describa para qué sirve el permiso.').max(300),
+  module: moduloSchema,
+  critico: z.boolean().default(false)
+})
 const passwordStrong = z
   .string()
   .min(10, 'La contraseña debe tener al menos 10 caracteres')
@@ -36,10 +58,20 @@ export const updateUserSchema = createUserSchema.extend({ id })
 export const createRoleSchema = z.object({
   nombre: z.string().trim().min(2).max(60),
   descripcion: z.string().trim().max(200).default(''),
-  permisos: z.array(z.string()).default([])
+  permisos: z.array(permissionKeySchema).default([])
 })
 
-export const updateRoleSchema = createRoleSchema.extend({ id, empresaId: id.optional().nullable() })
+export const updateRoleSchema = createRoleSchema.extend({ id })
+
+/** Editor administrativo de permisos: claves estrictas y confirmación para permisos sensibles. */
+export const rolePermissionsReplaceSchema = z.object({
+  rolId: id,
+  permisos: z.array(permissionKeySchema),
+  confirmarCriticos: z.boolean().default(false),
+  motivo: z.string().trim().max(200).default('')
+})
+
+export const customPermissionDeleteSchema = z.object({ key: customPermissionKeySchema })
 
 export const createDepartamentoSchema = z.object({
   nombre: z.string().trim().min(2).max(60),
@@ -50,3 +82,6 @@ export type LoginInput = z.infer<typeof loginSchema>
 export type CreateUserInput = z.infer<typeof createUserSchema>
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
 export type CreateRoleInput = z.infer<typeof createRoleSchema>
+export type RolePermissionsReplaceInput = z.infer<typeof rolePermissionsReplaceSchema>
+export type CustomPermissionInput = z.infer<typeof customPermissionCreateSchema>
+export type CustomPermissionDeleteInput = z.infer<typeof customPermissionDeleteSchema>

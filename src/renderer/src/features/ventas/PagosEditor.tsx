@@ -72,7 +72,7 @@ export function PagosEditor({ totalCent, pagos, onChange }: Props): React.JSX.El
                 <td className="px-2 py-1.5">
                   <input
                     className={`${inputClass} h-8 px-2`}
-                    type="number" min="0" step="0.01"
+                    type="text" inputMode="decimal" min="0" step="0.01"
                     value={pago.monto}
                     onChange={(e) => actualizar(pago.key, { monto: e.target.value })}
                     aria-label="Monto del pago"

@@ -15,7 +15,7 @@ describe('migraciones y datos estructurales', () => {
     }
     const versions = (db.prepare('SELECT version FROM _migraciones ORDER BY version').all() as { version: number }[])
       .map((m) => m.version)
-    expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
     db.close()
   })
 

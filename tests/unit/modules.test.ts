@@ -22,14 +22,14 @@ describe('catálogo de módulos', () => {
     }
   })
 
-  it('los módulos activos en 0.4.0 son los previstos', () => {
+  it('los módulos activos en 0.5.0 son los previstos', () => {
     const active = allModules.filter((m) => m.available).map((m) => m.id)
     expect(active.sort()).toEqual([
-      'activos', 'apariencia', 'auditoria', 'bancos', 'cajas', 'catalogos', 'clientes', 'compras',
-      'configuracion', 'configuracion-avanzada', 'contabilidad', 'cotizaciones', 'crm', 'cxc', 'cxp',
-      'dashboard', 'dashboard-ejecutivo', 'facturacion', 'gastos', 'inventario', 'pos',
-      'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos', 'roles',
-      'salud', 'servicios', 'usuarios', 'vendedores'
+      'activos', 'apariencia', 'auditoria', 'bancos', 'cajas', 'catalogos', 'centro-control',
+      'clientes', 'compras', 'configuracion', 'configuracion-avanzada', 'contabilidad',
+      'cotizaciones', 'crm', 'cxc', 'cxp', 'dashboard', 'dashboard-ejecutivo', 'facturacion',
+      'gastos', 'inteligencia', 'inventario', 'pos', 'presupuestos', 'productos', 'proveedores',
+      'reportes', 'respaldos', 'roles', 'salud', 'servicios', 'usuarios', 'vendedores'
     ])
   })
 

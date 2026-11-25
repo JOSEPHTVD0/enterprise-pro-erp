@@ -9,3 +9,9 @@ export const dashboardEjecutivoSchema = conDefaultsDeObjetoVacio(z.object({
 }))
 
 export type DashboardEjecutivoFiltro = z.infer<typeof dashboardEjecutivoSchema>
+
+export const inteligenciaFiltroSchema = conDefaultsDeObjetoVacio(z.object({
+  periodo: z.enum(['MES', 'TRIMESTRE', 'ANIO']).default('ANIO')
+}))
+
+export type InteligenciaFiltro = z.infer<typeof inteligenciaFiltroSchema>

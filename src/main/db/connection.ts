@@ -10,6 +10,8 @@ import { comprasSql } from './migrations/005_compras'
 import { finanzasSql } from './migrations/006_finanzas'
 import { modulos2026Sql } from './migrations/007_modulos_2026'
 import { contabilidadSql } from './migrations/008_contabilidad'
+import { centroControlSql } from './migrations/009_centro_control'
+import { permisosPersonalizadosSql } from './migrations/010_permisos_personalizados'
 import { seed } from './seed'
 
 export type Db = Database.Database
@@ -22,7 +24,9 @@ const migrations: { version: number; nombre: string; sql: string }[] = [
   { version: 5, nombre: 'compras', sql: comprasSql },
   { version: 6, nombre: 'finanzas', sql: finanzasSql },
   { version: 7, nombre: 'modulos_2026', sql: modulos2026Sql },
-  { version: 8, nombre: 'contabilidad', sql: contabilidadSql }
+  { version: 8, nombre: 'contabilidad', sql: contabilidadSql },
+  { version: 9, nombre: 'centro_control', sql: centroControlSql },
+  { version: 10, nombre: 'permisos_personalizados', sql: permisosPersonalizadosSql }
 ]
 
 export function configurePragmas(db: Db): void {

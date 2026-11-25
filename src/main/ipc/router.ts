@@ -21,11 +21,14 @@ import { createDashboardEjecutivoService } from '../services/dashboard-ejecutivo
 import { createSaludService } from '../services/salud.service'
 import { createModulos2026Service } from '../services/modulos2026.service'
 import { createContabilidadService } from '../services/contabilidad.service'
+import { createAjustesService } from '../services/ajustes.service'
+import { createInteligenciaService } from '../services/inteligencia.service'
 import { serializeError, errors, encodeIpcError } from '@shared/errors'
 import { assertCanProceed } from './policy'
 import {
   loginSchema, changePasswordSchema, createUserSchema, updateUserSchema,
-  createRoleSchema
+  createRoleSchema, rolePermissionsReplaceSchema,
+  customPermissionCreateSchema, customPermissionDeleteSchema
 } from '@shared/schemas/auth'
 import {
   empresaSchema, parametroSchema, backupConfigSchema,
@@ -65,7 +68,10 @@ import {
   respaldosCrearSchema, respaldosHistorialSchema, respaldosIntegridadSchema, respaldosRestaurarSchema
 } from '@shared/schemas/respaldos'
 import { pdfGenerarSchema } from '@shared/schemas/pdf'
-import { dashboardEjecutivoSchema } from '@shared/schemas/paneles'
+import {
+  ajustesGetSchema, ajustesResetSchema, ajustesSaveSchema
+} from '@shared/schemas/ajustes'
+import { dashboardEjecutivoSchema, inteligenciaFiltroSchema } from '@shared/schemas/paneles'
 import {
   idModuloSchema, filtroModulosSchema, cambiarEstadoSchema, presupuestoCrearSchema,
   presupuestoEjecutarSchema, servicioCatalogoSchema, ordenServicioCrearSchema,
@@ -139,6 +145,8 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
   const salud = createSaludService(db)
   const modulos2026 = createModulos2026Service(db)
   const contabilidad = createContabilidadService(db)
+  const ajustes = createAjustesService(db)
+  const inteligencia = createInteligenciaService(db, ajustes)
   const backups = createBackupsService({
     db,
     userDataPath: app.getPath('userData'),
@@ -182,6 +190,27 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
       { schema: createRoleSchema.extend({ id: zId }) }
     ),
     'seguridad.permissions.list': route((ctx) => seguridad.listPermissions(ctx), { permission: 'seguridad.consultar' }),
+    'seguridad.permissions.catalog': route((ctx) => seguridad.permissionCatalog(ctx), { permission: 'seguridad.consultar' }),
+    'seguridad.permissions.custom.list': route(
+      (ctx) => seguridad.listCustomPermissions(ctx),
+      { permission: 'seguridad.consultar' }
+    ),
+    'seguridad.permissions.custom.save': route(
+      (ctx, input) => seguridad.saveCustomPermission(ctx, input as never),
+      { schema: customPermissionCreateSchema }
+    ),
+    'seguridad.permissions.custom.delete': route(
+      (ctx, input) => seguridad.deleteCustomPermission(ctx, (input as { key: string }).key),
+      { schema: customPermissionDeleteSchema }
+    ),
+    'seguridad.roles.permissions.get': route(
+      (ctx, input) => seguridad.getRolePermissions(ctx, input as number),
+      { schema: zId, permission: 'seguridad.consultar' }
+    ),
+    'seguridad.roles.permissions.replace': route(
+      (ctx, input) => seguridad.replaceRolePermissions(ctx, input as never),
+      { schema: rolePermissionsReplaceSchema }
+    ),
     'seguridad.departments.list': route((ctx) => seguridad.listDepartments(ctx), { permission: 'seguridad.consultar' }),
     'seguridad.departments.create': route((ctx, input) => seguridad.createDepartment(ctx, input as string), { schema: string.min(2).max(60) }),
     'seguridad.sessions.list': route((ctx) => seguridad.listSessions(ctx)),
@@ -335,6 +364,19 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     'config.serie.reservar': route((ctx, input) => config.reservarNumero(ctx, input as string), { schema: string.min(2) }),
     'config.serie.preview': route((ctx, input) => config.vistaPreviaNumero(ctx, input as string), { schema: string.min(2) }),
     'config.series.estado': route((ctx) => config.estadoSeries(ctx)),
+    // v0.5.0 — Centro de control: ajustes por empresa con permiso y auditoría.
+    'config.ajustes.get': route(
+      (ctx, input) => ajustes.get(ctx, input),
+      { schema: ajustesGetSchema, permission: 'configuracion.ajustes.consultar' }
+    ),
+    'config.ajustes.save': route(
+      (ctx, input) => ajustes.save(ctx, input),
+      { schema: ajustesSaveSchema }
+    ),
+    'config.ajustes.reset': route(
+      (ctx, input) => ajustes.reset(ctx, input),
+      { schema: ajustesResetSchema }
+    ),
     'config.backup.config': route(
       (ctx, input) => {
         const cfg = backupConfigSchema.parse(input)
@@ -740,6 +782,11 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     'salud.resumen': route(
       (ctx) => salud.resumen(ctx),
       { permission: 'salud.consultar' }
+    ),
+    // v0.5.0 — Inteligencia operativa: solo lectura, cálculos locales reales.
+    'inteligencia.resumen': route(
+      (ctx, input) => inteligencia.resumen(ctx, input as never),
+      { schema: inteligenciaFiltroSchema, permission: 'inteligencia.consultar' }
     ),
 
     'presupuestos.list': route(

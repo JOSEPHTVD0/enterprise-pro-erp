@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { ShieldAlert } from 'lucide-react'
 import { defaultSettings, resolveTheme } from '@shared/settings'
 import { useAppStore } from '@/app/store'
+import { useAjustesStore } from '@/app/ajustes-store'
+import { aplicarTemaAvanzado } from '@/lib/tema-avanzado'
 import { findModule, modulePermission } from '@/app/modules'
 import { Sidebar } from '@/app/Sidebar'
 import { Topbar } from '@/app/Topbar'
@@ -19,6 +21,8 @@ import { UsuariosPage } from '@/features/usuarios/UsuariosPage'
 import { RolesPage } from '@/features/usuarios/RolesPage'
 import { ConfiguracionPage } from '@/features/configuracion/ConfiguracionPage'
 import { ConfiguracionAvanzadaPage } from '@/features/configuracion/ConfiguracionAvanzadaPage'
+import { CentroControlPage } from '@/features/configuracion/CentroControlPage'
+import { InteligenciaOperativaPage } from '@/features/inteligencia/InteligenciaOperativaPage'
 import { SaludPage } from '@/features/sistema/SaludPage'
 import { Modulos2026Page } from '@/features/modulos2026/Modulos2026Page'
 import { AuditoriaPage } from '@/features/auditoria/AuditoriaPage'
@@ -74,7 +78,9 @@ function ActiveView(): React.JSX.Element {
   const activeView = useAppStore((s) => s.activeView)
   const permiso = modulePermission(activeView)
   const ctx = useSessionStore((s) => s.ctx)
+  const moduloActivo = useAjustesStore((s) => s.moduloActivo)
   if (permiso && !ctx?.permisos.includes(permiso)) return <AccessDenied />
+  if (!moduloActivo(activeView)) return <AccessDenied />
 
   if (activeView === 'dashboard') return <DashboardPage />
   if (activeView === 'dashboard-ejecutivo') return <DashboardEjecutivoPage />
@@ -83,6 +89,8 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'roles') return <RolesPage />
   if (activeView === 'configuracion') return <ConfiguracionPage />
   if (activeView === 'configuracion-avanzada') return <ConfiguracionAvanzadaPage />
+  if (activeView === 'centro-control') return <CentroControlPage />
+  if (activeView === 'inteligencia') return <InteligenciaOperativaPage />
   if (activeView === 'salud') return <SaludPage />
   if (activeView === 'presupuestos' || activeView === 'servicios' || activeView === 'activos' || activeView === 'crm') {
     return <Modulos2026Page modulo={activeView} />
@@ -132,6 +140,16 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     void hydrateSession()
   }, [hydrateSession])
+
+  // Ajustes de la empresa: llegan con token, por lo que se cargan tras la sesión.
+  const cargarAjustes = useAjustesStore((s) => s.cargar)
+  const temaAvanzado = useAjustesStore((s) => s.ajustes.tema)
+  useEffect(() => {
+    if (status === 'authenticated') void cargarAjustes()
+  }, [cargarAjustes, status])
+  useEffect(() => {
+    aplicarTemaAvanzado(temaAvanzado)
+  }, [temaAvanzado])
 
   // Un 401 en cualquier operación cierra la sesión de forma global.
   useEffect(() => {
