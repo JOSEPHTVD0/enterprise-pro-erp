@@ -118,6 +118,8 @@ function ActiveView(): React.JSX.Element {
   return <DashboardPage />
 }
 
+const NOOP = (): void => {}
+
 export default function App(): React.JSX.Element {
   const { hydrated, hydrate, setSidebarCollapsed } = useAppStore()
   const activeView = useAppStore((s) => s.activeView)
@@ -196,7 +198,7 @@ export default function App(): React.JSX.Element {
   if (mustChangePassword) {
     return (
       <>
-        <ChangePasswordModal open forced onDone={() => {}} />
+        <ChangePasswordModal open forced onDone={NOOP} />
         <Toaster />
       </>
     )

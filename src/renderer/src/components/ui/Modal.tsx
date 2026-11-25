@@ -6,33 +6,42 @@ interface ModalProps {
   open: boolean
   title: string
   subtitle?: string
-  onClose: () => void
+  onClose?: () => void
   children: ReactNode
   footer?: ReactNode
   width?: string
 }
+
+const NOOP = (): void => {}
 
 /** Modal profesional: portal, cierre con Escape y clic en el fondo, foco inicial. */
 export function Modal({
   open,
   title,
   subtitle,
-  onClose,
+  onClose = NOOP,
   children,
   footer,
   width = 'max-w-lg'
 }: ModalProps): React.JSX.Element | null {
   const panelRef = useRef<HTMLDivElement>(null)
+  // `onClose` suele ser una flecha inline que cambia en cada render del padre.
+  // Guardarlo en un ref evita que el efecto se vuelva a ejecutar (y robe el foco
+  // del campo que se está escribiendo) cuando el modal cambia de estado interno.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', onKey)
-    panelRef.current?.focus()
+    const panel = panelRef.current
+    const campo = panel?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select')
+    ;(campo ?? panel)?.focus()
     return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 

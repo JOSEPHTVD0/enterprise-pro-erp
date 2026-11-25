@@ -11,24 +11,24 @@ const childProcess = require('node:child_process')
 if (process.platform === 'win32') {
   const execFileOriginal = childProcess.execFile
   childProcess.execFile = function execFileCompat(file, args, options, callback) {
-    const incompleto =
-      options != null &&
-      options.env != null &&
-      !Object.keys(options.env).some((k) => k.toUpperCase() === 'SYSTEMROOT')
-    const opciones = incompleto
-      ? {
-          ...options,
-          env: {
-            SystemRoot: process.env.SystemRoot || 'C:\\WINDOWS',
-            ComSpec: process.env.ComSpec || 'C:\\WINDOWS\\system32\\cmd.exe',
-            PATH: process.env.PATH || '',
-            TEMP: process.env.TEMP || '',
-            TMP: process.env.TMP || '',
-            ...process.env,
-            ...options.env
-          }
-        }
-      : options
-    return execFileOriginal.call(this, file, args, opciones, callback)
+    let opciones = options
+    let retorno = callback
+    if (typeof opciones === 'function') {
+      retorno = opciones
+      opciones = undefined
+    }
+    // Algunas rutas de electron-builder pasan `env` con una sola variable y otras
+    // no pasan `env`. En Windows ambas necesitan las variables del sistema para
+    // que Node 24 no devuelva `spawn UNKNOWN`.
+    const entorno = {
+      SystemRoot: process.env.SystemRoot || 'C:\\WINDOWS',
+      ComSpec: process.env.ComSpec || 'C:\\WINDOWS\\system32\\cmd.exe',
+      PATH: process.env.PATH || '',
+      TEMP: process.env.TEMP || '',
+      TMP: process.env.TMP || '',
+      ...(opciones?.env ?? process.env)
+    }
+    opciones = opciones == null ? { env: entorno } : { ...opciones, env: entorno }
+    return execFileOriginal.call(this, file, args, opciones, retorno)
   }
 }

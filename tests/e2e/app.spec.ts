@@ -86,8 +86,13 @@ test.beforeAll(async () => {
     // Primer arranque: la aplicación exige contraseña propia antes de entrar.
     await expect(page.getByLabel('Contraseña actual')).toBeVisible()
     await page.getByLabel('Contraseña actual').fill('Admin1234!')
-    await page.getByLabel('Nueva contraseña', { exact: true }).fill('E2ePass2026!')
-    await page.getByLabel('Confirmar nueva contraseña').fill('E2ePass2026!')
+    // Regresión: escribir tecla por tecla no debe perder el foco del campo.
+    const nueva = page.getByLabel('Nueva contraseña', { exact: true })
+    await nueva.pressSequentially('E2ePass2026!')
+    await expect(nueva).toHaveValue('E2ePass2026!')
+    const confirmar = page.getByLabel('Confirmar nueva contraseña')
+    await confirmar.pressSequentially('E2ePass2026!')
+    await expect(confirmar).toHaveValue('E2ePass2026!')
     await page.getByRole('button', { name: 'Establecer contraseña' }).click()
     await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
   } catch (error) {

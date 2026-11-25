@@ -5,6 +5,8 @@ import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
 import { useSessionStore, errorInfo } from '@/app/session'
 
+const NOOP = (): void => {}
+
 /** Modal de cambio de clave. En primer arranque es obligatorio (no se puede cerrar). */
 export function ChangePasswordModal({
   open,
@@ -50,7 +52,7 @@ export function ChangePasswordModal({
     <Modal
       open={open}
       title={forced ? 'Cambio de contraseña obligatorio' : 'Cambiar contraseña'}
-      onClose={forced ? () => {} : onDone}
+      onClose={forced ? NOOP : onDone}
       footer={forced ? undefined : <Button variant="secondary" onClick={onDone}>Cancelar</Button>}
     >
       <form onSubmit={(e) => void submit(e)} className="space-y-3">
