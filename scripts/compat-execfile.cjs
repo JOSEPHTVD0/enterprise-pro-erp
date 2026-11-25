@@ -11,13 +11,23 @@ const childProcess = require('node:child_process')
 if (process.platform === 'win32') {
   const execFileOriginal = childProcess.execFile
   childProcess.execFile = function execFileCompat(file, args, options, callback) {
-    const minimo =
+    const incompleto =
       options != null &&
       options.env != null &&
-      Object.keys(options.env).length === 1 &&
-      Object.prototype.hasOwnProperty.call(options.env, '__COMPAT_LAYER')
-    const opciones = minimo
-      ? { ...options, env: { ...process.env, ...options.env } }
+      !Object.keys(options.env).some((k) => k.toUpperCase() === 'SYSTEMROOT')
+    const opciones = incompleto
+      ? {
+          ...options,
+          env: {
+            SystemRoot: process.env.SystemRoot || 'C:\\WINDOWS',
+            ComSpec: process.env.ComSpec || 'C:\\WINDOWS\\system32\\cmd.exe',
+            PATH: process.env.PATH || '',
+            TEMP: process.env.TEMP || '',
+            TMP: process.env.TMP || '',
+            ...process.env,
+            ...options.env
+          }
+        }
       : options
     return execFileOriginal.call(this, file, args, opciones, callback)
   }

@@ -1,7 +1,8 @@
 # Centro de control administrativo 0.5.0
 
-Estado: **implementado y verificado en el árbol de trabajo**; pendiente de publicación/release.
+Estado: **publicado** como `v0.5.0`.
 Versión del paquete: **0.5.0**.
+Release: https://github.com/JOSEPHTVD0/enterprise-pro-erp/releases/tag/v0.5.0
 
 ## Objetivo
 
@@ -127,10 +128,17 @@ No se afirma emisión de e-CF ni certificación DGII.
 - `npm run test:updater`: correcto (detecta 0.5.1 desde el feed local de prueba).
 - `npm audit` y `npm audit --omit=dev`: 0 vulnerabilidades.
 - `npm run build`: correcto.
+- `npm run dist:win`: correcto tras reforzar el shim de entorno de NSIS en Node 24.
+- Instalador firmado: `EnterpriseProERP-Setup-0.5.0.exe`, 145.463.664 bytes,
+  SHA-256 `B3C82AE54B37ABA48EAD712B5E0B7F8EAE4D93875482842279254D3E166B4291`.
+  Certificado `CN=Enterprise Pro ERP (autofirmado)`, huella SHA-1
+  `60B08EC13A4D8B0B5039A1F9698994D55312CD0C` (sin marca de tiempo).
+- Feed regenerado desde el instalador firmado: `release/latest.yml` con versión 0.5.0.
+  `build.publish.url` apunta al feed público de releases de GitHub; `ERP_UPDATE_URL`
+  sigue disponible como override para pruebas/intranet.
 
-## Pendiente para publicar
+## Notas operativas
 
-1. Generar y firmar el instalador `EnterpriseProERP-Setup-0.5.0.exe`.
-2. Regenerar el feed con `latest.yml` coherente con 0.5.0.
-3. Crear tag `v0.5.0` y release con instalador + `latest.yml`.
-4. Corregir el feed histórico que hoy anuncia `0.4.1`, que no existe como release.
+- El certificado es autofirmado: `signtool verify /pa` avisa de raíz no confiable y
+  SmartScreen no desaparece sin una CA pública. La firma sí está presente.
+- El feed histórico `0.4.1` queda sustituido por el `latest.yml` de 0.5.0 en la release.
