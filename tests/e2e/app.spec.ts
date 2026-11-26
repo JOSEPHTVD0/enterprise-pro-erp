@@ -323,6 +323,17 @@ test('el mapa de capacidades 2026 muestra el alcance real', async () => {
   await expect(page.getByRole('cell', { name: 'Panel operativo 2026' })).toBeVisible()
 })
 
+test('el espacio de trabajo muestra panel, herramientas y personalización reales', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' })
+    .getByRole('button', { name: 'Espacio de trabajo', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Espacio de trabajo' })).toBeVisible()
+  await expect(page.getByText('Visualización de la operación')).toBeVisible()
+  await page.getByRole('button', { name: 'Herramientas', exact: true }).click()
+  await expect(page.getByText('Herramientas de mantenimiento')).toBeVisible()
+  await page.getByRole('button', { name: 'Personalización', exact: true }).click()
+  await expect(page.getByText('Personalización de la estación')).toBeVisible()
+})
+
 test('el árbol de React sigue presente tras autenticar y navegar', async () => {
   const hijos = await page.evaluate(() => document.getElementById('root')?.childElementCount ?? 0)
   expect(hijos).toBeGreaterThan(0)

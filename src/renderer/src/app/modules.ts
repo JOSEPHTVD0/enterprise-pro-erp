@@ -26,6 +26,7 @@ import {
   CalendarClock,
   Gauge,
   Map,
+  Wrench,
   type LucideIcon
 } from 'lucide-react'
 
@@ -116,6 +117,21 @@ export const moduleGroups: ModuleGroup[] = [
           'Rotación de inventario y rentabilidad por producto',
           'Flujo proyectado a 28 días y actividad de auditoría',
           'Radar de CRM, servicios y activos con permisos por subwidget'
+        ]
+      },
+      {
+        id: 'espacio-trabajo',
+        label: 'Espacio de trabajo',
+        icon: Wrench,
+        permission: 'espacio.consultar',
+        phase: 15,
+        available: true,
+        description: 'Panel, comprobantes, parámetros, herramientas y personalización en una sola vista.',
+        features: [
+          'Visualización real de ventas, compras, stock, CxC y CxP',
+          'Comprobantes PDF emitidos desde documentos existentes',
+          'Parámetros de la empresa auditados y ajustes de la estación',
+          'Diagnóstico SQLite, reindexación y plantillas de personalización'
         ]
       },
       {

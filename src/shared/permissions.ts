@@ -10,7 +10,8 @@ export const modules = [
   'dashboard', 'configuracion', 'seguridad', 'clientes', 'proveedores', 'productos', 'inventario', 'ventas',
   'pos', 'cotizaciones', 'compras', 'cxc', 'cobros', 'cxp', 'bancos', 'cajas', 'gastos', 'vendedores',
   'reportes', 'auditoria', 'respaldos',
-  'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad', 'inteligencia'
+  'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad', 'inteligencia',
+  'espacio'
 ] as const
 
 export type ModuleKey = (typeof modules)[number]
@@ -23,8 +24,8 @@ const operationModules: Record<Operation, readonly ModuleKey[]> = {
   eliminar: modules.filter((m) => m !== 'dashboard'),
   anular: ['ventas', 'compras', 'cxc', 'cobros', 'cxp', 'cotizaciones', 'cajas', 'bancos', 'gastos', 'presupuestos', 'servicios', 'contabilidad'],
   aprobar: ['cotizaciones', 'compras', 'ventas', 'gastos', 'configuracion', 'presupuestos', 'servicios', 'contabilidad'],
-  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cobros', 'cxp', 'bancos', 'cajas', 'reportes', 'presupuestos', 'servicios', 'activos', 'contabilidad'],
-  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cobros', 'cxp', 'vendedores', 'reportes', 'auditoria', 'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad', 'inteligencia'],
+  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cobros', 'cxp', 'bancos', 'cajas', 'reportes', 'presupuestos', 'servicios', 'activos', 'contabilidad', 'espacio'],
+  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cobros', 'cxp', 'vendedores', 'reportes', 'auditoria', 'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad', 'inteligencia', 'espacio'],
   descuento: ['ventas', 'pos', 'cotizaciones'],
   precio: ['productos', 'ventas', 'pos', 'cotizaciones'],
   costo: ['productos', 'inventario', 'compras', 'reportes'],
@@ -61,6 +62,7 @@ const extraKeys = [
   'compras.tasa',
   'compras.almacen',
   'compras.historial',
+  'espacio.mantenimiento',
   'contabilidad.asiento.confirmar',
   'contabilidad.periodo.cerrar',
   'contabilidad.integrar',
@@ -100,7 +102,7 @@ const spanishModules: Record<ModuleKey, string> = {
   reportes: 'Reportes', auditoria: 'Auditoría', respaldos: 'Respaldos',
   presupuestos: 'Presupuestos', servicios: 'Servicios', activos: 'Activos fijos',
   crm: 'CRM', salud: 'Salud del sistema', contabilidad: 'Contabilidad general',
-  inteligencia: 'Inteligencia operativa'
+  inteligencia: 'Inteligencia operativa', espacio: 'Espacio de trabajo'
 }
 
 /** Etiquetas legibles de módulo para el editor de permisos. */
@@ -136,6 +138,7 @@ const extraLabels: Record<string, string> = {
   'compras.tasa': 'Compras — Cambiar tasa de cambio',
   'compras.almacen': 'Compras — Cambiar almacén',
   'compras.historial': 'Compras — Consultar historial',
+  'espacio.mantenimiento': 'Espacio de trabajo — Mantenimiento de índices',
   'contabilidad.asiento.confirmar': 'Contabilidad — Confirmar asientos',
   'contabilidad.periodo.cerrar': 'Contabilidad — Cerrar periodos',
   'contabilidad.integrar': 'Contabilidad — Integrar documentos',
@@ -183,6 +186,7 @@ const extraDescriptions: Record<string, string> = {
   'compras.tasa': 'Permite fijar una tasa de cambio distinta a la vigente en la configuración.',
   'compras.almacen': 'Permite elegir un almacén distinto al principal al ingresar mercancía.',
   'compras.historial': 'Permite consultar versiones, auditoría, impresiones y asientos del ingreso.',
+  'espacio.mantenimiento': 'Permite reconstruir los índices SQLite; operación auditada y reindexa toda la base de datos.',
   'contabilidad.asiento.confirmar': 'Permite confirmar asientos contables para que alimenten libros y balances.',
   'contabilidad.periodo.cerrar': 'Permite cerrar un periodo contable; impide registrar en él.',
   'contabilidad.integrar': 'Permite generar asientos reales desde documentos pendientes.',
@@ -213,7 +217,8 @@ const criticalPermissionKeys = new Set([
   'configuracion.ajustes.seguridad.modificar',
   'configuracion.ajustes.integraciones.modificar',
   'configuracion.ajustes.featureFlags.modificar',
-  'configuracion.ajustes.interfaz.modificar'
+  'configuracion.ajustes.interfaz.modificar',
+  'espacio.mantenimiento'
 ])
 
 export const permissionCriticalKeys: string[] = [...criticalPermissionKeys]
@@ -261,6 +266,7 @@ export const seedRoles: { name: string; description: string; permissionFilter: (
       key !== 'configuracion.respaldo.restaurar' &&
       key !== 'configuracion.respaldo.crear' &&
       key !== 'configuracion.parametros.modificar' &&
+      key !== 'espacio.mantenimiento' &&
       !(key.startsWith('configuracion.ajustes.') && key !== 'configuracion.ajustes.consultar') &&
       key !== 'contabilidad.periodo.cerrar' &&
       key !== 'contabilidad.integrar'

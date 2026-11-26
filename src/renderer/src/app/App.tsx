@@ -30,6 +30,7 @@ import { SaludPage } from '@/features/sistema/SaludPage'
 import { Modulos2026Page } from '@/features/modulos2026/Modulos2026Page'
 import { Panel2026Page } from '@/features/panel2026/Panel2026Page'
 import { Capacidades2026Page } from '@/features/capacidades/Capacidades2026Page'
+import { EspacioTrabajoPage } from '@/features/espacio/EspacioTrabajoPage'
 import { AuditoriaPage } from '@/features/auditoria/AuditoriaPage'
 import { ClientesPage } from '@/features/maestros/ClientesPage'
 import { ProveedoresPage } from '@/features/maestros/ProveedoresPage'
@@ -125,6 +126,7 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'respaldos') return <RespaldosPage />
   if (activeView === 'panel-2026') return <Panel2026Page />
   if (activeView === 'capacidades-2026') return <Capacidades2026Page />
+  if (activeView === 'espacio-trabajo') return <EspacioTrabajoPage />
   const module = findModule(activeView)
   if (module) return <ModulePlaceholder module={module} />
   return <DashboardPage />

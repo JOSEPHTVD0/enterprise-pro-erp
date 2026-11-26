@@ -12,7 +12,7 @@ describe('catálogo de módulos', () => {
       expect(m.label.length).toBeGreaterThan(0)
       expect(m.description.length).toBeGreaterThan(0)
       expect(m.phase).toBeGreaterThanOrEqual(2)
-      expect(m.phase).toBeLessThanOrEqual(14)
+      expect(m.phase).toBeLessThanOrEqual(15)
     }
   })
 
@@ -28,8 +28,8 @@ describe('catálogo de módulos', () => {
       'activos', 'agenda', 'apariencia', 'auditoria', 'bancos', 'cajas', 'capacidades-2026',
       'catalogos', 'centro-control', 'clientes', 'cobros', 'compras', 'configuracion',
       'configuracion-avanzada', 'contabilidad', 'control-stock', 'cotizaciones', 'crm', 'cxc', 'cxp',
-      'dashboard', 'dashboard-ejecutivo', 'facturacion', 'gastos', 'inteligencia', 'inventario',
-      'panel-2026', 'pos', 'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos',
+      'dashboard', 'dashboard-ejecutivo', 'espacio-trabajo', 'facturacion', 'gastos', 'inteligencia',
+      'inventario', 'panel-2026', 'pos', 'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos',
       'roles', 'salud', 'servicios', 'usuarios', 'vendedores'
     ])
   })

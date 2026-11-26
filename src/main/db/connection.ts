@@ -15,6 +15,7 @@ import { permisosPersonalizadosSql } from './migrations/010_permisos_personaliza
 import { cobrosPersonalizacionSql } from './migrations/011_cobros_personalizacion'
 import { seguridadRespaldosSql } from './migrations/012_seguridad_respaldos'
 import { ingresoMercanciaSql } from './migrations/013_ingreso_mercancia'
+import { espacioTrabajoSql } from './migrations/014_espacio_trabajo'
 import { seed } from './seed'
 
 export type Db = Database.Database
@@ -32,7 +33,8 @@ const migrations: { version: number; nombre: string; sql: string }[] = [
   { version: 10, nombre: 'permisos_personalizados', sql: permisosPersonalizadosSql },
   { version: 11, nombre: 'cobros_personalizacion', sql: cobrosPersonalizacionSql },
   { version: 12, nombre: 'seguridad_respaldos', sql: seguridadRespaldosSql },
-  { version: 13, nombre: 'ingreso_mercancia', sql: ingresoMercanciaSql }
+  { version: 13, nombre: 'ingreso_mercancia', sql: ingresoMercanciaSql },
+  { version: 14, nombre: 'espacio_trabajo', sql: espacioTrabajoSql }
 ]
 
 export function configurePragmas(db: Db): void {

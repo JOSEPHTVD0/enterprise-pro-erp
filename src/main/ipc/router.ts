@@ -28,6 +28,7 @@ import { createModulos2026Service } from '../services/modulos2026.service'
 import { createContabilidadService } from '../services/contabilidad.service'
 import { createAjustesService } from '../services/ajustes.service'
 import { createInteligenciaService } from '../services/inteligencia.service'
+import { createEspacioService } from '../services/espacio.service'
 import { serializeError, errors, encodeIpcError } from '@shared/errors'
 import { assertCanProceed } from './policy'
 import {
@@ -74,6 +75,11 @@ import {
   respaldosCrearSchema, respaldosHistorialSchema, respaldosIntegridadSchema, respaldosRestaurarSchema
 } from '@shared/schemas/respaldos'
 import { pdfGenerarSchema } from '@shared/schemas/pdf'
+import {
+  espacioFiltroSchema, espacioComprobantesFiltroSchema, espacioComprobanteEmitirSchema,
+  espacioPresetSchema, espacioPresetIdSchema, espacioReindexSchema,
+  type EspacioComprobanteEmitir
+} from '@shared/schemas/espacio'
 import {
   ajustesGetSchema, ajustesResetSchema, ajustesSaveSchema
 } from '@shared/schemas/ajustes'
@@ -167,6 +173,7 @@ export function registerIpc(
   const modulos2026 = createModulos2026Service(db)
   const contabilidad = createContabilidadService(db)
   const inteligencia = createInteligenciaService(db, ajustes)
+  const espacio = createEspacioService(db)
   const backups = createBackupsService({
     db,
     userDataPath: app.getPath('userData'),
@@ -840,6 +847,58 @@ export function registerIpc(
     'pdf.generar': route(
       (ctx, input) => generarPdf(ctx, input as never, { ventas, compras, finanzas, cobros, reportes }),
       { schema: pdfGenerarSchema }
+    ),
+
+    // Espacio de trabajo: panel, comprobantes, herramientas y personalización.
+    // Los permisos finos se comprueban en el servicio y en cada fuente de impresión.
+    'espacio.resumen': route(
+      (ctx, input) => espacio.resumen(ctx, input),
+      { schema: espacioFiltroSchema, permission: 'espacio.consultar' }
+    ),
+    'espacio.comprobantes': route(
+      (ctx, input) => espacio.comprobantes(ctx, input),
+      { schema: espacioComprobantesFiltroSchema, permission: 'espacio.consultar' }
+    ),
+    'espacio.comprobantes.exportar': route(
+      (ctx, input) => espacio.exportar(ctx, input),
+      { schema: espacioComprobantesFiltroSchema, permission: 'espacio.exportar' }
+    ),
+    'espacio.diagnostico': route(
+      (ctx) => espacio.diagnosticar(ctx),
+      { permission: 'espacio.consultar' }
+    ),
+    'espacio.reindex': route(
+      (ctx, input) => espacio.reindexar(ctx, input),
+      { schema: espacioReindexSchema, permission: 'espacio.mantenimiento' }
+    ),
+    'espacio.presets.list': route(
+      (ctx) => espacio.listarPresets(ctx),
+      { permission: 'espacio.consultar' }
+    ),
+    'espacio.presets.save': route(
+      (ctx, input) => espacio.guardarPreset(ctx, input),
+      { schema: espacioPresetSchema, permission: 'espacio.modificar' }
+    ),
+    'espacio.presets.delete': route(
+      (ctx, input) => espacio.eliminarPreset(ctx, input),
+      { schema: espacioPresetIdSchema, permission: 'espacio.modificar' }
+    ),
+    'espacio.emisiones.list': route(
+      (ctx) => espacio.historialEmisiones(ctx),
+      { permission: 'espacio.consultar' }
+    ),
+    'espacio.comprobante.emitir': route(
+      async (ctx, input) => {
+        const solicitud = input as EspacioComprobanteEmitir
+        const archivo = await generarPdf(
+          ctx,
+          { origen: solicitud.origen, id: solicitud.id, formato: solicitud.formato, tipo: 'DOCUMENTO' },
+          { ventas, compras, finanzas, cobros, reportes }
+        )
+        espacio.registrarEmision(ctx, solicitud, archivo)
+        return archivo
+      },
+      { schema: espacioComprobanteEmitirSchema, permission: 'espacio.imprimir' }
     ),
 
     // Fase 10 — Auditoría y respaldos. La auditoría ya funcionaba desde la Fase 3.

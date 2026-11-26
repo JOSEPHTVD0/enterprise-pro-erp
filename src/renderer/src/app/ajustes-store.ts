@@ -43,7 +43,8 @@ const dominioDeVista: Record<string, string> = {
   roles: 'seguridad',
   inteligencia: 'inteligencia',
   'panel-2026': 'inteligencia',
-  'capacidades-2026': 'dashboard'
+  'capacidades-2026': 'dashboard',
+  'espacio-trabajo': 'espacio'
 }
 
 export const useAjustesStore = create<AjustesState>((set, get) => ({

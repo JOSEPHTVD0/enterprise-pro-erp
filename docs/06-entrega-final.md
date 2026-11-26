@@ -31,12 +31,12 @@ e-CF.**
 
 | Campo | Valor |
 |---|---|
-| Instalador | `EnterpriseProERP-Setup-0.5.10.exe` |
-| Tamaño | 145.527.128 bytes |
-| SHA-256 | `D16E382BFE03649EDC9F8750456D9CBE7BC8927EB71D3002BF76C0E0648B738E` |
-| SHA-512 (base64, `release/latest.yml`) | `IM15UeO3B3i0rjqD5OXy7J+WbGyGxHF/d6mv80pZgy68VPKh+zl7BszfB+gaTNAN46PBAt+r14bwFmkMSTJ0gA==` |
+| Instalador | `EnterpriseProERP-Setup-0.5.11.exe` |
+| Tamaño | 145.535.128 bytes |
+| SHA-256 | `0EE0122F07F4E5C1879D85473FF5BC4E5D7D04A590AF407893D8739C3C937BDC` |
+| SHA-512 (base64, `release/latest.yml`) | `nJqk85/NuSnJqTjIdxMHAUvbJdbFwrS9K8qaEVje7bPYlThwMQhBoiijg+WAycmQtI/aLQH0r3RvfGp9/gUk/w==` |
 | Tipo | NSIS 3 Unicode, x64, per-usuario, carpeta configurable |
-| Producto | ENTERPRISE PRO ERP 0.5.10 |
+| Producto | ENTERPRISE PRO ERP 0.5.11 |
 | AppID | `com.enterprisepro.erp` |
 | Firma digital | **Autofirmada** (SHA-256, sin timestamp: no había acceso al servidor de tiempo) |
 | Huella SHA-1 del certificado | `60B08EC13A4D8B0B5039A1F9698994D55312CD0C` |
