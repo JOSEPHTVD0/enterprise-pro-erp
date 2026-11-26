@@ -33,10 +33,10 @@ primera vez Windows SmartScreen **puede seguir mostrando una advertencia**: solo
 de código de una CA pública confiable permite eliminarla. Esto no afecta la operación local.
 Detalles en [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md).
 
-Versión publicada actual: `0.5.12` — `EnterpriseProERP-Setup-0.5.12.exe` (145.541.368 bytes),
-SHA-256 `D6379C79A33DAFE97D52BA6FCB25DF59BF4E0406219B801EAB34BE69E03101D3`,
-SHA-512 `1oxORKzA+/4/+VwNmkfKnLLrOKrwQH/pGyHrgNAizCDBWkW+5orRBseMwR58isQGihHBJ7PGVdW+PjbY4RfpFA==`.
-Novedades: [docs/31](31-novedades-0.5.12.md).
+Versión publicada actual: `0.5.13` — `EnterpriseProERP-Setup-0.5.13.exe` (145.543.208 bytes),
+SHA-256 `30E25B263B63A89A6B61B2079809A51C26824B494958C1BFD51534A4DA586CE2`,
+SHA-512 `usyzuG8WIrXsgW5mMNqIuI1aGRRiKGONnuZ9+1VSS7HmyddiQI/0MoAuibGsOumGAFAEQK7xJKcjy7583HM9zg==`.
+Novedades: [docs/32](32-novedades-0.5.13.md).
 
 ## 2. Primer arranque
 

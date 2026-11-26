@@ -22,7 +22,7 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 | 13 | Ampliaciones 2026 y correcciones de desarrollo | ✅ Completa y verificada |
 | 14 | Numeración consecutiva y contabilidad general | ✅ Completa y verificada |
 
-**Versión publicada: 0.5.12.** [Novedades](docs/31-novedades-0.5.12.md) ·
+**Versión publicada: 0.5.13.** [Novedades](docs/32-novedades-0.5.13.md) ·
 [Corrección de la pantalla negra y ajustes](docs/22-correcciones-post-0.5.7.md) ·
 [Paneles y ajustes 2026](docs/20-paneles-y-ajustes-2026.md) ·
 [Panel de actualizaciones](docs/18-panel-actualizaciones-progreso.md) ·
@@ -31,13 +31,14 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 [Ingreso de mercancía](docs/27-ingreso-mercancia.md) ·
 [Espacio de trabajo](docs/29-espacio-trabajo-local.md) ·
 [Facturación ECF](docs/31-novedades-0.5.12.md) ·
-`EnterpriseProERP-Setup-0.5.12.exe` · SHA-256
-`D6379C79A33DAFE97D52BA6FCB25DF59BF4E0406219B801EAB34BE69E03101D3` ·
+[Rediseño del panel ECF](docs/32-novedades-0.5.13.md) ·
+`EnterpriseProERP-Setup-0.5.13.exe` · SHA-256
+`30E25B263B63A89A6B61B2079809A51C26824B494958C1BFD51534A4DA586CE2` ·
 instalador **firmado de forma autofirmada** y sin timestamp (SmartScreen no desaparece
 sin CA confiable). El actualizador solo guarda el instalador en `Descargas`; la
 instalación es manual. Se pueden abrir varias instancias con la misma BD.
-La versión anterior fue `0.5.11`; sus novedades siguen en
-[docs/30-novedades-0.5.11.md](docs/30-novedades-0.5.11.md).
+La versión anterior fue `0.5.12`; sus novedades siguen en
+[docs/31-novedades-0.5.12.md](docs/31-novedades-0.5.12.md).
 Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md).
 
 ## Ejecución

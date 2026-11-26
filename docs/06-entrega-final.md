@@ -31,12 +31,12 @@ e-CF.**
 
 | Campo | Valor |
 |---|---|
-| Instalador | `EnterpriseProERP-Setup-0.5.12.exe` |
-| Tamaño | 145.541.368 bytes |
-| SHA-256 | `D6379C79A33DAFE97D52BA6FCB25DF59BF4E0406219B801EAB34BE69E03101D3` |
-| SHA-512 (base64, `release/latest.yml`) | `1oxORKzA+/4/+VwNmkfKnLLrOKrwQH/pGyHrgNAizCDBWkW+5orRBseMwR58isQGihHBJ7PGVdW+PjbY4RfpFA==` |
+| Instalador | `EnterpriseProERP-Setup-0.5.13.exe` |
+| Tamaño | 145.543.208 bytes |
+| SHA-256 | `30E25B263B63A89A6B61B2079809A51C26824B494958C1BFD51534A4DA586CE2` |
+| SHA-512 (base64, `release/latest.yml`) | `usyzuG8WIrXsgW5mMNqIuI1aGRRiKGONnuZ9+1VSS7HmyddiQI/0MoAuibGsOumGAFAEQK7xJKcjy7583HM9zg==` |
 | Tipo | NSIS 3 Unicode, x64, per-usuario, carpeta configurable |
-| Producto | ENTERPRISE PRO ERP 0.5.12 |
+| Producto | ENTERPRISE PRO ERP 0.5.13 |
 | AppID | `com.enterprisepro.erp` |
 | Firma digital | **Autofirmada** (SHA-256, sin timestamp: no había acceso al servidor de tiempo) |
 | Huella SHA-1 del certificado | `60B08EC13A4D8B0B5039A1F9698994D55312CD0C` |
@@ -55,8 +55,9 @@ instalador publicado. Código fuente y documentación: `C:\Users\ferre\Downloads
 | `npm.cmd run typecheck` | Sin errores (`tsc --noEmit`). |
 | `npm.cmd test` | **337/337** pruebas, **47 archivos** (integración + unitarios). |
 | `npm.cmd run test:e2e` | **26/26** pruebas reales sobre Electron por CDP (login, IPC PDF, módulos 2026, espacio de trabajo, consola limpia). |
-| `npm.cmd run test:updater` | `electron-updater` detectó `0.3.1` desde un feed HTTP local. |
-| `npm.cmd run build` | main 494,40 kB · preload 1,52 kB · renderer 2,67 MB. |
+| `npm.cmd run test:updater` | `electron-updater` detectó `0.5.14` desde un feed efímero con la `0.5.13` instalada y guardó el instalador sin ejecutarlo. |
+| `npm.cmd run test:instancias` | Dos procesos, misma BD, un solo líder y dos sesiones simultáneas. |
+| `npm.cmd run build` | main 753,32 kB · preload 2,00 kB · renderer 3,18 MB. |
 | `npm.cmd audit` / `npm.cmd audit --omit=dev` | **0 vulnerabilidades** en ambos modos. |
 | `npm.cmd run dist:win` | Instalador NSIS generado con `app.asar`, módulo nativo desempaquetado, icono y desinstalador. |
 | `npm.cmd run release:feed` | `release\latest.yml` generado con SHA-512 del instalador firmado. |

@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
-import { Hash, Link2, LogOut, Percent, Plus, Search, Tag, Trash2, XCircle } from 'lucide-react'
+import {
+  Hash, Keyboard, Link2, LogOut, PackagePlus, Percent, Plus, ReceiptText,
+  Save, Search, StickyNote, Tag, Trash2, UserRound, Wallet, XCircle
+} from 'lucide-react'
 import { errorInfo } from '@/app/session'
 import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
@@ -19,9 +22,22 @@ import {
  */
 
 const ecInput =
-  'h-6 w-full min-w-0 rounded-[3px] border border-slate-700 bg-slate-950 px-1.5 text-[11px] text-slate-100 outline-none placeholder:text-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/40 disabled:text-slate-500'
+  'h-7 w-full min-w-0 rounded-md border border-slate-700/80 bg-slate-950/80 px-2 text-[11px] text-slate-100 outline-none transition placeholder:text-slate-600 hover:border-slate-600 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/25 disabled:cursor-not-allowed disabled:border-slate-800 disabled:bg-slate-900/60 disabled:text-slate-500'
+const soloLectura =
+  'border-transparent bg-transparent hover:border-transparent focus:border-transparent focus:ring-0'
 const ecBoton =
-  'flex h-[52px] flex-col items-center justify-center gap-1 rounded-[3px] border border-slate-700 bg-slate-800 text-[10px] font-medium text-slate-300 transition-colors hover:border-indigo-500 hover:bg-slate-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-50'
+  'flex h-10 items-center justify-center gap-2 rounded-md border border-slate-700/70 bg-slate-800/60 px-2.5 text-[11px] font-medium text-slate-300 transition-all hover:-translate-y-px hover:border-indigo-400/70 hover:bg-slate-700/70 hover:text-white active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0'
+const tarjeta = 'rounded-lg border border-slate-800/80 bg-slate-950/60 p-3 shadow-lg shadow-black/10'
+
+function Entrada({ className = '', readOnly, ...props }: InputHTMLAttributes<HTMLInputElement>): React.JSX.Element {
+  return (
+    <input
+      {...props}
+      readOnly={readOnly}
+      className={`${ecInput} ${readOnly ? soloLectura : ''} ${className}`}
+    />
+  )
+}
 
 function Campo({ etiqueta, children, className = '' }: {
   etiqueta: string
@@ -29,15 +45,58 @@ function Campo({ etiqueta, children, className = '' }: {
   className?: string
 }): React.JSX.Element {
   return (
-    <div className={`grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 ${className}`}>
-      <span className="text-right text-[11px] leading-tight text-slate-400">{etiqueta}</span>
+    <div className={`grid grid-cols-[82px_minmax(0,1fr)] items-center gap-2 ${className}`}>
+      <span className="text-right text-[10px] font-medium uppercase leading-tight tracking-wide text-slate-500">
+        {etiqueta}
+      </span>
       <div className="min-w-0">{children}</div>
     </div>
   )
 }
 
-function Entrada({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>): React.JSX.Element {
-  return <input {...props} className={`${ecInput} ${className}`} />
+function Tarjeta({ titulo, icono, children, className = '', accesorio }: {
+  titulo: string
+  icono: ReactNode
+  children: ReactNode
+  className?: string
+  accesorio?: ReactNode
+}): React.JSX.Element {
+  return (
+    <section className={`${tarjeta} ${className}`}>
+      <div className="mb-3 flex items-center gap-2">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-400/20">
+          {icono}
+        </span>
+        <h2 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-300">{titulo}</h2>
+        <div className="ml-auto flex items-center gap-2">
+          {accesorio}
+          <span className="h-px w-8 bg-slate-700/70" />
+        </div>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function FilaResumen({ etiqueta, children, destacado = false }: {
+  etiqueta: string
+  children: ReactNode
+  destacado?: boolean
+}): React.JSX.Element {
+  if (destacado) {
+    return (
+      <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-indigo-500/30 bg-gradient-to-r from-indigo-500/15 to-transparent px-3 py-2.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-indigo-200">{etiqueta}</span>
+        <span className="text-xl font-bold tabular-nums tracking-tight text-white">{children}</span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-slate-800/60 py-1.5 last:border-0">
+      <span className="text-[11px] text-slate-400">{etiqueta}</span>
+      <div className="flex w-[132px] shrink-0 items-center justify-end gap-1.5">{children}</div>
+    </div>
+  )
 }
 
 function fechaATexto(iso: string): string {
@@ -260,7 +319,7 @@ export function FacturacionEcfPanel({
   const etiquetaEditor = editor === 'precio' ? 'Precio' : editor === 'descuento' ? 'Descuento %' : 'Cantidad'
 
   return (
-    <div className="erp-ecf flex min-h-[640px] flex-col gap-2 rounded-lg border border-slate-800 bg-slate-900 p-2.5 text-slate-200">
+    <div className="erp-ecf flex min-h-[640px] flex-col gap-3 rounded-xl border border-slate-800/80 bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 p-3 text-slate-200 shadow-2xl shadow-black/20">
       <datalist id="ecf-clientes">
         {catalogos.clientes.map((c) => (
           <option key={c.id} value={c.codigo || String(c.id)}>{c.nombre}</option>
@@ -277,196 +336,221 @@ export function FacturacionEcfPanel({
         ))}
       </datalist>
 
-      <div className="flex h-7 shrink-0 items-center rounded-[3px] bg-slate-800 px-3 text-[11px] font-semibold tracking-wide text-slate-200">
-        {tipoFactura === 'FACTURA_CONTADO' ? '1 - CONTADO' : '2 - CRÉDITO'}
+      <div className="flex items-center gap-2.5 rounded-lg border border-slate-700/60 bg-slate-800/60 px-3 py-1.5 shadow-inner shadow-black/10">
+        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+        <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-200">
+          {tipoFactura === 'FACTURA_CONTADO' ? '1 - CONTADO' : '2 - CRÉDITO'}
+        </span>
+        <span className="ml-auto flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-slate-500">
+          <Keyboard size={12} /> F7 guardar
+        </span>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 px-1">
-        <h1 className="text-base font-bold tracking-tight text-white">Facturación ECF</h1>
-        <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
-          Moneda
-          <select className={`${ecInput} w-20`} value={moneda} onChange={(e) => setMoneda(e.target.value)} aria-label="Moneda">
-            <option value="RD$">RD$</option>
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
-          Tasa
-          <Entrada className="w-20 text-right" value={tasa} inputMode="decimal" onChange={(e) => setTasa(e.target.value)} aria-label="Tasa" />
-        </label>
-        <label className="flex items-center gap-1.5 text-[11px] text-slate-400">
-          Depósitos
-          <select
-            className={`${ecInput} w-36`}
-            value={form.almacenId}
-            onChange={(e) => actualizar({ almacenId: e.target.value })}
-            aria-label="Depósitos"
-          >
-            <option value="">Predeterminado</option>
-            {catalogos.almacenes.map((almacen) => (
-              <option key={almacen.id} value={almacen.id}>{almacen.nombre}</option>
-            ))}
-          </select>
-        </label>
-        <div className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-400">
-          <span>Fecha :</span>
-          <Entrada className="w-28 text-center" value={fechaDraft} onChange={(e) => cambiarFecha(e.target.value)} aria-label="Fecha" />
-          <button
-            type="button"
-            className="flex h-6 w-6 items-center justify-center rounded-[3px] border border-slate-700 bg-slate-800 text-slate-300 hover:border-indigo-500 hover:text-white"
-            title="Vincular pedido"
-            aria-label="Vincular pedido"
-            onClick={() => void abrirPedidos()}
-          >
-            <Link2 size={13} />
-          </button>
-        </div>
-      </div>
-
-      <div className="grid min-h-0 flex-1 grid-cols-12 gap-2">
-        <section className="col-span-12 flex flex-col gap-1.5 rounded-[3px] border border-slate-800 bg-slate-950/50 p-2 lg:col-span-4">
-          <Campo etiqueta="Cliente">
-            <div className="flex gap-1.5">
-              <Entrada
-                list="ecf-clientes"
-                className="w-20"
-                value={clienteCodigo}
-                onChange={(e) => { setClienteCodigo(e.target.value); resolverCliente(e.target.value) }}
-                onBlur={() => resolverCliente(clienteCodigo)}
-                placeholder="Código"
-                aria-label="Código de cliente"
-              />
-              <Entrada readOnly value={cliente?.rncCedula ?? ''} placeholder="RNC" aria-label="RNC" />
-              <Entrada readOnly className="w-24 text-right" value={money(num(cliente?.limiteCreditoCent))} aria-label="Límite de crédito" />
-            </div>
-          </Campo>
-          <Campo etiqueta="Nombre">
-            <Entrada readOnly value={cliente?.nombre ?? ''} placeholder="Seleccione un cliente" aria-label="Nombre del cliente" />
-          </Campo>
-          <Campo etiqueta="Dirección">
-            <Entrada value={direccion} onChange={(e) => setDireccion(e.target.value)} aria-label="Dirección" />
-          </Campo>
-          <Campo etiqueta="Teléfono">
-            <div className="flex gap-1.5">
-              <Entrada value={telefono} onChange={(e) => setTelefono(e.target.value)} aria-label="Teléfono" />
-              <Entrada value={celular} onChange={(e) => setCelular(e.target.value)} aria-label="Celular" />
-            </div>
-          </Campo>
-          <Campo etiqueta="Vendedor" className="mt-1">
-            <div className="flex gap-1.5">
-              <Entrada
-                list="ecf-vendedores"
-                className="w-20"
-                value={vendedorCodigo}
-                onChange={(e) => { setVendedorCodigo(e.target.value); resolverVendedor(e.target.value) }}
-                onBlur={() => resolverVendedor(vendedorCodigo)}
-                placeholder="Código"
-                aria-label="Código de vendedor"
-              />
-              <Entrada readOnly value={vendedor?.nombre ?? ''} placeholder="Sin vendedor" aria-label="Nombre del vendedor" />
-            </div>
-          </Campo>
-          <Campo etiqueta="Tipo NCF:" className="mt-1">
-            <select
-              className={ecInput}
-              value={tipoFactura}
-              onChange={(e) => onTipoFactura(e.target.value as 'FACTURA_CONTADO' | 'FACTURA_CREDITO')}
-              title="La condición del documento llega al backend; la serie y el NCF los asigna el servidor."
-              aria-label="Tipo NCF"
-            >
-              <option value="FACTURA_CONTADO">Factura Consumidor Final</option>
-              <option value="FACTURA_CREDITO">Factura Fiscal</option>
-            </select>
-          </Campo>
-        </section>
-
-        <section className="col-span-12 flex flex-col gap-2 rounded-[3px] border border-slate-800 bg-slate-950/50 p-2 lg:col-span-4">
-          <div className="flex items-center gap-2">
-            <span className="rounded-t-[3px] border border-b-0 border-slate-700 bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-200">Nota</span>
-            <span className="h-px flex-1 bg-slate-800" />
+      <header className="flex flex-wrap items-end justify-between gap-3 px-0.5">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-300 ring-1 ring-indigo-400/20">
+            <ReceiptText size={19} />
+          </span>
+          <div>
+            <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-indigo-400">Módulo de ventas</p>
+            <h1 className="text-xl font-semibold tracking-tight text-white">Facturación ECF</h1>
           </div>
-          <textarea
-            className={`${ecInput} min-h-[92px] flex-1 resize-none py-1.5 leading-relaxed`}
-            value={form.comentarios}
-            maxLength={500}
-            onChange={(e) => actualizar({ comentarios: e.target.value })}
-            placeholder="Nota del documento"
-            aria-label="Nota"
-          />
-          <div className="flex items-center gap-2">
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-slate-400">
+          <label className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Moneda</span>
+            <select className={`${ecInput} w-20`} value={moneda} onChange={(e) => setMoneda(e.target.value)} aria-label="Moneda">
+              <option value="RD$">RD$</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Tasa</span>
+            <Entrada className="w-20 text-right" value={tasa} inputMode="decimal" onChange={(e) => setTasa(e.target.value)} aria-label="Tasa" />
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Depósitos</span>
+            <select
+              className={`${ecInput} w-36`}
+              value={form.almacenId}
+              onChange={(e) => actualizar({ almacenId: e.target.value })}
+              aria-label="Depósitos"
+            >
+              <option value="">Predeterminado</option>
+              {catalogos.almacenes.map((almacen) => (
+                <option key={almacen.id} value={almacen.id}>{almacen.nombre}</option>
+              ))}
+            </select>
+          </label>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-slate-500">Fecha :</span>
+            <Entrada className="w-28 text-center" value={fechaDraft} onChange={(e) => cambiarFecha(e.target.value)} aria-label="Fecha" />
             <button
               type="button"
-              className="h-7 rounded-[3px] border border-slate-700 bg-slate-800 px-3 text-[11px] text-slate-200 hover:border-indigo-500 hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-700/70 bg-slate-800/70 text-slate-300 transition-colors hover:border-indigo-400 hover:text-white"
+              title="Vincular pedido"
+              aria-label="Vincular pedido"
               onClick={() => void abrirPedidos()}
             >
-              Ver Pedido
+              <Link2 size={13} />
             </button>
-            <label className="ml-auto flex items-center gap-1.5 text-[11px] text-slate-400">
-              Forma Pago
-              <select
-                className={`${ecInput} w-28`}
-                value={formaPago}
-                onChange={(e) => setFormaPago(e.target.value)}
-                title="Ventas no registra cobros; aplique el recibo desde Cobros."
-                aria-label="Forma Pago"
-              >
-                {['Contado', 'Tarjeta', 'Transferencia', 'Cheque', 'Otro'].map((forma) => (
-                  <option key={forma}>{forma}</option>
-                ))}
-              </select>
-            </label>
           </div>
-        </section>
+        </div>
+      </header>
 
-        <aside className="col-span-12 flex flex-col gap-2 lg:col-span-4 lg:row-span-2">
-          <div className="rounded-[3px] border border-slate-800 bg-slate-950/70 p-2.5">
-            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">Resumen financiero</p>
-            <div className="flex flex-col gap-1.5">
-              <Campo etiqueta="Total Bruto:"><Entrada readOnly className="text-right tabular-nums" value={money(totales.subtotalCent)} aria-label="Total Bruto" /></Campo>
-              <Campo etiqueta="Descuento 1:">
-                <div className="flex gap-1.5">
+      <div className="grid min-h-0 flex-1 grid-cols-12 gap-3">
+        <div className="col-span-12 flex min-w-0 flex-col gap-3 lg:col-span-8">
+          <Tarjeta
+            titulo="Cliente"
+            icono={<UserRound size={13} />}
+            accesorio={
+              <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide ${cliente ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-800 text-slate-500'}`}>
+                {cliente ? 'Activo' : 'Sin cliente'}
+              </span>
+            }
+          >
+            <div className="flex flex-col gap-2">
+              <Campo etiqueta="Cliente">
+                <div className="grid grid-cols-[84px_minmax(0,1fr)_118px] gap-1.5">
                   <Entrada
-                    className="w-14 text-right"
-                    value={seleccionada?.descuentoPct ?? ''}
-                    disabled={!permitirDescuento}
-                    onChange={(e) => { if (seleccionada) actualizarLinea(seleccionada.key, { descuentoPct: e.target.value }) }}
-                    placeholder="%"
-                    aria-label="Descuento 1 porcentaje"
+                    list="ecf-clientes"
+                    value={clienteCodigo}
+                    onChange={(e) => { setClienteCodigo(e.target.value); resolverCliente(e.target.value) }}
+                    onBlur={() => resolverCliente(clienteCodigo)}
+                    placeholder="Código"
+                    aria-label="Código de cliente"
                   />
-                  <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuento1Cent)} aria-label="Descuento 1" />
+                  <Entrada readOnly value={cliente?.rncCedula ?? ''} placeholder="RNC" aria-label="RNC" />
+                  <Entrada readOnly className="text-right" value={money(num(cliente?.limiteCreditoCent))} aria-label="Límite de crédito" />
                 </div>
               </Campo>
-              <Campo etiqueta="Descuento 2:">
-                <div className="flex gap-1.5">
-                  <Entrada readOnly className="w-14 text-right" value="" placeholder="%" title="El documento admite un descuento por línea" aria-label="Descuento 2 porcentaje" />
-                  <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuento2Cent + totales.descuento3Cent)} aria-label="Descuento 2" />
+              <Campo etiqueta="Nombre">
+                <Entrada readOnly value={cliente?.nombre ?? ''} placeholder="Seleccione un cliente" aria-label="Nombre del cliente" />
+              </Campo>
+              <Campo etiqueta="Dirección">
+                <Entrada value={direccion} onChange={(e) => setDireccion(e.target.value)} aria-label="Dirección" />
+              </Campo>
+              <Campo etiqueta="Teléfono / Celular" className="grid-cols-[104px_minmax(0,1fr)]">
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Entrada value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="Teléfono" aria-label="Teléfono" />
+                  <Entrada value={celular} onChange={(e) => setCelular(e.target.value)} placeholder="Celular" aria-label="Celular" />
                 </div>
               </Campo>
-              <Campo etiqueta="Desc. Items:"><Entrada readOnly className="text-right tabular-nums" value={money(totales.descuentoCent)} aria-label="Descuento de items" /></Campo>
-              <Campo etiqueta="Monto Exento:"><Entrada readOnly className="text-right tabular-nums" value={money(totales.exentoCent)} aria-label="Monto exento" /></Campo>
-              <Campo etiqueta="Base Imponible:"><Entrada readOnly className="text-right tabular-nums" value={money(totales.gravadoCent)} aria-label="Base imponible" /></Campo>
-              <Campo etiqueta="ITBIS:"><Entrada readOnly className="text-right tabular-nums" value={money(totales.impuestoCent)} aria-label="ITBIS" /></Campo>
-              <Campo etiqueta="Total Neto:">
-                <p className="text-right text-lg font-bold leading-6 tabular-nums text-indigo-300">{money(totales.totalCent)}</p>
+              <Campo etiqueta="Vendedor">
+                <div className="grid grid-cols-[84px_minmax(0,1fr)] gap-1.5">
+                  <Entrada
+                    list="ecf-vendedores"
+                    value={vendedorCodigo}
+                    onChange={(e) => { setVendedorCodigo(e.target.value); resolverVendedor(e.target.value) }}
+                    onBlur={() => resolverVendedor(vendedorCodigo)}
+                    placeholder="Código"
+                    aria-label="Código de vendedor"
+                  />
+                  <Entrada readOnly value={vendedor?.nombre ?? ''} placeholder="Sin vendedor" aria-label="Nombre del vendedor" />
+                </div>
+              </Campo>
+              <Campo etiqueta="Tipo NCF">
+                <select
+                  className={ecInput}
+                  value={tipoFactura}
+                  onChange={(e) => onTipoFactura(e.target.value as 'FACTURA_CONTADO' | 'FACTURA_CREDITO')}
+                  title="La condición del documento llega al backend; la serie y el NCF los asigna el servidor."
+                  aria-label="Tipo NCF"
+                >
+                  <option value="FACTURA_CONTADO">Factura Consumidor Final</option>
+                  <option value="FACTURA_CREDITO">Factura Fiscal</option>
+                </select>
               </Campo>
             </div>
-          </div>
+          </Tarjeta>
 
-          <div className="flex flex-1 flex-col gap-2 rounded-[3px] border border-slate-800 bg-slate-950/70 p-2.5">
+          <Tarjeta titulo="Nota" icono={<StickyNote size={13} />} className="flex flex-1 flex-col">
+            <textarea
+              className={`${ecInput} h-full min-h-[110px] flex-1 resize-none px-2.5 py-2 leading-relaxed`}
+              value={form.comentarios}
+              maxLength={500}
+              onChange={(e) => actualizar({ comentarios: e.target.value })}
+              placeholder="Escriba una nota para el documento…"
+              aria-label="Nota"
+            />
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="flex h-7 items-center gap-1.5 rounded-md border border-slate-700/70 bg-slate-800/70 px-3 text-[11px] text-slate-200 transition-colors hover:border-indigo-400 hover:text-white"
+                onClick={() => void abrirPedidos()}
+              >
+                <Link2 size={13} /> Ver Pedido
+              </button>
+              <label className="ml-auto flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-500">
+                Forma Pago
+                <select
+                  className={`${ecInput} w-28`}
+                  value={formaPago}
+                  onChange={(e) => setFormaPago(e.target.value)}
+                  title="Ventas no registra cobros; aplique el recibo desde Cobros."
+                  aria-label="Forma Pago"
+                >
+                  {['Contado', 'Tarjeta', 'Transferencia', 'Cheque', 'Otro'].map((forma) => (
+                    <option key={forma}>{forma}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </Tarjeta>
+        </div>
+
+        <aside className="col-span-12 flex min-w-0 flex-col gap-3 lg:col-span-4 lg:row-span-2">
+          <Tarjeta titulo="Resumen" icono={<Wallet size={13} />}>
+            <div className="flex flex-col">
+              <FilaResumen etiqueta="Total Bruto:">
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.subtotalCent)} aria-label="Total Bruto" />
+              </FilaResumen>
+              <FilaResumen etiqueta="Descuento 1:">
+                <Entrada
+                  className="w-12 text-right"
+                  value={seleccionada?.descuentoPct ?? ''}
+                  disabled={!permitirDescuento}
+                  onChange={(e) => { if (seleccionada) actualizarLinea(seleccionada.key, { descuentoPct: e.target.value }) }}
+                  placeholder="%"
+                  aria-label="Descuento 1 porcentaje"
+                />
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuento1Cent)} aria-label="Descuento 1" />
+              </FilaResumen>
+              <FilaResumen etiqueta="Descuento 2:">
+                <Entrada readOnly className="w-12 text-right" value="" placeholder="%" title="El documento admite un descuento por línea" aria-label="Descuento 2 porcentaje" />
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuento2Cent + totales.descuento3Cent)} aria-label="Descuento 2" />
+              </FilaResumen>
+              <FilaResumen etiqueta="Desc. Items:">
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuentoCent)} aria-label="Descuento de items" />
+              </FilaResumen>
+              <FilaResumen etiqueta="Monto Exento:">
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.exentoCent)} aria-label="Monto exento" />
+              </FilaResumen>
+              <FilaResumen etiqueta="Base Imponible:">
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.gravadoCent)} aria-label="Base imponible" />
+              </FilaResumen>
+              <FilaResumen etiqueta="ITBIS:">
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.impuestoCent)} aria-label="ITBIS" />
+              </FilaResumen>
+              <FilaResumen etiqueta="Total Neto:" destacado>{money(totales.totalCent)}</FilaResumen>
+            </div>
+          </Tarjeta>
+
+          <Tarjeta titulo="Acciones" icono={<Keyboard size={13} />} className="flex flex-1 flex-col">
             <button
               type="button"
-              className="flex h-11 w-full items-center justify-center gap-2 rounded-[3px] bg-indigo-600 text-sm font-bold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-violet-600 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition-all hover:-translate-y-px hover:from-indigo-400 hover:to-violet-500 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
               onClick={onGuardar}
               disabled={guardando || cargando}
               title="Guardar factura (F7)"
             >
-              <span>Salvar F7</span>
+              <Save size={16} /> Salvar F7
             </button>
 
             {editor && (
-              <div className="flex items-center gap-1.5 rounded-[3px] border border-indigo-700 bg-slate-900 p-1.5">
-                <span className="text-[10px] text-slate-400">{etiquetaEditor}</span>
+              <div className="mt-2 flex items-center gap-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/5 p-2">
+                <span className="text-[10px] uppercase tracking-wide text-slate-400">{etiquetaEditor}</span>
                 <Entrada
                   autoFocus
                   className="w-20 text-right"
@@ -478,7 +562,7 @@ export function FacturacionEcfPanel({
                 />
                 <button
                   type="button"
-                  className="h-6 rounded-[3px] bg-indigo-600 px-2 text-[10px] text-white hover:bg-indigo-500"
+                  className="h-7 rounded-md bg-indigo-600 px-2.5 text-[10px] font-medium text-white transition-colors hover:bg-indigo-500"
                   onClick={aplicarEditor}
                 >
                   Aplicar
@@ -486,35 +570,45 @@ export function FacturacionEcfPanel({
               </div>
             )}
 
-            <div className="grid flex-1 grid-cols-2 gap-2">
+            <div className="mt-2 grid flex-1 grid-cols-2 content-start gap-2">
               <button type="button" className={ecBoton} onClick={() => abrirEditor('precio')} disabled={!permitirPrecio} title="Editar precio de la línea seleccionada">
-                <Tag size={16} /> Precio
+                <Tag size={15} /> Precio
               </button>
               <button type="button" className={ecBoton} onClick={() => abrirEditor('descuento')} disabled={!permitirDescuento} title="Editar descuento de la línea seleccionada">
-                <Percent size={16} /> Descuento
+                <Percent size={15} /> Descuento
               </button>
               <button type="button" className={ecBoton} onClick={() => abrirEditor('cantidad')} title="Editar cantidad de la línea seleccionada">
-                <Hash size={16} /> Cantidad
+                <Hash size={15} /> Cantidad
               </button>
               <button type="button" className={ecBoton} onClick={cancelar} title="Cancelar la edición actual">
-                <XCircle size={16} /> Cancelar
+                <XCircle size={15} /> Cancelar
               </button>
               <button type="button" className={ecBoton} onClick={borrarLinea} title="Borrar la línea seleccionada">
-                <Trash2 size={16} /> Borrar
+                <Trash2 size={15} /> Borrar
               </button>
               <button type="button" className={ecBoton} onClick={onSalir} title="Volver al listado de documentos">
-                <LogOut size={16} /> Salir
+                <LogOut size={15} /> Salir
               </button>
             </div>
-          </div>
+            <p className="mt-2 text-center text-[10px] text-slate-600">Los botones editan la línea activa</p>
+          </Tarjeta>
         </aside>
 
-        <section className="col-span-12 flex min-h-[260px] flex-col gap-2 rounded-[3px] border border-slate-800 bg-slate-950/50 p-2 lg:col-span-8">
+        <Tarjeta
+          titulo="Detalle de la factura"
+          icono={<ReceiptText size={13} />}
+          className="col-span-12 min-h-[260px] lg:col-span-8"
+          accesorio={
+            <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-slate-400">
+              {form.lineas.length} ítem(s)
+            </span>
+          }
+        >
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex min-w-[160px] flex-1 items-center gap-1.5 rounded-[3px] border border-slate-700 bg-slate-950 px-2">
-              <Search size={13} className="text-slate-500" />
+            <div className="flex h-7 min-w-[170px] flex-1 items-center gap-2 rounded-md border border-slate-700/80 bg-slate-950/80 px-2 transition-colors focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-500/25">
+              <Search size={13} className="shrink-0 text-slate-500" />
               <input
-                className="h-6 w-full bg-transparent text-[11px] text-slate-100 outline-none placeholder:text-slate-600"
+                className="h-full w-full bg-transparent text-[11px] text-slate-100 outline-none placeholder:text-slate-600"
                 value={buscar}
                 onChange={(e) => setBuscar(e.target.value)}
                 placeholder="Buscar"
@@ -523,7 +617,7 @@ export function FacturacionEcfPanel({
             </div>
             <Entrada
               list="ecf-productos"
-              className="w-52"
+              className="w-48"
               value={descripcionNueva}
               onChange={(e) => setDescripcionNueva(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') agregarProducto() }}
@@ -539,7 +633,7 @@ export function FacturacionEcfPanel({
             />
             <button
               type="button"
-              className="flex h-6 w-6 items-center justify-center rounded-[3px] border border-slate-700 bg-slate-800 text-slate-200 hover:border-indigo-500 hover:text-white"
+              className="flex h-7 w-7 items-center justify-center rounded-md bg-indigo-600 text-white shadow-md shadow-indigo-950/40 transition-colors hover:bg-indigo-500"
               onClick={agregarProducto}
               title="Agregar producto"
               aria-label="Agregar producto"
@@ -548,35 +642,36 @@ export function FacturacionEcfPanel({
             </button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto rounded-[3px] border border-slate-800">
-            <table className="w-full min-w-[620px] border-collapse text-left text-[11px]">
-              <thead className="sticky top-0 z-10 bg-slate-800 text-[10px] uppercase tracking-wide text-slate-400">
+          <div className="mt-2.5 min-h-0 flex-1 overflow-auto rounded-lg border border-slate-800/80 bg-slate-950/40">
+            <table className="w-full min-w-[640px] border-collapse text-left text-[11px]">
+              <thead className="sticky top-0 z-10 bg-slate-800/80 text-[10px] uppercase tracking-wide text-slate-400 backdrop-blur">
                 <tr>
-                  <th className="w-8 px-2 py-1.5 font-medium">#</th>
-                  <th className="w-24 px-2 py-1.5 font-medium">Código</th>
-                  <th className="px-2 py-1.5 font-medium">Descripción</th>
-                  <th className="w-20 px-2 py-1.5 text-right font-medium">QTY</th>
-                  <th className="w-24 px-2 py-1.5 text-right font-medium">Precio</th>
-                  <th className="w-28 px-2 py-1.5 text-right font-medium">Total</th>
+                  <th className="w-8 px-2 py-2 font-medium">#</th>
+                  <th className="w-24 px-2 py-2 font-medium">Código</th>
+                  <th className="px-2 py-2 font-medium">Descripción</th>
+                  <th className="w-20 px-2 py-2 text-right font-medium">QTY</th>
+                  <th className="w-24 px-2 py-2 text-right font-medium">Precio</th>
+                  <th className="w-28 px-2 py-2 text-right font-medium">Total</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-slate-800/60">
                 {filtradas.map((linea) => {
                   const indice = form.lineas.findIndex((l) => l.key === linea.key) + 1
                   const producto = catalogos.productos.find((p) => String(p.id) === linea.productoId)
                   const total = totalesCarrito(catalogos, [linea]).totalCent
+                  const activa = seleccionada?.key === linea.key
                   return (
                     <tr
                       key={linea.key}
                       onClick={() => setSeleccion(linea.key)}
-                      className={`cursor-pointer ${seleccionada?.key === linea.key ? 'bg-indigo-950/40' : 'hover:bg-slate-800/60'}`}
+                      className={`cursor-pointer transition-colors ${activa ? 'bg-indigo-500/10 shadow-[inset_3px_0_0_0_#818cf8]' : 'odd:bg-white/[0.015] hover:bg-slate-800/50'}`}
                     >
-                      <td className="px-2 py-1 text-slate-500">{indice}</td>
-                      <td className="px-2 py-1 font-mono text-slate-300">{producto?.codigo ?? '—'}</td>
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-1.5 text-slate-500">{indice}</td>
+                      <td className="px-2 py-1.5 font-mono text-slate-300">{producto?.codigo ?? '—'}</td>
+                      <td className="px-2 py-1.5">
                         <Entrada
                           list="ecf-productos"
-                          className="border-transparent bg-transparent px-1"
+                          className="border-transparent bg-transparent px-1 hover:border-slate-700"
                           value={producto?.descripcion ?? ''}
                           onChange={(e) => {
                             const texto = e.target.value.trim().toLowerCase()
@@ -589,9 +684,9 @@ export function FacturacionEcfPanel({
                           aria-label="Descripción del producto"
                         />
                       </td>
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-1.5">
                         <Entrada
-                          className="border-transparent bg-transparent px-1 text-right tabular-nums"
+                          className="border-transparent bg-transparent px-1 text-right tabular-nums hover:border-slate-700"
                           value={linea.cantidad}
                           inputMode="decimal"
                           onChange={(e) => actualizarLinea(linea.key, { cantidad: e.target.value })}
@@ -599,9 +694,9 @@ export function FacturacionEcfPanel({
                           aria-label="Cantidad"
                         />
                       </td>
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-1.5">
                         <Entrada
-                          className="border-transparent bg-transparent px-1 text-right tabular-nums"
+                          className="border-transparent bg-transparent px-1 text-right tabular-nums hover:border-slate-700"
                           value={linea.precioCent}
                           inputMode="decimal"
                           disabled={!permitirPrecio}
@@ -610,25 +705,38 @@ export function FacturacionEcfPanel({
                           aria-label="Precio"
                         />
                       </td>
-                      <td className="px-2 py-1 text-right font-medium tabular-nums text-slate-100">{money(total)}</td>
+                      <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-slate-100">{money(total)}</td>
                     </tr>
                   )
                 })}
                 {filtradas.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
-                      {form.lineas.length ? 'Ningún ítem coincide con la búsqueda.' : 'Agregue productos para iniciar la factura.'}
+                    <td colSpan={6} className="px-3 py-10 text-center">
+                      <div className="mx-auto flex max-w-xs flex-col items-center gap-2">
+                        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800/70 text-slate-500">
+                          <PackagePlus size={18} />
+                        </span>
+                        <p className="text-[11px] text-slate-400">
+                          {form.lineas.length ? 'Ningún ítem coincide con la búsqueda.' : 'Agregue productos para iniciar la factura.'}
+                        </p>
+                      </div>
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
-          <div className="flex shrink-0 items-center justify-between text-[10px] text-slate-500">
-            <span>{form.lineas.length} ítem(s) · QTY total {number(form.lineas.reduce((suma, l) => suma + (Number(l.cantidad) || 0), 0))}</span>
-            <span>ITBIS {money(totales.impuestoCent)} · Neto {money(totales.totalCent)}</span>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500">
+            <span className="rounded-md bg-slate-800/60 px-2 py-1">
+              {form.lineas.length} ítem(s) · QTY total {number(form.lineas.reduce((suma, l) => suma + (Number(l.cantidad) || 0), 0))}
+            </span>
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-slate-800/60 px-2 py-1">ITBIS {money(totales.impuestoCent)}</span>
+              <span className="rounded-md bg-indigo-500/10 px-2 py-1 text-indigo-200">Neto {money(totales.totalCent)}</span>
+            </span>
           </div>
-        </section>
+        </Tarjeta>
       </div>
 
       <Modal open={pedidosOpen} title="Pedidos pendientes" onClose={() => setPedidosOpen(false)} width="max-w-3xl">
