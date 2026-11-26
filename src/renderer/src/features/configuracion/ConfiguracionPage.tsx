@@ -10,6 +10,8 @@ import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { toast } from '@/components/ui/Toast'
 import { errorInfo } from '@/app/session'
+import { formatosImpresion } from '@shared/schemas/ventas'
+import { normalizarFormato } from '@/lib/formato-impresion'
 import { CatalogManager, toForm } from './CatalogManager'
 import type { ConfigData, ConfigRow } from './types'
 
@@ -112,12 +114,23 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
   const [edit, setEdit] = useState<ConfigRow | null>(null)
   const [saving, setSaving] = useState(false)
   const [estados, setEstados] = useState<EstadoSerie[]>([])
+  const [preview, setPreview] = useState('')
 
   useEffect(() => {
     window.api.invoke<EstadoSerie[]>('config.series.estado')
       .then((v) => setEstados(v ?? []))
       .catch(() => setEstados([]))
   }, [cfg.series])
+
+  useEffect(() => {
+    const tipo = String(edit?.tipoDoc ?? '')
+    if (!tipo) { setPreview(''); return }
+    let activo = true
+    window.api.invoke<{ numero: string }>('config.serie.preview', tipo)
+      .then((v) => { if (activo) setPreview(v.numero) })
+      .catch(() => { if (activo) setPreview('Serie inactiva o sin configuración') })
+    return () => { activo = false }
+  }, [edit?.tipoDoc])
 
   async function save(): Promise<void> {
     if (!edit) return
@@ -149,6 +162,7 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
         <p className="text-sm text-slate-600 dark:text-slate-300">
           El correlativo es automático y no se edita. Para reiniciar una secuencia, cree una serie nueva.
           El panel de salud avisa cuando una serie está por agotarse, vence o se inactiva.
+          Si hay varias series activas para un mismo tipo, se usa la primera creada; cancele las demás para evitar ambigüedad.
         </p>
       </Card>
       <Card title="Numeración de documentos y NCF" subtitle="Secuencias internas y rangos fiscales configurables por empresa.">
@@ -161,6 +175,9 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
       }>
         {edit && (
           <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-200">
+              Próximo número que se reservará: <strong>{preview || 'calculando…'}</strong>
+            </div>
             {([
               ['serie', 'Serie'], ['prefijo', 'Prefijo'],
               ['longitud', 'Longitud'], ['rangoDesde', 'Rango NCF desde'], ['rangoHasta', 'Rango NCF hasta'],
@@ -197,7 +214,29 @@ function SeriesTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): Re
 
 function CatalogosTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }): React.JSX.Element {
   const [tasa, setTasa] = useState({ monedaCodigo: 'USD', tasa: 0, fecha: new Date().toISOString().slice(0, 10) })
-  const [formato, setFormato] = useState({ tipoDoc: 'FACTURA_CONTADO', formato: 'CARTA', copias: 1 })
+
+  function formatoDeFila(fila?: ConfigRow): { tipoDoc: string; formato: (typeof formatosImpresion)[number]; copias: number } {
+    const f = fila ? toForm(fila) : {}
+    return {
+      tipoDoc: String(f.tipoDoc ?? 'FACTURA_CONTADO'),
+      formato: normalizarFormato(f.formato),
+      copias: Math.min(5, Math.max(1, Number(f.copias ?? 1)))
+    }
+  }
+
+  const [formato, setFormato] = useState(() => formatoDeFila(cfg.formatos[0]))
+
+  useEffect(() => {
+    setFormato((actual) => {
+      const fila = cfg.formatos.find((item) => String(toForm(item).tipoDoc) === actual.tipoDoc)
+      return fila ? formatoDeFila(fila) : actual
+    })
+  }, [cfg.formatos])
+
+  function cambiarTipoDoc(tipoDoc: string): void {
+    const fila = cfg.formatos.find((item) => String(toForm(item).tipoDoc) === tipoDoc)
+    setFormato(fila ? formatoDeFila(fila) : { ...formato, tipoDoc })
+  }
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -250,24 +289,24 @@ function CatalogosTab({ cfg, reload }: { cfg: ConfigData; reload: () => void }):
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Documento">
             <select className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-              value={formato.tipoDoc} onChange={(e) => setFormato({ ...formato, tipoDoc: e.target.value })}>
+              value={formato.tipoDoc} onChange={(e) => cambiarTipoDoc(e.target.value)}>
               {cfg.series.map((s) => <option key={String(s.id)} value={String(s.tipo_doc)}>{String(s.tipo_doc)}</option>)}
             </select>
           </Field>
           <Field label="Formato">
             <select className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
-              value={formato.formato} onChange={(e) => setFormato({ ...formato, formato: e.target.value })}>
-              {['CARTA', 'MEDIA_PAGINA', 'TICKET_80', 'TICKET_58'].map((v) => <option key={v}>{v}</option>)}
+              value={formato.formato} onChange={(e) => setFormato({ ...formato, formato: normalizarFormato(e.target.value) })}>
+              {formatosImpresion.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </Field>
-          <Field label="Copias"><NumberInput label="Copias" value={formato.copias} min={1} max={20} onChange={(valor) => setFormato({ ...formato, copias: valor })} /></Field>
+          <Field label="Copias"><NumberInput label="Copias" value={formato.copias} min={1} max={5} onChange={(valor) => setFormato({ ...formato, copias: valor })} /></Field>
         </div>
         <Button className="mt-3" size="sm" onClick={() => void (async () => {
           try { await window.api.invoke('config.formato.save', formato); toast.success('Formato guardado.'); reload() }
           catch (e) { toast.error(errorInfo(e).message) }
         })()}>Guardar formato</Button>
         <p className="mt-3 text-xs text-slate-400">
-          {cfg.formatos.length} formato(s) configurado(s). La impresión física se implementa en la Fase 6.
+          {cfg.formatos.length} formato(s) configurado(s). La impresión y los PDF usan el formato guardado para cada tipo de documento.
         </p>
       </Card>
       <CatalogManager tabla="impresoras" title="Impresoras configuradas" rows={cfg.impresoras} onSaved={reload} fields={[
@@ -316,7 +355,7 @@ function ParametrosTab({ cfg, reload }: { cfg: ConfigData; reload: () => void })
       </Card>
       <Card title="Respaldos" subtitle="La ejecución, el historial y la restauración están en el módulo Respaldos.">
         <div className="space-y-3">
-          <Field label="Carpeta de respaldo"><TextInput value={backup.carpeta} placeholder="Ruta local absoluta" onChange={(e) => setBackup({ ...backup, carpeta: e.target.value })} /></Field>
+          <Field label="Carpeta de respaldo" hint="Relativa a userData/backups; se aplica a todas las empresas porque la copia incluye toda la base."><TextInput value={backup.carpeta} placeholder="Ej. mensuales, vacío = backups" onChange={(e) => setBackup({ ...backup, carpeta: e.target.value })} /></Field>
           <Field label="Frecuencia">
             <select className="h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm dark:border-slate-700 dark:bg-slate-900"
               value={backup.frecuencia} onChange={(e) => setBackup({ ...backup, frecuencia: e.target.value })}>

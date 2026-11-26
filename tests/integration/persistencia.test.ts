@@ -38,13 +38,13 @@ describe('Fase 11 — persistencia en frío y arranque controlado', () => {
     expect(cliente.codigo).toBe('CLI-FRIO')
     expect((reabierta.prepare('SELECT COUNT(*) AS total FROM auditoria WHERE entidad = ? AND entidad_id = ?')
       .get('clientes', String(clienteId)) as Fila).total).toBeGreaterThan(0)
-    // Solo initializeDatabase invalida sesiones al arrancar; la reapertura directa conserva el registro.
+    // La reapertura conserva el registro: las políticas de sesión se aplican en buildContext.
     expect(reabierta.prepare('SELECT id FROM sesiones WHERE token_hash = ?').get(sesion.token_hash)).toEqual({ id: 1 })
     expect(loadSettings().theme).toBe('dark')
     reabierta.close()
   })
 
-  it('initializeDatabase invalida las sesiones de una ejecución anterior', () => {
+  it('initializeDatabase conserva las sesiones para permitir varias instancias', () => {
     em.dir = mkdtempSync(join(tmpdir(), 'erp-arranque-f11-'))
     const primera = createDatabase(join(em.dir, 'data', 'enterprise.db'))
     createAuthService(primera).login({ username: FIRST_RUN_USER, password: FIRST_RUN_PASSWORD }, 'F11-ARRANQUE')
@@ -54,7 +54,8 @@ describe('Fase 11 — persistencia en frío y arranque controlado', () => {
     const segunda = initializeDatabase()
     const sesiones = segunda.prepare('SELECT id, fin FROM sesiones').all() as Fila[]
     expect(sesiones.length).toBe(1)
-    expect(sesiones[0].fin).toBeTruthy()
+    // No se cierra al abrir otra instancia: buildContext aplica 30 min / 12 h en cada llamada.
+    expect(sesiones[0].fin).toBeNull()
     closeDatabase()
   })
 })

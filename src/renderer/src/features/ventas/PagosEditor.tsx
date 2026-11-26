@@ -26,7 +26,9 @@ export function PagosEditor({ totalCent, pagos, onChange }: Props): React.JSX.El
 
   function completarResto(): void {
     if (!pagos.length || pendienteCent <= 0) return
-    actualizar(pagos[0].key, { monto: (pendienteCent / 100).toFixed(2) })
+    const primera = pagos[0]
+    const nuevoCent = centavosDesdeDecimal(Number(primera.monto) || 0) + pendienteCent
+    actualizar(primera.key, { monto: (nuevoCent / 100).toFixed(2) })
   }
 
   return (

@@ -6,7 +6,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Field, TextInput } from '@/components/ui/Field'
 import { Badge } from '@/components/ui/Badge'
 import { toast } from '@/components/ui/Toast'
-import { errorInfo } from '@/app/session'
+import { can, errorInfo, useSessionStore } from '@/app/session'
 
 interface AuditRow {
   id: number
@@ -41,8 +41,11 @@ export function AuditoriaPage(): React.JSX.Element {
   const [tab, setTab] = useState('auditoria')
   const [audit, setAudit] = useState<AuditRow[]>([])
   const [sessions, setSessions] = useState<SessionRow[]>([])
-  const [filter, setFilter] = useState({ fechaDesde: '', fechaHasta: '', operacion: '', entidad: '' })
+  const [filter, setFilter] = useState({
+    fechaDesde: '', fechaHasta: '', operacion: '', entidad: '', entidadId: '', texto: ''
+  })
   const [detalle, setDetalle] = useState<AuditRow | null>(null)
+  const ctxSesionId = useSessionStore((s) => s.ctx?.sesionId)
 
   const loadAudit = useCallback(async () => {
     try {
@@ -60,6 +63,14 @@ export function AuditoriaPage(): React.JSX.Element {
         .catch((e) => toast.error(errorInfo(e).message))
     }
   }, [tab])
+
+  async function cerrarSesion(id: number): Promise<void> {
+    try {
+      await window.api.invoke('seguridad.sessions.close', id)
+      toast.success('Sesión cerrada y auditada.')
+      setSessions(await window.api.invoke<SessionRow[]>('seguridad.sessions.list'))
+    } catch (e) { toast.error(errorInfo(e).message) }
+  }
 
   const auditColumns: Column<AuditRow>[] = [
     { key: 'fecha', header: 'Fecha', value: (r) => String(r.fecha) },
@@ -89,11 +100,13 @@ export function AuditoriaPage(): React.JSX.Element {
         {tab === 'auditoria' && (
           <div className="space-y-3">
             <Card>
-              <div className="grid gap-3 sm:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 <Field label="Desde"><TextInput type="date" value={filter.fechaDesde} onChange={(e) => setFilter({ ...filter, fechaDesde: e.target.value })} /></Field>
                 <Field label="Hasta"><TextInput type="date" value={filter.fechaHasta} onChange={(e) => setFilter({ ...filter, fechaHasta: e.target.value })} /></Field>
                 <Field label="Operación"><TextInput value={filter.operacion} placeholder="Ej. MODIFICAR" onChange={(e) => setFilter({ ...filter, operacion: e.target.value })} /></Field>
                 <Field label="Entidad"><TextInput value={filter.entidad} placeholder="Ej. usuarios" onChange={(e) => setFilter({ ...filter, entidad: e.target.value })} /></Field>
+                <Field label="ID del registro" hint="Historial por registro"><TextInput value={filter.entidadId} placeholder="Ej. 42" onChange={(e) => setFilter({ ...filter, entidadId: e.target.value })} /></Field>
+                <Field label="Buscar en valores" hint="Incluye antes y después"><TextInput value={filter.texto} placeholder="Ej. cliente, RNC…" onChange={(e) => setFilter({ ...filter, texto: e.target.value })} /></Field>
               </div>
             </Card>
             <Card>
@@ -103,7 +116,21 @@ export function AuditoriaPage(): React.JSX.Element {
           </div>
         )}
         {tab === 'sesiones' && (
-          <Card><DataTable columns={sessionColumns} data={sessions} rowKey={(r) => r.id} pageSize={12} /></Card>
+          <Card>
+            <DataTable
+              columns={sessionColumns}
+              data={sessions}
+              rowKey={(r) => r.id}
+              pageSize={12}
+              actions={(r) => can('seguridad.usuario.bloquear') && !r.fin && r.id !== ctxSesionId ? (
+                <button
+                  onClick={() => void cerrarSesion(r.id)}
+                  className="text-xs text-red-600 hover:underline dark:text-red-400"
+                  title="Cerrar esta sesión"
+                >Cerrar</button>
+              ) : null}
+            />
+          </Card>
         )}
       </TabPanel>
 

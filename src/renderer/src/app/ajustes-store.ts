@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
-  defaultAjustes, modulosProtegidos, type Ajustes, type AjustesGet, type WidgetId
+  ajustesGrupos, ajustesPorGrupo, defaultAjustes, modulosProtegidos,
+  type Ajustes, type AjustesGet, type WidgetId
 } from '@shared/schemas/ajustes'
 
 interface AjustesState {
@@ -14,6 +15,23 @@ interface AjustesState {
 
 const protegidos = new Set<string>(modulosProtegidos)
 
+/**
+ * Los grupos recibidos por IPC pueden venir de un perfil heredado o de una capa
+ * parcial. Los fusionamos con los defaults y validamos cada grupo por separado:
+ * un grupo corrupto se descarta por completo sin tumbar el resto de la interfaz.
+ */
+export function normalizarAjustesEfectivos(ajustes: Partial<Ajustes>): Ajustes {
+  const resultado = { ...defaultAjustes } as Record<string, unknown>
+  for (const grupo of ajustesGrupos) {
+    const parcial = ajustes[grupo]
+    if (!parcial || typeof parcial !== 'object' || Array.isArray(parcial)) continue
+    const candidato = { ...(defaultAjustes[grupo] as object), ...(parcial as object) }
+    const validado = ajustesPorGrupo[grupo].safeParse(candidato)
+    if (validado.success) resultado[grupo] = validado.data
+  }
+  return resultado as Ajustes
+}
+
 /** Vistas del renderer que pertenecen a un dominio de permisos compartido. */
 const dominioDeVista: Record<string, string> = {
   apariencia: 'configuracion',
@@ -23,7 +41,9 @@ const dominioDeVista: Record<string, string> = {
   'centro-control': 'configuracion',
   usuarios: 'seguridad',
   roles: 'seguridad',
-  inteligencia: 'inteligencia'
+  inteligencia: 'inteligencia',
+  'panel-2026': 'inteligencia',
+  'capacidades-2026': 'dashboard'
 }
 
 export const useAjustesStore = create<AjustesState>((set, get) => ({
@@ -32,20 +52,20 @@ export const useAjustesStore = create<AjustesState>((set, get) => ({
 
   cargar: async () => {
     try {
-      const ajustes = await window.api.invoke<AjustesGet>('config.ajustes.get', {})
-      set({ ajustes, cargado: true })
+      const ajustes = await window.api.invoke<AjustesGet>('config.ajustes.efectivos')
+      set({ ajustes: normalizarAjustesEfectivos(ajustes), cargado: true })
     } catch {
-      // Sin permiso o sin sesión: se mantienen defaults y se marca como cargado.
-      set({ ajustes: {}, cargado: true })
+      // Sin sesión: se mantienen defaults y se marca como cargado.
+      set({ ajustes: { ...defaultAjustes }, cargado: true })
     }
   },
 
   recargar: async () => {
     try {
-      const ajustes = await window.api.invoke<AjustesGet>('config.ajustes.get', {})
-      set({ ajustes })
+      const ajustes = await window.api.invoke<AjustesGet>('config.ajustes.efectivos')
+      set({ ajustes: normalizarAjustesEfectivos(ajustes) })
     } catch {
-      set({ ajustes: {} })
+      set({ ajustes: { ...defaultAjustes } })
     }
   },
 
@@ -66,5 +86,5 @@ export const useAjustesStore = create<AjustesState>((set, get) => ({
 
 /** Ajustes completos con defaults, para formularios que editan todos los grupos. */
 export function ajustesConDefaults(ajustes: AjustesGet): Ajustes {
-  return { ...defaultAjustes, ...ajustes } as Ajustes
+  return normalizarAjustesEfectivos(ajustes)
 }

@@ -11,6 +11,9 @@ const raiz = resolve(import.meta.dirname, '..')
 const electronExe = (await import('electron')).default
 const perfil = mkdtempSync(join(tmpdir(), 'erp-updater-'))
 const feedDir = mkdtempSync(join(tmpdir(), 'erp-feed-'))
+const descargasDir = mkdtempSync(join(tmpdir(), 'erp-descargas-'))
+const configDev = join(raiz, 'dev-app-update.yml')
+writeFileSync(configDev, 'updaterCacheDirName: erp-updater-prueba\n')
 
 const paquete = JSON.parse(readFileSync(join(raiz, 'package.json'), 'utf8'))
 const [mayor, menor, parche] = paquete.version.split('.').map(Number)
@@ -58,7 +61,11 @@ const hijo = spawn(electronExe, [
   raiz, `--remote-debugging-port=${puertoCdp}`, `--user-data-dir=${perfil}`
 ], {
   cwd: raiz,
-  env: { ...process.env, ERP_UPDATE_URL: `http://127.0.0.1:${puertoFeed}/` },
+  env: {
+    ...process.env,
+    ERP_UPDATE_URL: `http://127.0.0.1:${puertoFeed}/`,
+    ERP_DOWNLOADS_DIR: descargasDir
+  },
   stdio: ['ignore', 'pipe', 'pipe']
 })
 const salida = []
@@ -94,6 +101,21 @@ try {
     throw new Error(`El actualizador no detectó ${versionFeed} desde el feed local.`)
   }
   console.log(`VERIFICADO: electron-updater detectó ${versionFeed} desde el feed local (versión instalada ${paquete.version}).`)
+
+  const descargado = await pagina.evaluate(async () =>
+    await window.api.invoke('update.descargar'))
+  console.log(JSON.stringify(descargado, null, 2))
+  if (!descargado.descargada || !descargado.rutaInstalador) {
+    throw new Error(`El instalador no se guardó en Descargas: ${descargado.error ?? 'sin ruta'}`)
+  }
+  const guardado = readFileSync(descargado.rutaInstalador)
+  if (!guardado.equals(dummy)) {
+    throw new Error('El instalador guardado no coincide con el publicado en el feed local.')
+  }
+  if (descargado.rutaInstalador !== join(descargasDir, 'actualizacion.exe')) {
+    throw new Error(`El instalador se guardó fuera de Descargas: ${descargado.rutaInstalador}`)
+  }
+  console.log(`DESCARGADO: ${descargado.rutaInstalador} (instalación manual, sin ejecución).`)
 } finally {
   await navegador?.close().catch(() => undefined)
   hijo.kill()
@@ -101,4 +123,6 @@ try {
   servidor.close()
   rmSync(perfil, { recursive: true, force: true })
   rmSync(feedDir, { recursive: true, force: true })
+  rmSync(descargasDir, { recursive: true, force: true })
+  rmSync(configDev, { force: true })
 }

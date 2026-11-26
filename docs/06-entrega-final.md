@@ -31,12 +31,12 @@ e-CF.**
 
 | Campo | Valor |
 |---|---|
-| Instalador | `EnterpriseProERP-Setup-0.3.0.exe` |
-| Tamaño | 145.429.840 bytes |
-| SHA-256 | `D508A61277EC5971A04A5AD0D9E970D07160F09CE4851A99E3FFBB18D3728C75` |
-| SHA-512 (base64, `release/latest.yml`) | `x8TTXSTZTSQBibH7MjzVx5ArTeQjK9C3HZmGUhxZF72ARoClZWiNkjQOwEqc1jgJuaR7NVU/rg3JUaNMS/pdeg==` |
+| Instalador | `EnterpriseProERP-Setup-0.5.10.exe` |
+| Tamaño | 145.527.128 bytes |
+| SHA-256 | `D16E382BFE03649EDC9F8750456D9CBE7BC8927EB71D3002BF76C0E0648B738E` |
+| SHA-512 (base64, `release/latest.yml`) | `IM15UeO3B3i0rjqD5OXy7J+WbGyGxHF/d6mv80pZgy68VPKh+zl7BszfB+gaTNAN46PBAt+r14bwFmkMSTJ0gA==` |
 | Tipo | NSIS 3 Unicode, x64, per-usuario, carpeta configurable |
-| Producto | ENTERPRISE PRO ERP 0.3.0 |
+| Producto | ENTERPRISE PRO ERP 0.5.10 |
 | AppID | `com.enterprisepro.erp` |
 | Firma digital | **Autofirmada** (SHA-256, sin timestamp: no había acceso al servidor de tiempo) |
 | Huella SHA-1 del certificado | `60B08EC13A4D8B0B5039A1F9698994D55312CD0C` |
@@ -113,8 +113,9 @@ y arquitectura preparada para e-CF. **No se afirma certificación DGII.**
 - `pdf.generar` no acepta datos del renderer: reutiliza `ventas`, `compras`, `finanzas` y
   `reportes` para que cada servicio compruebe permisos, empresa y existencia. La descarga usa el
   mismo patrón `{ filename, base64, mime }` que las exportaciones Excel.
-- Los canales `update.estado`, `update.verificar`, `update.descargar` y `update.instalar` están
-  en el grupo de IPC básico y usan el mismo `isTrusted` que `settings:*` y `app:get-info`.
+- Los canales `update.estado`, `update.verificar`, `update.descargar` y `update.abrirCarpeta`
+  están en el grupo de IPC básico y usan el mismo `isTrusted` que `settings:*` y `app:get-info`.
+  Ya no existe `update.instalar`: el instalador se guarda y el usuario lo ejecuta.
 - Contraseñas con `scrypt` + salt; bloqueo tras intentos fallidos; cambio obligatorio inicial.
 - Transacciones reales, integridad referencial, auditoría y copias verificadas con
   `integrity_check`.

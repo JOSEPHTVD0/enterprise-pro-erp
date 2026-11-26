@@ -22,11 +22,20 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 | 13 | Ampliaciones 2026 y correcciones de desarrollo | ✅ Completa y verificada |
 | 14 | Numeración consecutiva y contabilidad general | ✅ Completa y verificada |
 
-**Versión actual: 0.4.0.** [Novedades](docs/10-novedades-0.4.0.md) ·
-[Entrega final](docs/11-entrega-final-0.4.0.md) ·
-`EnterpriseProERP-Setup-0.4.0.exe` · SHA-256
-`26654D42C6D66500E10233BCB7B64BE3C0D1014F5EC17E69644E5AE3CAC199E4` ·
-instalador **firmado de forma autofirmada** (SmartScreen no desaparece sin CA confiable).
+**Versión publicada: 0.5.10.** [Novedades](docs/28-novedades-0.5.10.md) ·
+[Corrección de la pantalla negra y ajustes](docs/22-correcciones-post-0.5.7.md) ·
+[Paneles y ajustes 2026](docs/20-paneles-y-ajustes-2026.md) ·
+[Panel de actualizaciones](docs/18-panel-actualizaciones-progreso.md) ·
+[Descarga local e instalación manual](docs/24-actualizacion-descarga-manual.md) ·
+[Varias instancias y pantalla negra](docs/25-instancias-y-pantalla-negra.md) ·
+[Ingreso de mercancía](docs/27-ingreso-mercancia.md) ·
+`EnterpriseProERP-Setup-0.5.10.exe` · SHA-256
+`D16E382BFE03649EDC9F8750456D9CBE7BC8927EB71D3002BF76C0E0648B738E` ·
+instalador **firmado de forma autofirmada** y sin timestamp (SmartScreen no desaparece
+sin CA confiable). El actualizador solo guarda el instalador en `Descargas`; la
+instalación es manual. Se pueden abrir varias instancias con la misma BD.
+La versión anterior fue `0.5.9`; sus novedades siguen en
+[docs/26-novedades-0.5.9.md](docs/26-novedades-0.5.9.md).
 Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md).
 
 ## Ejecución
@@ -35,8 +44,8 @@ Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cie
 npm.cmd install
 npm.cmd run dev        # aplicación Electron en modo desarrollo
 npm.cmd run build      # compilar main + preload + renderer
-npm.cmd test           # 220 pruebas (seguridad, IPC, BD real, PDF, maestros, inventario, ventas, POS, compras, finanzas, reportes, auditoría, respaldos, impresión, rendimiento, persistencia, Excel, UI, módulos 0.4.0, series y contabilidad)
-npm.cmd run test:e2e   # 4 pruebas reales en Electron por CDP (Playwright)
+npm.cmd test           # 303 pruebas (seguridad, IPC, BD real, PDF, maestros, inventario, ventas, POS, compras, finanzas, reportes, auditoría, respaldos, impresión, rendimiento, persistencia, Excel, UI, módulos 0.4.0/2026, series y contabilidad)
+npm.cmd run test:e2e   # 24 pruebas reales en Electron por CDP (Playwright)
 npm.cmd run test:updater # verifica el feed local de electron-updater
 npm.cmd run typecheck  # TypeScript estricto
 ```

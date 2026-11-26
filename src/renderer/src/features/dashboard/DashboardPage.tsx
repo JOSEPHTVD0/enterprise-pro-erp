@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { BarChart3, CheckCircle2, Circle, Database, Rocket } from 'lucide-react'
+import { AlertTriangle, ArrowRight, BarChart3, CheckCircle2, Circle, Database, Rocket } from 'lucide-react'
 import { can } from '@/app/session'
 import { useAppStore } from '@/app/store'
 import { Badge } from '@/components/ui/Badge'
@@ -46,8 +46,12 @@ export function DashboardPage(): React.JSX.Element {
   const [resumen, setResumen] = useState<Resumen | null>(null)
   const [indicadores, setIndicadores] = useState<Indicadores | null>(null)
   const [serie, setSerie] = useState<Serie | null>(null)
+  const [salud, setSalud] = useState<{
+    comprobaciones: { nombre: string; estado: string; detalle: string }[]
+  } | null>(null)
   const available = allModules.filter((m) => m.available).length
   const conReportes = can('reportes.consultar')
+  const conSalud = can('salud.consultar')
 
   useEffect(() => {
     window.api.app
@@ -72,6 +76,37 @@ export function DashboardPage(): React.JSX.Element {
       setSerie(null)
     })
   }, [conReportes])
+
+  useEffect(() => {
+    if (!conSalud) return
+    window.api.invoke<{
+      comprobaciones: { nombre: string; estado: string; detalle: string }[]
+    }>('salud.resumen')
+      .then(setSalud)
+      .catch(() => setSalud(null))
+  }, [conSalud])
+
+  const tareas = useMemo(() => {
+    const items: { texto: string; vista: string; tono: 'warning' | 'danger' | 'accent' }[] = []
+    if (indicadores && indicadores.productosAgotados > 0) {
+      items.push({
+        texto: `${indicadores.productosAgotados} producto(s) agotado(s): reponga existencias`,
+        vista: 'inventario', tono: 'warning'
+      })
+    }
+    if (indicadores && indicadores.cxcSaldoCent > 0 && can('cobros.consultar')) {
+      items.push({
+        texto: `CxC pendiente por ${money(indicadores.cxcSaldoCent)}: revise Cobros`,
+        vista: 'cobros', tono: 'accent'
+      })
+    }
+    for (const c of salud?.comprobaciones ?? []) {
+      if (c.estado === 'error' || c.estado === 'advertencia') {
+        items.push({ texto: `${c.nombre}: ${c.detalle}`, vista: 'salud', tono: c.estado === 'error' ? 'danger' : 'warning' })
+      }
+    }
+    return items.slice(0, 8)
+  }, [indicadores, salud])
 
   const tarjetas = useMemo(() => indicadores ? [
     { label: 'Ventas del día', valor: money(indicadores.ventasHoyCent) },
@@ -182,6 +217,35 @@ export function DashboardPage(): React.JSX.Element {
           </p>
         </Card>
       )}
+
+      <Card
+        title="Centro de tareas"
+        subtitle="Pendientes detectados en datos reales; se actualizan al recargar el panel."
+        className="mb-4"
+      >
+        {tareas.length === 0 ? (
+          <p className="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 size={16} /> No hay tareas pendientes con la información disponible.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {tareas.map((tarea, indice) => (
+              <li key={`${tarea.vista}-${indice}`} className="flex items-center gap-3 py-2 text-sm">
+                <AlertTriangle size={15} className={tarea.tono === 'danger'
+                  ? 'shrink-0 text-red-500'
+                  : tarea.tono === 'warning' ? 'shrink-0 text-amber-500' : 'shrink-0 text-indigo-500'} />
+                <span className="min-w-0 flex-1">{tarea.texto}</span>
+                <button
+                  className="flex shrink-0 items-center gap-1 text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+                  onClick={() => useAppStore.getState().setActiveView(tarea.vista)}
+                >
+                  Abrir <ArrowRight size={13} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card

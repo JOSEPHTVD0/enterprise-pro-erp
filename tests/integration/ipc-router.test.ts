@@ -82,9 +82,14 @@ describe('Fase 11 — router IPC real', () => {
 
     const login = await invoke('auth.login', {
       input: { username: FIRST_RUN_USER, password: FIRST_RUN_PASSWORD }
-    }) as { token?: string; debeCambiarClave?: boolean }
+    }) as { token?: string; debeCambiarClave?: boolean; context?: Record<string, unknown> }
     expect(login.debeCambiarClave).toBe(true)
     expect(login.token).toBeTruthy()
+    // El token se entrega una sola vez al preload; el contexto del renderer no lo incluye.
+    expect(login.context).toBeDefined()
+    expect((login.context as Record<string, unknown>).token).toBeUndefined()
+    expect((login.context as Record<string, unknown>).iniciaEn).toBeTruthy()
+    expect(JSON.stringify(login.context)).not.toContain(login.token!)
     tokenInicial = login.token!
     const fila = db.prepare('SELECT token_hash, equipo FROM sesiones WHERE token_hash = ?')
       .get(hashToken(tokenInicial)) as { token_hash: string; equipo: string } | undefined
@@ -97,18 +102,20 @@ describe('Fase 11 — router IPC real', () => {
     const bloqueado = await errorOf(invoke('config.get', { token: tokenInicial }))
     expect(bloqueado.code).toBe('PASSWORD_CHANGE_REQUIRED')
 
-    const yo = await invoke('auth.me', { token: tokenInicial }) as { username: string }
+    const yo = await invoke('auth.me', { token: tokenInicial }) as { username: string; token?: string }
     expect(yo.username).toBe(FIRST_RUN_USER)
+    expect(yo.token).toBeUndefined()
 
     const debil = await errorOf(invoke('auth.changePassword', {
       token: tokenInicial,
-      input: { currentPassword: FIRST_RUN_PASSWORD, newPassword: 'corta' }
+      input: { currentPassword: FIRST_RUN_PASSWORD, newPassword: 'abc' }
     }))
     expect(debil.code).toBe('VALIDATION')
 
     await invoke('auth.changePassword', {
       token: tokenInicial,
-      input: { currentPassword: FIRST_RUN_PASSWORD, newPassword: 'PruebaFase11!' }
+      // El router acepta un PIN de 4 dígitos tras la relajación de la política.
+      input: { currentPassword: FIRST_RUN_PASSWORD, newPassword: '1234' }
     })
     tokenAdmin = tokenInicial
     const config = await invoke('config.get', {
@@ -157,6 +164,38 @@ describe('Fase 11 — router IPC real', () => {
       token: tokenAdmin, input: { tabla: 'usuarios', data: {} }
     }))
     expect(catalogo.code).toBe('VALIDATION')
+  })
+
+  it('cambia de empresa sin pedir contraseña y emite un token nuevo', async () => {
+    const nueva = await invoke('config.empresa.save', {
+      token: tokenAdmin,
+      input: {
+        nombreComercial: 'Empresa IPC', razonSocial: 'EMPRESA IPC, SRL', rnc: '',
+        cedula: '', direccion: '', telefonos: '', email: '', monedaBase: 'DOP', activa: true
+      }
+    }) as { id: number }
+    const yo = await invoke('auth.me', { token: tokenAdmin }) as { userId: number }
+    const rol = db.prepare('SELECT id FROM roles WHERE empresa_id = ? AND nombre = ?')
+      .get(nueva.id, 'Administrador') as { id: number }
+    // La asignación de roles solo permite la empresa activa; en la prueba se
+    // siembra directamente para simular un usuario que ya tenía acceso a ambas.
+    db.prepare('INSERT OR IGNORE INTO usuario_roles (usuario_id, rol_id, empresa_id) VALUES (?, ?, ?)')
+      .run(yo.userId, rol.id, nueva.id)
+
+    const me = await invoke('auth.me', { token: tokenAdmin }) as { empresas?: { id: number }[] }
+    expect(me.empresas?.map((e) => e.id)).toContain(nueva.id)
+
+    const cambio = await invoke('auth.switchCompany', { token: tokenAdmin, input: nueva.id }) as {
+      token?: string; context?: Record<string, unknown>
+    }
+    expect(cambio.token).toBeTruthy()
+    expect(cambio.token).not.toBe(tokenAdmin)
+    expect(cambio.context?.empresaId).toBe(nueva.id)
+    expect(cambio.context?.token).toBeUndefined()
+    const activa = await invoke('auth.me', { token: cambio.token }) as { empresaId: number }
+    expect(activa.empresaId).toBe(nueva.id)
+    const anterior = await errorOf(invoke('auth.me', { token: tokenAdmin }))
+    expect(anterior.code).toBe('UNAUTHORIZED')
   })
 
   it('cierra la sesión cuando su actividad quedó expirada', async () => {

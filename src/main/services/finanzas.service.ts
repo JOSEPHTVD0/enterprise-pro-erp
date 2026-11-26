@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import type { Db } from '../db/connection'
 import type { SessionContext } from './context'
 import { errors } from '@shared/errors'
+import { createAjustesService } from './ajustes.service'
 import { redondear } from '@shared/dinero'
 import { writeAudit } from '../repositories/auditoria.repo'
 import type { Fila } from '../repositories/ventas.repo'
@@ -78,7 +79,10 @@ function sumarFecha(fecha: string, frecuencia: string): string {
  * Finanzas de la Fase 8. Todo importe se mueve en centavos enteros dentro de una
  * transacción; ningún saldo cacheado se modifica fuera del servicio.
  */
-export function createFinanzasService(db: Db) {
+export function createFinanzasService(
+  db: Db,
+  ajustes: Pick<ReturnType<typeof createAjustesService>, 'leerGrupo'> = createAjustesService(db)
+) {
   function tiene(ctx: SessionContext, ...permisos: string[]): boolean {
     return permisos.some((permiso) => ctx.permisos.includes(permiso))
   }
@@ -205,9 +209,12 @@ export function createFinanzasService(db: Db) {
     fin.ajustarAnticipo(db, ctx.empresaId, anticipoId, -montoCent)
   }
 
-  function datosImpresion(ctx: SessionContext, input: ImprimirFinanzasInput, tipo: TipoFinanzas) {
-    exigir(ctx, `${tipo}.imprimir`)
-    const permiso = {
+  function datosImpresion(
+    ctx: SessionContext, input: ImprimirFinanzasInput, tipo: TipoFinanzas,
+    opciones: { imprimir?: string; consultar?: string } = {}
+  ) {
+    exigir(ctx, opciones.imprimir ?? `${tipo}.imprimir`)
+    const permiso = opciones.consultar ?? {
       cxc: 'cxc.consultar', cxp: 'cxp.consultar',
       bancos: 'bancos.consultar', cajas: 'cajas.consultar'
     }[tipo]
@@ -261,9 +268,11 @@ export function createFinanzasService(db: Db) {
   }
 
   async function exportar(
-    ctx: SessionContext, input: ExportarFinanzasInput, tipo: 'cxc' | 'cxp'
+    ctx: SessionContext, input: ExportarFinanzasInput, tipo: 'cxc' | 'cxp',
+    opciones: { exportar?: string; consultar?: string } = {}
   ) {
-    exigir(ctx, `${tipo}.exportar`)
+    exigir(ctx, opciones.exportar ?? `${tipo}.exportar`)
+    if (!tiene(ctx, opciones.consultar ?? `${tipo}.consultar`)) throw errors.forbidden()
     const filtro = norm(input?.filtro)
     const filas = tipo === 'cxc'
       ? fin.listarCxc(db, ctx.empresaId, filtro)
@@ -305,7 +314,7 @@ export function createFinanzasService(db: Db) {
         ctx, 'cxc.consultar', 'cxp.consultar', 'bancos.consultar',
         'cajas.consultar', 'gastos.consultar'
       )
-      const catalogos = fin.catalogosFin(db, ctx.empresaId)
+      const catalogos = fin.catalogosFin(db, ctx.empresaId, (clave) => ctx.permisos.includes(clave))
       return {
         ...catalogos,
         metodosPago: [...metodosPagoFinanzas],
@@ -868,6 +877,12 @@ export function createFinanzasService(db: Db) {
 
     // ------------------------------- Caja -----------------------------------
 
+    /** Solo lectura: el renderer usa esta preferencia para omitir la confirmación manual. */
+    cajaCierreAutomatico(ctx: SessionContext): boolean {
+      exigir(ctx, 'cajas.consultar')
+      return ajustes.leerGrupo(ctx.empresaId, 'flujos').cierreCajaAutomatico
+    },
+
     cajasSesiones(ctx: SessionContext, filtro?: SesionesCajaFiltroInput) {
       exigir(ctx, 'cajas.consultar')
       return fin.listarSesionesCaja(db, ctx.empresaId, {
@@ -1241,6 +1256,12 @@ export function createFinanzasService(db: Db) {
       return datosImpresion(ctx, input, 'cxc')
     },
 
+    cobrosImprimir(ctx: SessionContext, input: ImprimirFinanzasInput) {
+      return datosImpresion(ctx, input, 'cxc', {
+        imprimir: 'cobros.imprimir', consultar: 'cobros.consultar'
+      })
+    },
+
     cxpImprimir(ctx: SessionContext, input: ImprimirFinanzasInput) {
       return datosImpresion(ctx, input, 'cxp')
     },
@@ -1255,6 +1276,12 @@ export function createFinanzasService(db: Db) {
 
     cxcExportar(ctx: SessionContext, input: ExportarFinanzasInput) {
       return exportar(ctx, input, 'cxc')
+    },
+
+    cobrosExportar(ctx: SessionContext, input: ExportarFinanzasInput) {
+      return exportar(ctx, input, 'cxc', {
+        exportar: 'cobros.exportar', consultar: 'cobros.consultar'
+      })
     },
 
     cxpExportar(ctx: SessionContext, input: ExportarFinanzasInput) {

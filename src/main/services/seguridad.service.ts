@@ -32,6 +32,20 @@ export function createSeguridadService(db: Db) {
     return [...permissionCatalog, ...personalizados]
   }
 
+  function validarEmpresa(ctx: SessionContext, userId: number): void {
+    if (!repo.userBelongsToCompany(db, userId, ctx.empresaId)) throw errors.notFound('Usuario')
+  }
+
+  function validarDependencias(ctx: SessionContext, input: { departamentoId?: number | null; roles: { rolId: number; empresaId: number }[] }): void {
+    if (input.departamentoId && !repo.findDepartment(db, ctx.empresaId, input.departamentoId)) {
+      throw errors.validation('El departamento no pertenece a la empresa activa.')
+    }
+    for (const r of input.roles) {
+      if (r.empresaId !== ctx.empresaId) throw errors.validation('Uno de los roles no pertenece a la empresa activa.')
+      if (!repo.findRole(db, ctx.empresaId, r.rolId)) throw errors.validation('Uno de los roles no existe para la empresa activa.')
+    }
+  }
+
   function validarClaves(ctx: SessionContext, keys: string[]): void {
     const permitidas = new Set<string>([
       ...clavesDelSistema,
@@ -47,22 +61,23 @@ export function createSeguridadService(db: Db) {
   return {
     listUsers(ctx: SessionContext) {
       requirePermission(ctx, 'seguridad.consultar')
-      return repo.listUsers(db)
+      return repo.listUsers(db, ctx.empresaId)
     },
 
     getUser(ctx: SessionContext, userId: number) {
       requirePermission(ctx, 'seguridad.consultar')
-      const user = repo.findUserById(db, userId)
-      if (!user) throw errors.notFound('Usuario')
-      return { id: user.id, username: user.username, nombre: user.nombre, roles: repo.rolesForUser(db, userId) }
+      validarEmpresa(ctx, userId)
+      const user = repo.findUserById(db, userId)!
+      return {
+        id: user.id, username: user.username, nombre: user.nombre,
+        roles: repo.rolesForUser(db, userId, ctx.empresaId)
+      }
     },
 
     createUser(ctx: SessionContext, input: CreateUserInput) {
       requirePermission(ctx, 'seguridad.crear')
       if (repo.findUserByUsername(db, input.username)) throw errors.conflict('El nombre de usuario ya existe.')
-      for (const r of input.roles) {
-        if (!repo.findRole(db, r.empresaId, r.rolId)) throw errors.validation('Uno de los roles no existe para la empresa indicada.')
-      }
+      validarDependencias(ctx, input)
       const temp = temporaryPassword()
       const { hash, salt } = hashPassword(temp)
       const id = db.transaction(() => {
@@ -70,7 +85,7 @@ export function createSeguridadService(db: Db) {
           username: input.username, nombre: input.nombre, email: input.email,
           hash, salt, departamentoId: input.departamentoId ?? null, activo: input.activo
         })
-        repo.replaceUserRoles(db, userId, input.roles)
+        repo.replaceUserRoles(db, userId, input.roles, ctx.empresaId)
         writeAudit(db, { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId }, 'CREAR', 'usuarios', userId, null, input)
         return userId
       })()
@@ -79,14 +94,15 @@ export function createSeguridadService(db: Db) {
 
     updateUser(ctx: SessionContext, input: UpdateUserInput) {
       requirePermission(ctx, 'seguridad.modificar')
-      const user = repo.findUserById(db, input.id)
-      if (!user) throw errors.notFound('Usuario')
+      validarEmpresa(ctx, input.id)
+      validarDependencias(ctx, input)
+      const user = repo.findUserById(db, input.id)!
       db.transaction(() => {
         repo.updateUser(db, input.id, {
           nombre: input.nombre, email: input.email,
           departamentoId: input.departamentoId ?? null, activo: input.activo
         })
-        repo.replaceUserRoles(db, input.id, input.roles)
+        repo.replaceUserRoles(db, input.id, input.roles, ctx.empresaId)
         if (!input.activo) repo.closeUserSessions(db, input.id)
         writeAudit(db, { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId }, 'MODIFICAR', 'usuarios', input.id, user, input)
       })()
@@ -95,8 +111,7 @@ export function createSeguridadService(db: Db) {
 
     setUserStatus(ctx: SessionContext, userId: number, field: 'activo' | 'bloqueado', value: boolean) {
       requirePermission(ctx, field === 'bloqueado' ? 'seguridad.usuario.bloquear' : 'seguridad.modificar')
-      const user = repo.findUserById(db, userId)
-      if (!user) throw errors.notFound('Usuario')
+      validarEmpresa(ctx, userId)
       if (field === 'bloqueado' && userId === ctx.userId) throw errors.validation('No puede bloquear su propio usuario.')
       if (field === 'activo' && userId === ctx.userId) throw errors.validation('No puede desactivar su propio usuario.')
       db.transaction(() => {
@@ -294,6 +309,30 @@ export function createSeguridadService(db: Db) {
       return { ok: true }
     },
 
+    deleteRole(ctx: SessionContext, roleId: number) {
+      requirePermission(ctx, 'seguridad.rol.eliminar')
+      const role = repo.findRole(db, ctx.empresaId, roleId)
+      if (!role) throw errors.notFound('Rol')
+      const nombre = String(role.nombre)
+      if (['Administrador', 'Gerente', 'Vendedor'].includes(nombre)) {
+        throw errors.validation(`El rol ${nombre} es del sistema y no se puede eliminar.`)
+      }
+      const asignados = Number((db.prepare(`
+        SELECT COUNT(*) AS n FROM usuario_roles WHERE rol_id = ? AND empresa_id = ?
+      `).get(roleId, ctx.empresaId) as { n: number }).n)
+      if (asignados > 0) {
+        throw errors.conflict(`El rol tiene ${asignados} usuario(s) asignado(s); quítelos antes de eliminarlo.`)
+      }
+      db.transaction(() => {
+        db.prepare(`
+          DELETE FROM ajustes_personalizados WHERE empresa_id = ? AND ambito = 'ROL' AND objetivo = ?
+        `).run(ctx.empresaId, String(roleId))
+        db.prepare('DELETE FROM roles WHERE id = ? AND empresa_id = ?').run(roleId, ctx.empresaId)
+        writeAudit(db, { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId }, 'ELIMINAR', 'roles', roleId, role, null)
+      })()
+      return { ok: true }
+    },
+
     listDepartments(ctx: SessionContext) {
       requirePermission(ctx, 'seguridad.consultar')
       return repo.listDepartments(db, ctx.empresaId)
@@ -320,6 +359,22 @@ export function createSeguridadService(db: Db) {
     listAudit(ctx: SessionContext, filter: AuditFilter) {
       requirePermission(ctx, 'auditoria.consultar')
       return listAudit(db, ctx.empresaId, filter)
+    },
+
+    /** Cierre forzado de una sesión ajena, auditado y limitado a la empresa activa. */
+    closeSession(ctx: SessionContext, sesionId: number) {
+      requirePermission(ctx, 'seguridad.usuario.bloquear')
+      if (sesionId === ctx.sesionId) throw errors.validation('Use «Cerrar sesión» para finalizar la suya.')
+      const sesion = db.prepare('SELECT id, empresa_id FROM sesiones WHERE id = ? AND fin IS NULL')
+        .get(sesionId) as { id: number; empresa_id: number } | undefined
+      if (!sesion || sesion.empresa_id !== ctx.empresaId) throw errors.notFound('Sesión')
+      db.transaction(() => {
+        repo.closeSession(db, sesionId)
+        writeAudit(db, {
+          empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
+        }, 'BLOQUEAR', 'sesiones', sesionId, { abierta: true }, { abierta: false })
+      })()
+      return { ok: true }
     }
   }
 }

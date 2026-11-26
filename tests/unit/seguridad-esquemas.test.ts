@@ -36,6 +36,12 @@ describe('hash y tokens', () => {
     const temp = temporaryPassword()
     expect(() => changePasswordSchema.parse({ currentPassword: 'x', newPassword: temp })).not.toThrow()
   })
+
+  it('acepta PIN de 4 dígitos y rechaza claves más cortas', () => {
+    expect(() => changePasswordSchema.parse({ currentPassword: 'x', newPassword: '1234' })).not.toThrow()
+    expect(() => changePasswordSchema.parse({ currentPassword: 'x', newPassword: 'abcd' })).not.toThrow()
+    expect(() => changePasswordSchema.parse({ currentPassword: 'x', newPassword: '123' })).toThrow(/al menos 4/)
+  })
 })
 
 describe('serialización de errores IPC', () => {

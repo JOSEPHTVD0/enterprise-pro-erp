@@ -7,7 +7,7 @@ import { buildContext } from '../../src/main/services/context'
 import { permissionKeys } from '@shared/permissions'
 
 describe('migraciones y datos estructurales', () => {
-  it('crea todas las tablas y migraciones hasta la 0.4.0', () => {
+  it('crea todas las tablas y migraciones aplicadas', () => {
     const db = testDb()
     const tables = (db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]).map((t) => t.name)
     for (const t of ['empresas', 'usuarios', 'roles', 'permisos', 'sesiones', 'auditoria', 'series_documento', 'impuestos', 'almacenes', 'cajas', 'plan_cuentas', 'periodos_contables', 'asientos', 'asiento_lineas']) {
@@ -15,7 +15,7 @@ describe('migraciones y datos estructurales', () => {
     }
     const versions = (db.prepare('SELECT version FROM _migraciones ORDER BY version').all() as { version: number }[])
       .map((m) => m.version)
-    expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(versions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
     db.close()
   })
 
@@ -88,6 +88,23 @@ describe('autenticación', () => {
     db.close()
   })
 
+  it('un administrador puede cerrar la sesión de otro usuario de su empresa', () => {
+    const db = testDb()
+    const auth = createAuthService(db)
+    const seguridad = createSeguridadService(db)
+    const primera = auth.login({ username: FIRST_RUN_USER, password: FIRST_RUN_PASSWORD }, 'PC-1')
+    const segunda = auth.login({ username: FIRST_RUN_USER, password: FIRST_RUN_PASSWORD }, 'PC-2')
+    const ctx = segunda.context!
+    expect(() => seguridad.closeSession(ctx, ctx.sesionId)).toThrowError(/suya/)
+    seguridad.closeSession(ctx, primera.context!.sesionId)
+    expect(() => auth.me(primera.token!)).toThrowError('Sesión no válida')
+    expect(auth.me(segunda.token!).username).toBe(FIRST_RUN_USER)
+    const audit = db.prepare("SELECT operacion, entidad FROM auditoria WHERE entidad = 'sesiones' ORDER BY id DESC LIMIT 1")
+      .get() as { operacion: string; entidad: string }
+    expect(audit.operacion).toBe('BLOQUEAR')
+    db.close()
+  })
+
   it('el contexto expone el cambio obligatorio y se limpia al cambiar la clave', () => {
     const db = testDb()
     const auth = createAuthService(db)
@@ -98,16 +115,16 @@ describe('autenticación', () => {
     db.close()
   })
 
-  it('cambio de contraseña requiere la actual y rechaza claves débiles', () => {
+  it('cambio de contraseña requiere la actual y admite PIN de 4 dígitos', () => {
     const db = testDb()
     const auth = createAuthService(db)
     const { token, context } = auth.login({ username: FIRST_RUN_USER, password: FIRST_RUN_PASSWORD }, 'PC')
-    expect(() => auth.changePassword(context!, 'incorrecta', 'NuevaClave123!')).toThrowError('actual')
-    auth.changePassword(context!, FIRST_RUN_PASSWORD, 'NuevaClave123!')
+    expect(() => auth.changePassword(context!, 'incorrecta', '1234')).toThrowError('actual')
+    auth.changePassword(context!, FIRST_RUN_PASSWORD, '1234')
     const row = db.prepare('SELECT debe_cambiar_clave AS flag FROM usuarios WHERE username = ?').get(FIRST_RUN_USER) as { flag: number }
     expect(row.flag).toBe(0)
     expect(auth.me(token!).username).toBe(FIRST_RUN_USER)
-    expect(() => auth.login({ username: FIRST_RUN_USER, password: 'NuevaClave123!' }, 'PC')).not.toThrow()
+    expect(() => auth.login({ username: FIRST_RUN_USER, password: '1234' }, 'PC')).not.toThrow()
     db.close()
   })
 })

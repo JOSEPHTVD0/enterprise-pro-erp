@@ -1,6 +1,6 @@
-import { centavosDesdeDecimal } from '@shared/dinero'
+import { centavosDesdeDecimal, redondear } from '@shared/dinero'
 import { calcularLinea, resumenLineas, type LineaCalculada } from '@shared/impuestos'
-import { clave, num, type CatalogosCompras, type FormularioCompra, type LineaCompra } from './types'
+import { clave, num, txt, type CatalogosCompras, type FormularioCompra, type LineaCompra } from './types'
 
 /** Utilidades del carrito de compras. Usan el mismo motor de cálculo que el backend. */
 
@@ -17,9 +17,16 @@ function datosImpuesto(catalogos: CatalogosCompras, impuestoId: string): { tasaB
   }
 }
 
-function centavos(texto: string): number {
-  const valor = Number(texto)
+export function centavos(texto: unknown): number {
+  const valor = typeof texto === 'number' ? texto : Number(txt(texto).replace(/,/g, ''))
   return Number.isFinite(valor) && valor >= 0 ? centavosDesdeDecimal(valor) : 0
+}
+
+/** El usuario escribe porcentaje (18); el motor persiste puntos base (1800). */
+export function puntosBase(texto: unknown): number {
+  const valor = Number(txt(texto).replace(',', '.'))
+  if (!Number.isFinite(valor) || valor < 0) return 0
+  return Math.min(10000, redondear(valor * 100))
 }
 
 export function nuevaLinea(
@@ -32,7 +39,9 @@ export function nuevaLinea(
     productoId: productoId ?? '',
     cantidad: '1',
     costo: ultimo ? (ultimo / 100).toFixed(2) : '0.00',
-    descuentoPct: '0',
+    pvs: producto?.precio1Cent ? (producto.precio1Cent / 100).toFixed(2) : '0.00',
+    referencia: producto?.referencia ?? '',
+    descuentoPct: '0', descuento2Pct: '0', descuento3Pct: '0',
     gasto: '0.00',
     impuestoId: producto?.impuestoId
       ? String(producto.impuestoId)
@@ -44,54 +53,92 @@ export function nuevaLinea(
   }
 }
 
+/** Cálculo de una fila para la tabla del ingreso. Devuelve null si está incompleta. */
+export function calcularFila(
+  catalogos: CatalogosCompras, linea: LineaCompra
+): LineaCalculada | null {
+  const cantidad = Number(linea.cantidad)
+  if (!linea.productoId || !Number.isFinite(cantidad) || cantidad <= 0) return null
+  const { tasaBp, exento } = datosImpuesto(catalogos, linea.impuestoId)
+  try {
+    return calcularLinea({
+      cantidad,
+      precioCent: centavos(linea.costo),
+      descuentoPctBp: puntosBase(linea.descuentoPct),
+      descuento2PctBp: puntosBase(linea.descuento2Pct),
+      descuento3PctBp: puntosBase(linea.descuento3Pct),
+      tasaBp,
+      exento: linea.exento || exento
+    })
+  } catch {
+    return null
+  }
+}
+
 function lineasCalculadas(catalogos: CatalogosCompras, lineas: LineaCompra[]): LineaCalculada[] {
   const resultado: LineaCalculada[] = []
   for (const linea of lineas) {
-    const cantidad = Number(linea.cantidad)
-    if (!linea.productoId || !Number.isFinite(cantidad) || cantidad <= 0) continue
-    const { tasaBp, exento } = datosImpuesto(catalogos, linea.impuestoId)
-    try {
-      resultado.push(calcularLinea({
-        cantidad,
-        precioCent: centavos(linea.costo),
-        descuentoPctBp: centavos(linea.descuentoPct),
-        tasaBp,
-        exento: linea.exento || exento
-      }))
-    } catch {
-      // Un campo incompleto no debe impedir ver el resto del documento.
-    }
+    const calculo = calcularFila(catalogos, linea)
+    if (calculo) resultado.push(calculo)
   }
   return resultado
 }
 
-export function totalesCarrito(catalogos: CatalogosCompras, lineas: LineaCompra[]) {
+export interface OpcionesTotalesCompra {
+  fleteCent?: number
+  ajusteCent?: number
+  montoFacturaCent?: number
+}
+
+export function totalesCarrito(
+  catalogos: CatalogosCompras, lineas: LineaCompra[], opciones: OpcionesTotalesCompra = {}
+) {
   const resumen = resumenLineas(lineasCalculadas(catalogos, lineas))
   const gastoCent = lineas.reduce((suma, linea) => suma + centavos(linea.gasto), 0)
-  const baseCent = resumen.subtotalCent - resumen.descuentoCent
+  const fleteCent = opciones.fleteCent ?? 0
+  const ajusteCent = opciones.ajusteCent ?? 0
+  const montoFacturaCent = opciones.montoFacturaCent
+  const totalCent = resumen.totalCent + gastoCent + fleteCent + ajusteCent
   return {
     ...resumen,
-    baseCent,
+    baseCent: resumen.baseCent,
     gastoCent,
-    totalCent: resumen.totalCent + gastoCent,
-    costoTotalCent: baseCent + gastoCent
+    fleteCent,
+    ajusteCent,
+    montoFacturaCent: montoFacturaCent ?? totalCent,
+    diferenciaCent: (montoFacturaCent ?? totalCent) - totalCent,
+    totalCent,
+    costoTotalCent: resumen.baseCent + gastoCent + fleteCent + ajusteCent
   }
+}
+
+/** Una fila sin producto, cantidad o costo no debe llegar a Zod. */
+export function primeraLineaIncompleta(lineas: LineaCompra[]): boolean {
+  return lineas.some((linea) =>
+    !linea.productoId || Number(linea.cantidad) <= 0 || centavos(linea.costo) <= 0
+  )
 }
 
 /** Convierte el formulario al payload validado por el router. */
 export function payloadLineas(lineas: LineaCompra[]) {
-  return lineas.map((linea) => ({
-    productoId: num(linea.productoId),
-    docLineaId: linea.docLineaId ? num(linea.docLineaId) : undefined,
-    cantidad: Number(linea.cantidad),
-    precioCent: centavos(linea.costo),
-    descuentoPctBp: centavos(linea.descuentoPct),
-    gastoCent: centavos(linea.gasto),
-    impuestoId: linea.impuestoId ? num(linea.impuestoId) : undefined,
-    exento: linea.exento,
-    numeroSerie: linea.numeroSerie,
-    lote: linea.lote
-  }))
+  return lineas
+    .filter((linea) => linea.productoId && Number(linea.cantidad) > 0 && centavos(linea.costo) > 0)
+    .map((linea) => ({
+      productoId: num(linea.productoId),
+      docLineaId: linea.docLineaId ? num(linea.docLineaId) : undefined,
+      cantidad: Number(linea.cantidad),
+      precioCent: centavos(linea.costo),
+      pvsCent: centavos(linea.pvs),
+      referencia: linea.referencia,
+      descuentoPctBp: puntosBase(linea.descuentoPct),
+      descuento2PctBp: puntosBase(linea.descuento2Pct),
+      descuento3PctBp: puntosBase(linea.descuento3Pct),
+      gastoCent: centavos(linea.gasto),
+      impuestoId: linea.impuestoId ? num(linea.impuestoId) : undefined,
+      exento: linea.exento,
+      numeroSerie: linea.numeroSerie,
+      lote: linea.lote
+    }))
 }
 
 export function payloadPagos(pagos: { metodo: string; monto: string; referencia: string }[]) {
@@ -115,6 +162,34 @@ export function payloadCabecera(form: FormularioCompra) {
     docOrigenId: form.docOrigenId ? num(form.docOrigenId) : undefined,
     credito: form.credito,
     pagos: form.tipo === 'FACTURA_COMPRA' && !form.credito ? payloadPagos(form.pagos) : undefined,
+    lineas: payloadLineas(form.lineas)
+  }
+}
+
+/** Payload del ingreso de mercancía; todos los importes viajan como centavos. */
+export function payloadIngreso(form: FormularioCompra, totalCent: number) {
+  const tasa = Number(form.tasa) > 0 ? Number(form.tasa) : 1
+  return {
+    proveedorId: num(form.proveedorId),
+    almacenId: form.almacenId ? num(form.almacenId) : undefined,
+    fecha: form.fecha || undefined,
+    fechaLlegada: form.fechaLlegada || undefined,
+    vencimiento: form.vencimiento || undefined,
+    numeroProveedor: form.numeroProveedor,
+    numeroOrdenCompra: form.numeroOrdenCompra,
+    clasificacionContable: form.clasificacionContable || '1200',
+    monedaCodigo: form.monedaCodigo || 'DOP',
+    tasaAplicada: tasa,
+    montoFacturaCent: form.montoFactura ? centavos(form.montoFactura) : totalCent,
+    montoFacturaMonedaCent: form.montoFacturaMoneda
+      ? centavos(form.montoFacturaMoneda)
+      : (form.monedaCodigo === 'DOP' ? totalCent : redondear(totalCent / tasa)),
+    ajusteCent: centavosDesdeDecimal(Number(form.ajuste) || 0),
+    fleteCent: centavos(form.flete),
+    nota: form.nota,
+    comentarios: form.comentarios,
+    credito: form.credito,
+    pagos: form.credito ? undefined : payloadPagos(form.pagos),
     lineas: payloadLineas(form.lineas)
   }
 }

@@ -8,7 +8,7 @@ export type Operation = (typeof operations)[number]
 
 export const modules = [
   'dashboard', 'configuracion', 'seguridad', 'clientes', 'proveedores', 'productos', 'inventario', 'ventas',
-  'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'gastos', 'vendedores',
+  'pos', 'cotizaciones', 'compras', 'cxc', 'cobros', 'cxp', 'bancos', 'cajas', 'gastos', 'vendedores',
   'reportes', 'auditoria', 'respaldos',
   'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad', 'inteligencia'
 ] as const
@@ -21,10 +21,10 @@ const operationModules: Record<Operation, readonly ModuleKey[]> = {
   crear: modules.filter((m) => m !== 'dashboard'),
   modificar: modules.filter((m) => m !== 'dashboard'),
   eliminar: modules.filter((m) => m !== 'dashboard'),
-  anular: ['ventas', 'compras', 'cxc', 'cxp', 'cotizaciones', 'cajas', 'bancos', 'gastos', 'presupuestos', 'servicios', 'contabilidad'],
+  anular: ['ventas', 'compras', 'cxc', 'cobros', 'cxp', 'cotizaciones', 'cajas', 'bancos', 'gastos', 'presupuestos', 'servicios', 'contabilidad'],
   aprobar: ['cotizaciones', 'compras', 'ventas', 'gastos', 'configuracion', 'presupuestos', 'servicios', 'contabilidad'],
-  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cxp', 'bancos', 'cajas', 'reportes', 'presupuestos', 'servicios', 'activos', 'contabilidad'],
-  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cxp', 'vendedores', 'reportes', 'auditoria', 'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad', 'inteligencia'],
+  imprimir: ['ventas', 'pos', 'cotizaciones', 'compras', 'cxc', 'cobros', 'cxp', 'bancos', 'cajas', 'reportes', 'presupuestos', 'servicios', 'activos', 'contabilidad'],
+  exportar: ['clientes', 'proveedores', 'productos', 'inventario', 'ventas', 'compras', 'cxc', 'cobros', 'cxp', 'vendedores', 'reportes', 'auditoria', 'presupuestos', 'servicios', 'activos', 'crm', 'salud', 'contabilidad', 'inteligencia'],
   descuento: ['ventas', 'pos', 'cotizaciones'],
   precio: ['productos', 'ventas', 'pos', 'cotizaciones'],
   costo: ['productos', 'inventario', 'compras', 'reportes'],
@@ -49,6 +49,7 @@ const extraKeys = [
   'seguridad.usuario.bloquear',
   'seguridad.permiso.modificar',
   'seguridad.sesion.consultar',
+  'seguridad.rol.eliminar',
   'configuracion.respaldo.crear',
   'configuracion.respaldo.restaurar',
   'configuracion.empresa.crear',
@@ -56,6 +57,10 @@ const extraKeys = [
   'servicios.finalizar',
   'activos.depreciar',
   'crm.convertir',
+  'compras.descuento',
+  'compras.tasa',
+  'compras.almacen',
+  'compras.historial',
   'contabilidad.asiento.confirmar',
   'contabilidad.periodo.cerrar',
   'contabilidad.integrar',
@@ -65,6 +70,7 @@ const extraKeys = [
   'configuracion.ajustes.seguridad.modificar',
   'configuracion.ajustes.integraciones.modificar',
   'configuracion.ajustes.featureFlags.modificar',
+  'configuracion.ajustes.interfaz.modificar',
   ...configResourceKeys
 ] as const
 
@@ -89,7 +95,7 @@ const spanishModules: Record<ModuleKey, string> = {
   dashboard: 'Panel', configuracion: 'Configuración', seguridad: 'Seguridad',
   clientes: 'Clientes', proveedores: 'Proveedores', productos: 'Productos', inventario: 'Inventario',
   ventas: 'Ventas', pos: 'Punto de Venta', cotizaciones: 'Cotizaciones',
-  compras: 'Compras', cxc: 'Cuentas por Cobrar', cxp: 'Cuentas por Pagar',
+  compras: 'Compras', cxc: 'Cuentas por Cobrar', cobros: 'Cobros', cxp: 'Cuentas por Pagar',
   bancos: 'Bancos', cajas: 'Cajas', gastos: 'Gastos', vendedores: 'Vendedores',
   reportes: 'Reportes', auditoria: 'Auditoría', respaldos: 'Respaldos',
   presupuestos: 'Presupuestos', servicios: 'Servicios', activos: 'Activos fijos',
@@ -118,6 +124,7 @@ const extraLabels: Record<string, string> = {
   'seguridad.usuario.restablecer': 'Seguridad — Restablecer contraseña',
   'seguridad.usuario.bloquear': 'Seguridad — Bloquear usuario',
   'seguridad.permiso.modificar': 'Seguridad — Modificar permisos',
+  'seguridad.rol.eliminar': 'Seguridad — Eliminar roles personalizados',
   'seguridad.sesion.consultar': 'Seguridad — Consultar sesiones',
   'configuracion.respaldo.crear': 'Respaldos — Crear copia',
   'configuracion.respaldo.restaurar': 'Respaldos — Restaurar copia',
@@ -125,6 +132,10 @@ const extraLabels: Record<string, string> = {
   'servicios.finalizar': 'Servicios — Finalizar orden',
   'activos.depreciar': 'Activos — Registrar depreciación',
   'crm.convertir': 'CRM — Convertir oportunidad en cliente',
+  'compras.descuento': 'Compras — Aplicar descuentos',
+  'compras.tasa': 'Compras — Cambiar tasa de cambio',
+  'compras.almacen': 'Compras — Cambiar almacén',
+  'compras.historial': 'Compras — Consultar historial',
   'contabilidad.asiento.confirmar': 'Contabilidad — Confirmar asientos',
   'contabilidad.periodo.cerrar': 'Contabilidad — Cerrar periodos',
   'contabilidad.integrar': 'Contabilidad — Integrar documentos',
@@ -134,7 +145,8 @@ const extraLabels: Record<string, string> = {
   'configuracion.ajustes.restaurar': 'Configuración — Restaurar ajustes por defecto',
   'configuracion.ajustes.seguridad.modificar': 'Configuración — Modificar ajustes de seguridad',
   'configuracion.ajustes.integraciones.modificar': 'Configuración — Modificar integraciones locales',
-  'configuracion.ajustes.featureFlags.modificar': 'Configuración — Activar u ocultar módulos'
+  'configuracion.ajustes.featureFlags.modificar': 'Configuración — Activar u ocultar módulos',
+  'configuracion.ajustes.interfaz.modificar': 'Configuración — Personalizar interfaz y paneles'
 }
 
 const operationDescriptions: Record<Operation, string> = {
@@ -159,6 +171,7 @@ const extraDescriptions: Record<string, string> = {
   'seguridad.usuario.restablecer': 'Permite generar una contraseña temporal para otro usuario.',
   'seguridad.usuario.bloquear': 'Permite bloquear o desbloquear el acceso de un usuario.',
   'seguridad.permiso.modificar': 'Permite cambiar roles, permisos y accesos desde el centro de control.',
+  'seguridad.rol.eliminar': 'Permite borrar roles creados por el administrador; los roles del sistema no se pueden eliminar.',
   'seguridad.sesion.consultar': 'Permite revisar las sesiones abiertas y su actividad.',
   'configuracion.respaldo.crear': 'Permite crear copias de seguridad de la base de datos.',
   'configuracion.respaldo.restaurar': 'Permite restaurar una copia; puede sobrescribir datos recientes.',
@@ -166,6 +179,10 @@ const extraDescriptions: Record<string, string> = {
   'servicios.finalizar': 'Permite cerrar una orden de servicio y dejarla lista para facturar.',
   'activos.depreciar': 'Permite registrar la depreciación mensual de activos fijos.',
   'crm.convertir': 'Permite convertir una oportunidad de CRM en cliente real.',
+  'compras.descuento': 'Permite aplicar descuentos 1, 2 y 3 en las líneas del ingreso de mercancía.',
+  'compras.tasa': 'Permite fijar una tasa de cambio distinta a la vigente en la configuración.',
+  'compras.almacen': 'Permite elegir un almacén distinto al principal al ingresar mercancía.',
+  'compras.historial': 'Permite consultar versiones, auditoría, impresiones y asientos del ingreso.',
   'contabilidad.asiento.confirmar': 'Permite confirmar asientos contables para que alimenten libros y balances.',
   'contabilidad.periodo.cerrar': 'Permite cerrar un periodo contable; impide registrar en él.',
   'contabilidad.integrar': 'Permite generar asientos reales desde documentos pendientes.',
@@ -174,7 +191,8 @@ const extraDescriptions: Record<string, string> = {
   'configuracion.ajustes.restaurar': 'Permite devolver un grupo de ajustes a los valores por defecto validados.',
   'configuracion.ajustes.seguridad.modificar': 'Permite cambiar refuerzos visuales de seguridad; nunca las políticas duras del backend.',
   'configuracion.ajustes.integraciones.modificar': 'Permite configurar carpetas y formatos de exportación local.',
-  'configuracion.ajustes.featureFlags.modificar': 'Permite ocultar módulos opcionales; los módulos protegidos siguen visibles.'
+  'configuracion.ajustes.featureFlags.modificar': 'Permite ocultar módulos opcionales; los módulos protegidos siguen visibles.',
+  'configuracion.ajustes.interfaz.modificar': 'Permite renombrar y reordenar módulos, cambiar el ancho del menú y ocultar elementos visuales.'
 }
 
 const criticalPermissionKeys = new Set([
@@ -182,6 +200,7 @@ const criticalPermissionKeys = new Set([
   'seguridad.usuario.bloquear',
   'seguridad.permiso.modificar',
   'seguridad.sesion.consultar',
+  'seguridad.rol.eliminar',
   'configuracion.parametros.modificar',
   'configuracion.respaldo.crear',
   'configuracion.respaldo.restaurar',
@@ -193,7 +212,8 @@ const criticalPermissionKeys = new Set([
   'configuracion.ajustes.restaurar',
   'configuracion.ajustes.seguridad.modificar',
   'configuracion.ajustes.integraciones.modificar',
-  'configuracion.ajustes.featureFlags.modificar'
+  'configuracion.ajustes.featureFlags.modificar',
+  'configuracion.ajustes.interfaz.modificar'
 ])
 
 export const permissionCriticalKeys: string[] = [...criticalPermissionKeys]
@@ -248,8 +268,10 @@ export const seedRoles: { name: string; description: string; permissionFilter: (
   {
     name: 'Vendedor',
     description: 'Ventas y consulta de maestros, sin costos, ganancias ni finanzas.',
+    // Ventas no cobra: el perfil de Vendedor nunca recibe permisos de Cobros.
     permissionFilter: (key) =>
-      key.startsWith('dashboard.') ||
+      !key.startsWith('cobros.') &&
+      (key.startsWith('dashboard.') ||
       key.startsWith('clientes.consultar') ||
       key.startsWith('productos.consultar') ||
       key.startsWith('inventario.consultar') ||
@@ -260,6 +282,47 @@ export const seedRoles: { name: string; description: string; permissionFilter: (
       key.startsWith('crm.crear') ||
       key.startsWith('crm.modificar') ||
       (!key.includes('.costo') && !key.includes('.ganancia') &&
-        ['cxc.consultar', 'reportes.consultar'].includes(key))
+        ['cxc.consultar', 'reportes.consultar'].includes(key)))
   }
+]
+
+/** Plantillas listas para crear roles desde la UI, sin permisos críticos. */
+export interface RoleTemplate {
+  id: string
+  nombre: string
+  descripcion: string
+  permisos: string[]
+}
+
+const esCritico = new Set(criticalPermissionKeys)
+
+function plantilla(id: string, nombre: string, descripcion: string, aceptar: (key: string) => boolean): RoleTemplate {
+  return {
+    id, nombre, descripcion,
+    permisos: permissionKeys.filter((key) => !esCritico.has(key) && aceptar(key))
+  }
+}
+
+export const roleTemplates: RoleTemplate[] = [
+  plantilla(
+    'ventas', 'Solo Ventas',
+    'Factura, cotiza y usa el POS; no puede cobrar ni administrar finanzas.',
+    (key) => key.startsWith('ventas.') || key.startsWith('pos.') || key.startsWith('cotizaciones.') ||
+      ['dashboard.consultar', 'clientes.consultar', 'productos.consultar', 'inventario.consultar'].includes(key)
+  ),
+  plantilla(
+    'cobros', 'Solo Cobros',
+    'Registra recibos, anticipos y anulaciones de cobro; no emite facturas.',
+    (key) => key.startsWith('cobros.') || ['clientes.consultar', 'cxc.consultar', 'reportes.consultar'].includes(key)
+  ),
+  plantilla(
+    'consulta', 'Solo Consulta',
+    'Lectura general, sin altas, cambios ni acceso al área de cobros.',
+    (key) => key.endsWith('.consultar') && !key.startsWith('cobros.')
+  ),
+  plantilla(
+    'personal', 'Personalización',
+    'Configura tema, paneles y módulos visibles sin tocar seguridad ni finanzas.',
+    (key) => key.startsWith('configuracion.ajustes.') || key === 'dashboard.consultar'
+  )
 ]

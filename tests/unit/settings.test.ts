@@ -18,12 +18,20 @@ describe('settingsSchema', () => {
   it('valida los grupos avanzados', () => {
     const parsed = settingsSchema.parse({
       ...defaultSettings,
-      impresion: { ...defaultSettings.impresion, formato: 'TICKET80', copias: 2 },
+      impresion: { ...defaultSettings.impresion, formato: 'TICKET_80', copias: 2 },
       seguridad: { ...defaultSettings.seguridad, enmascararRnc: true }
     })
-    expect(parsed.impresion.formato).toBe('TICKET80')
+    expect(parsed.impresion.formato).toBe('TICKET_80')
     expect(parsed.impresion.copias).toBe(2)
     expect(parsed.seguridad.enmascararRnc).toBe(true)
+  })
+
+  it('migra los formatos históricos de tickets al vocabulario actual', () => {
+    const parsed = settingsSchema.parse({
+      ...defaultSettings,
+      impresion: { ...defaultSettings.impresion, formato: 'TICKET58' }
+    })
+    expect(parsed.impresion.formato).toBe('TICKET_58')
   })
 
   it('rechaza temas desconocidos', () => {

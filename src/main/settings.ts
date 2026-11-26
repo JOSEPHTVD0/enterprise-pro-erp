@@ -27,7 +27,9 @@ export function saveSettings(input: unknown): Settings {
   const settings = settingsSchema.parse(input)
   const file = settingsPath()
   mkdirSync(dirname(file), { recursive: true })
-  const tmp = `${file}.tmp`
+  // Sufijo por PID: dos instancias pueden guardar preferencias a la vez sin
+  // pisar el mismo archivo temporal.
+  const tmp = `${file}.${process.pid}.tmp`
   writeFileSync(tmp, JSON.stringify(settings, null, 2), 'utf-8')
   renameSync(tmp, file)
   return settings

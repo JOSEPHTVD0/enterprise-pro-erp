@@ -12,14 +12,14 @@ import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { money, number } from '@/lib/format'
 import { guardarPdf } from '@/lib/pdf'
+import { formatoGuardado, type FormatoImpresion } from '@/lib/formato-impresion'
 import { descargarArchivo } from '@/features/inventario/descargar'
 import { AreaImpresion } from './AreaImpresion'
 import { DocumentoDetalle } from './DocumentoDetalle'
 import { DocumentoForm } from './DocumentoForm'
-import { PagosEditor } from './PagosEditor'
-import { nuevaLinea, payloadCabecera, payloadPagos, totalesCarrito } from './carrito'
+import { nuevaLinea, payloadCabecera, primeraLineaIncompleta, totalesCarrito } from './carrito'
 import { ConducesTab } from './ConducesTab'
-import { clave, formularioVacio, num, txt, type DatosImpresion, type DetalleDocumento, type Fila } from './types'
+import { formularioVacio, num, txt, type DatosImpresion, type DetalleDocumento, type Fila } from './types'
 import { useVentasCatalogos } from './useVentasCatalogos'
 
 type TipoFactura = 'FACTURA_CONTADO' | 'FACTURA_CREDITO'
@@ -74,7 +74,6 @@ export function FacturacionPage(): React.JSX.Element {
   function abrirNuevo(): void {
     const base = formularioVacio(catalogos)
     base.lineas = [nuevaLinea(catalogos)]
-    base.pagos = [{ key: clave(), metodo: 'EFECTIVO', monto: '', referencia: '' }]
     setForm(base)
     setTipoFactura('FACTURA_CONTADO')
     setNuevoOpen(true)
@@ -82,32 +81,19 @@ export function FacturacionPage(): React.JSX.Element {
 
   function cambiarTipo(tipo: TipoFactura): void {
     setTipoFactura(tipo)
-    setForm((f) => ({
-      ...f,
-      pagos: tipo === 'FACTURA_CONTADO'
-        ? (f.pagos.length ? f.pagos : [{ key: clave(), metodo: 'EFECTIVO', monto: '', referencia: '' }])
-        : []
-    }))
   }
 
   async function guardar(): Promise<void> {
     if (!form.clienteId) { toast.warning('Seleccione el cliente.'); return }
     if (!form.lineas.length) { toast.warning('Agregue al menos una línea.'); return }
+    if (primeraLineaIncompleta(form.lineas)) { toast.warning('Complete o elimine las líneas vacías.'); return }
     const totales = totalesCarrito(catalogos, form.lineas)
     if (totales.totalCent <= 0) { toast.warning('El total debe ser mayor que cero.'); return }
-    if (tipoFactura === 'FACTURA_CONTADO') {
-      const pagado = payloadPagos(form.pagos).reduce((s, p) => s + p.montoCent, 0)
-      if (pagado !== totales.totalCent) {
-        toast.warning(`Los pagos deben sumar ${money(totales.totalCent)}.`)
-        return
-      }
-    }
     setGuardando(true)
     try {
       const resultado = await window.api.invoke<{ numero: string }>('ventas.factura.crear', {
         ...payloadCabecera(form),
-        tipo: tipoFactura,
-        pagos: tipoFactura === 'FACTURA_CONTADO' ? payloadPagos(form.pagos) : undefined
+        tipo: tipoFactura
       })
       toast.success(`Factura ${resultado.numero} guardada correctamente.`)
       setNuevoOpen(false)
@@ -127,8 +113,9 @@ export function FacturacionPage(): React.JSX.Element {
     }
   }
 
-  async function imprimir(id: number, formato: 'CARTA' | 'MEDIA' | 'TICKET_80' | 'TICKET_58'): Promise<void> {
+  async function imprimir(id: number, tipoDoc?: string, fallback: FormatoImpresion = 'CARTA'): Promise<void> {
     try {
+      const formato = await formatoGuardado(tipoDoc ?? 'FACTURA_CONTADO', fallback)
       setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id, formato }))
       window.setTimeout(() => window.print(), 80)
     } catch (error) {
@@ -136,9 +123,10 @@ export function FacturacionPage(): React.JSX.Element {
     }
   }
 
-  async function guardarPdfFactura(id: number): Promise<void> {
+  async function guardarPdfFactura(id: number, tipoDoc?: string): Promise<void> {
     try {
-      await guardarPdf({ origen: 'venta', id, formato: 'CARTA' })
+      const formato = await formatoGuardado(tipoDoc ?? 'FACTURA_CONTADO')
+      await guardarPdf({ origen: 'venta', id, formato })
       toast.success('PDF generado y descargado.')
     } catch (error) {
       toast.error(errorInfo(error).message)
@@ -229,7 +217,6 @@ export function FacturacionPage(): React.JSX.Element {
     { key: 'totalCent', header: 'Total', value: (f) => num(f.totalCent), render: (f) => <span className="tabular-nums">{money(num(f.totalCent))}</span> }
   ]
 
-  const totalCent = totalesCarrito(catalogos, form.lineas).totalCent
   const puedeImprimir = (fila: Fila) => can('ventas.imprimir') || (txt(fila.tipo) === 'POS' && can('pos.imprimir'))
 
   return (
@@ -308,10 +295,10 @@ export function FacturacionPage(): React.JSX.Element {
                   </button>
                   {puedeImprimir(fila) && (
                     <>
-                      <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => void imprimir(num(fila.id), 'CARTA')} title="Imprimir" aria-label="Imprimir">
+                      <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => void imprimir(num(fila.id), txt(fila.tipo))} title="Imprimir" aria-label="Imprimir">
                         <Printer size={15} />
                       </button>
-                      <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => void guardarPdfFactura(num(fila.id))} title="Guardar PDF" aria-label="Guardar PDF">
+                      <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => void guardarPdfFactura(num(fila.id), txt(fila.tipo))} title="Guardar PDF" aria-label="Guardar PDF">
                         <FileDown size={15} />
                       </button>
                     </>
@@ -368,20 +355,16 @@ export function FacturacionPage(): React.JSX.Element {
           permitirPrecio={can('ventas.precio')}
           mostrarVencimiento={tipoFactura === 'FACTURA_CREDITO'}
         >
-          {tipoFactura === 'FACTURA_CONTADO' ? (
-            <PagosEditor totalCent={totalCent} pagos={form.pagos} onChange={(pagos) => setForm({ ...form, pagos })} />
-          ) : (
-            <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300">
-              La factura a crédito genera un cargo real en CxC. No se registra ningún cobro automático; los abonos se gestionarán en el módulo de cuentas por cobrar.
-            </p>
-          )}
+          <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300">
+            La factura genera un cargo cobrable real. Ventas no registra cobros: use el módulo <strong>Cobros</strong> para aplicar recibos y anticipos.
+          </p>
         </DocumentoForm>
       </Modal>
 
       <DocumentoDetalle
         detalle={detalle}
         onClose={() => setDetalle(null)}
-        onPrint={detalle ? () => void imprimir(num(detalle.cabecera.id), 'CARTA') : undefined}
+        onPrint={detalle ? () => void imprimir(num(detalle.cabecera.id), txt(detalle.cabecera.tipo)) : undefined}
         puedeImprimir={detalle ? puedeImprimir(detalle.cabecera) : false}
       />
 

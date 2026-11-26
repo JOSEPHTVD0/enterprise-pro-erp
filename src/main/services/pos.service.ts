@@ -38,7 +38,11 @@ export function createPosService(db: Db, ventas: VentasService) {
       return {
         sesion,
         caja: sesion ? aux.getCaja(db, ctx.empresaId, Number(sesion.cajaId)) : undefined,
-        movimientos: sesion ? aux.listarMovimientosCaja(db, ctx.empresaId, Number(sesion.id)) : []
+        movimientos: sesion ? aux.listarMovimientosCaja(db, ctx.empresaId, Number(sesion.id)) : [],
+        // La lista de movimientos está limitada a 300 filas; el teórico debe
+        // calcularse con todas las filas para que el cierre no preload un monto
+        // distinto al que valida el backend.
+        teoricoCent: sesion ? aux.saldoTeorico(db, ctx.empresaId, sesion) : 0
       }
     },
 
@@ -85,8 +89,8 @@ export function createPosService(db: Db, ventas: VentasService) {
         const resultado = ventas.crearDocumento(ctx, {
           tipo: 'POS', clienteId: input.clienteId, almacenId: input.almacenId,
           vendedorId: input.vendedorId, fecha: input.fecha, comentarios: input.comentarios ?? '',
-          motivo: '', lineas: input.lineas, pagos: input.pagos
-        }, { modulo: 'pos', sesionCajaId: Number(sesion.id) })
+          motivo: '', lineas: input.lineas
+        }, { modulo: 'pos' })
         if (input.suspensionId) {
           db.prepare('DELETE FROM ventas_suspendidas WHERE id = ? AND empresa_id = ? AND usuario_id = ?')
             .run(input.suspensionId, ctx.empresaId, ctx.userId)

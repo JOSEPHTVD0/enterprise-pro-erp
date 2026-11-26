@@ -23,6 +23,9 @@ import {
   BookOpen,
   SlidersHorizontal,
   BrainCircuit,
+  CalendarClock,
+  Gauge,
+  Map,
   type LucideIcon
 } from 'lucide-react'
 
@@ -114,6 +117,21 @@ export const moduleGroups: ModuleGroup[] = [
           'Flujo proyectado a 28 días y actividad de auditoría',
           'Radar de CRM, servicios y activos con permisos por subwidget'
         ]
+      },
+      {
+        id: 'capacidades-2026',
+        label: 'Mapa de capacidades 2026',
+        icon: Map,
+        permission: 'dashboard.consultar',
+        phase: 14,
+        available: true,
+        description: 'Catálogo real de módulos, fases, permisos y características del ERP.',
+        features: [
+          'Módulos activos y su permiso mínimo',
+          'Fases del plan y estado de disponibilidad',
+          'Características declaradas sin datos simulados',
+          'Exportación CSV del catálogo'
+        ]
       }
     ]
   },
@@ -130,7 +148,7 @@ export const moduleGroups: ModuleGroup[] = [
         available: true,
         description: 'Facturas de contado, crédito, notas y devoluciones.',
         features: [
-          'Facturas de contado y crédito con cargo real en CxC',
+          'Facturas que generan cargo cobrable en CxC; el cobro se hace en Cobros',
           'Descuentos por línea sujetos a permiso',
           'ITBIS por línea y NCF de series configuradas',
           'Entregas parciales con conduce',
@@ -146,14 +164,14 @@ export const moduleGroups: ModuleGroup[] = [
         permission: 'pos.consultar',
         phase: 6,
         available: true,
-        description: 'Caja rápida con pagos combinados y control de sesión.',
+        description: 'Venta rápida; el cobro se registra después en Cobros.',
         features: [
           'Carrito con selección de productos y series/lotes',
-          'Pago combinado: efectivo, tarjeta, transferencia, cheque',
-          'Cálculo automático de cambio',
+          'Documento POS con cargo pendiente en CxC',
           'Suspender y recuperar ventas',
           'Apertura y cierre de sesión de caja con monto teórico',
-          'Impresión nativa de ticket'
+          'Impresión nativa de ticket',
+          'Sin cobro directo ni pagos combinados'
         ]
       },
       {
@@ -170,6 +188,28 @@ export const moduleGroups: ModuleGroup[] = [
           'Vencimiento y observaciones',
           'Impresión nativa y exportación a Excel',
           'Sin efectos en inventario ni en CxC'
+        ]
+      }
+    ]
+  },
+  {
+    id: 'cobros',
+    label: 'Cobros',
+    modules: [
+      {
+        id: 'cobros',
+        label: 'Cobros',
+        icon: HandCoins,
+        permission: 'cobros.consultar',
+        phase: 8,
+        available: true,
+        description: 'Área independiente para cobrar facturas y registrar anticipos.',
+        features: [
+          'Recibos aplicados a una o varias facturas pendientes',
+          'Anticipos de clientes imputables a recibos',
+          'Anulación con motivo y auditoría',
+          'Impresión nativa y exportación a XLSX',
+          'Permisos propios: Ventas no puede cobrar'
         ]
       }
     ]
@@ -216,6 +256,21 @@ export const moduleGroups: ModuleGroup[] = [
           'Productos compuestos, servicios, series y lotes',
           'Importación desde Excel y exportación',
           'Historial de precios y rentabilidad'
+        ]
+      },
+      {
+        id: 'control-stock',
+        label: 'Panel de stock',
+        icon: Boxes,
+        permission: 'inventario.consultar',
+        phase: 13,
+        available: true,
+        description: 'Vista operativa de existencias críticas y movimientos recientes.',
+        features: [
+          'Existencias filtrables por almacén, mínimo y texto',
+          'Valorización disponible solo con permiso de costo',
+          'Movimientos, transferencias y ajustes en pestañas',
+          'Altas y exportación con sus permisos propios'
         ]
       },
       {
@@ -399,6 +454,20 @@ export const moduleGroups: ModuleGroup[] = [
     label: 'Análisis',
     modules: [
       {
+        id: 'agenda',
+        label: 'Agenda de vencimientos',
+        icon: CalendarClock,
+        phase: 13,
+        available: true,
+        description: 'Cobros y pagos por vencer, vencidos y alertas de series.',
+        features: [
+          'CxC y CxP ordenados por fecha de vencimiento',
+          'Días restantes calculados con el umbral de alertas',
+          'Acceso directo a Cobros y CxP con sus permisos',
+          'Señales de series del panel de salud'
+        ]
+      },
+      {
         id: 'reportes',
         label: 'Reportes',
         icon: BarChart3,
@@ -410,6 +479,21 @@ export const moduleGroups: ModuleGroup[] = [
           'Libro de ventas y compras (formato DGII)',
           'Gráficos y comparación de períodos',
           'Exportación PDF, Excel y CSV'
+        ]
+      },
+      {
+        id: 'panel-2026',
+        label: 'Panel operativo 2026',
+        icon: Gauge,
+        permission: 'inteligencia.consultar',
+        phase: 14,
+        available: true,
+        description: 'Radar operativo, financiero y de riesgo calculado sobre SQLite real.',
+        features: [
+          'KPIs de ventas, cobros, CxC/CxP e inventario',
+          'Proyección de efectivo configurable en días',
+          'Envejecimiento con umbral administrable',
+          'Alertas con nivel mínimo y módulos 2026'
         ]
       }
     ]
@@ -602,5 +686,7 @@ export function findModule(id: string): ModuleDef | undefined {
 export function modulePermission(id: string): string | undefined {
   const module = findModule(id)
   if (!module) return undefined
-  return module.permission ?? (module.id === 'apariencia' ? undefined : `${module.id}.consultar`)
+  // La agenda y la apariencia son vistas de acceso general: cada panel verifica
+  // sus propios permisos (cobros.consultar, cxp.consultar, salud.consultar, …).
+  return module.permission ?? (['apariencia', 'agenda'].includes(module.id) ? undefined : `${module.id}.consultar`)
 }

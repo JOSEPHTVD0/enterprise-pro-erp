@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Download, History, Plus } from 'lucide-react'
+import { Download, History, Plus, Calculator } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Card } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
+import { Modal } from '@/components/ui/Modal'
 import { Field, inputClass } from '@/components/ui/Field'
 import { toast } from '@/components/ui/Toast'
 import { can, errorInfo } from '@/app/session'
@@ -23,6 +24,11 @@ export function ExistenciasTab({ almacenes, productos, onVerKardex }: Props): Re
   const [almacenId, setAlmacenId] = useState('')
   const [soloMinimos, setSoloMinimos] = useState(false)
   const [movimiento, setMovimiento] = useState<{ productoId?: number; almacenId?: number } | null>(null)
+  const [costos, setCostos] = useState<{
+    productoId: number; nombre: string
+    historial: Record<string, unknown>[]
+    movimientos: Record<string, unknown>[]
+  } | null>(null)
   const verCostos = can('inventario.costo')
   const puedeCrear = can('inventario.crear')
   const puedeExportar = can('inventario.exportar')
@@ -40,6 +46,21 @@ export function ExistenciasTab({ almacenes, productos, onVerKardex }: Props): Re
   }, [almacenId, soloMinimos])
 
   useEffect(() => { void load() }, [load])
+
+  async function verDetalleCostos(productoId: number): Promise<void> {
+    try {
+      const res = await window.api.invoke<{
+        historial: Record<string, unknown>[]
+        movimientos: Record<string, unknown>[]
+      }>('inventario.costos', productoId)
+      setCostos({
+        productoId,
+        nombre: String(productos.find((p) => p.id === productoId)?.descripcion ?? `Producto ${productoId}`),
+        historial: res.historial ?? [],
+        movimientos: res.movimientos ?? []
+      })
+    } catch (e) { toast.error(errorInfo(e).message) }
+  }
 
   async function exportar(): Promise<void> {
     try {
@@ -93,11 +114,20 @@ export function ExistenciasTab({ almacenes, productos, onVerKardex }: Props): Re
         searchPlaceholder="Buscar por código, producto o almacén…"
         emptyText="Aún no hay existencias registradas. Use «Movimiento» para dar entrada de mercancía."
         actions={(r) => (
-          <button
-            onClick={() => onVerKardex({ productoId: Number(r.productoId), almacenId: Number(r.almacenId) })}
-            className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-            title="Ver kardex"
-          ><History size={15} /></button>
+          <div className="flex justify-end gap-1">
+            {verCostos && (
+              <button
+                onClick={() => void verDetalleCostos(Number(r.productoId))}
+                className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                title="Inspector de costos"
+              ><Calculator size={15} /></button>
+            )}
+            <button
+              onClick={() => onVerKardex({ productoId: Number(r.productoId), almacenId: Number(r.almacenId) })}
+              className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+              title="Ver kardex"
+            ><History size={15} /></button>
+          </div>
         )}
       />
       <MovimientoModal
@@ -108,6 +138,44 @@ export function ExistenciasTab({ almacenes, productos, onVerKardex }: Props): Re
         onClose={() => setMovimiento(null)}
         onSaved={() => void load()}
       />
+      <Modal
+        open={!!costos}
+        title={`Inspector de costos: ${costos?.nombre ?? ''}`}
+        onClose={() => setCostos(null)}
+        width="max-w-3xl"
+        footer={<Button variant="secondary" onClick={() => setCostos(null)}>Cerrar</Button>}
+      >
+        {costos && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="mb-2 text-sm font-medium">Historial de costos</h3>
+              {costos.historial.length ? (
+                <table className="w-full text-sm">
+                  <thead className="text-xs uppercase text-slate-500">
+                    <tr><th className="py-1 text-left">Fecha</th><th className="py-1 text-left">Anterior</th><th className="py-1 text-left">Nuevo</th><th className="py-1 text-left">Origen</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {costos.historial.map((h, i) => (
+                      <tr key={String(h.id ?? i)}>
+                        <td className="py-1">{String(h.fecha ?? '')}</td>
+                        <td className="py-1">{money(Number(h.costoAnteriorCent ?? 0))}</td>
+                        <td className="py-1">{money(Number(h.costoNuevoCent ?? 0))}</td>
+                        <td className="py-1">{String(h.origenDoc ?? '—')} #{String(h.origenId ?? '')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : <p className="text-sm text-slate-500">Todavía no hay cambios de costo registrados.</p>}
+            </div>
+            <div>
+              <h3 className="mb-2 text-sm font-medium">Últimos movimientos (100)</h3>
+              <p className="text-sm text-slate-500">
+                Se mostraron {costos.movimientos.length} filas del kardex para contrastar el costo promedio con las entradas reales.
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
     </Card>
   )
 }

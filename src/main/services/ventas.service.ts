@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import type { Db } from '../db/connection'
 import type { SessionContext } from './context'
 import { requirePermission } from './context'
+import { createAjustesService } from './ajustes.service'
 import { errors } from '@shared/errors'
 import { writeAudit } from '../repositories/auditoria.repo'
 import { getEmpresa, nextSerieNumber, nextSerieDetalle } from '../repositories/configuracion.repo'
@@ -11,7 +12,7 @@ import { calcularLinea, resumenLineas } from '../core/impuestos'
 import { redondearCantidad } from '../core/dinero'
 import type {
   DocumentoVentaInput, DocumentosFiltroInput, AnularDocumentoInput,
-  ConvertirDocumentoInput, ImprimirDocumentoInput, PagoInput,
+  ConvertirDocumentoInput, ImprimirDocumentoInput,
   CotizacionCarritoInput, ConduceInput, EntregaInput
 } from '@shared/schemas/ventas'
 
@@ -21,7 +22,10 @@ type Modulo = 'ventas' | 'pos' | 'cotizaciones'
 const DOCUMENTOS_CON_STOCK = new Set([
   'FACTURA_CONTADO', 'FACTURA_CREDITO', 'POS', 'DEVOLUCION_VENTA', 'NOTA_CREDITO'
 ])
-const DOCUMENTOS_CON_COBRO = new Set(['FACTURA_CONTADO', 'FACTURA_CREDITO', 'POS'])
+/** Toda venta facturada queda pendiente de cobro en CxC; Ventas nunca cobra. */
+const DOCUMENTOS_CON_CXC = new Set(['FACTURA_CONTADO', 'FACTURA_CREDITO', 'POS'])
+/** Solo los documentos finales de venta requieren aprobación en el alta. */
+const DOCUMENTOS_CON_APROBACION = new Set(['FACTURA_CONTADO', 'FACTURA_CREDITO', 'POS'])
 
 function hoy(): string {
   return new Date().toISOString().slice(0, 10)
@@ -42,7 +46,11 @@ function permisoCrear(modulo: Modulo, tipo: string): string {
 const esCotizacion = (tipo: unknown): boolean => ['COTIZACION', 'PEDIDO'].includes(String(tipo))
 
 /** Fase 6 — Ventas. Un documento y todos sus efectos se escriben en una transacción. */
-export function createVentasService(db: Db, inventario: InventarioService) {
+export function createVentasService(
+  db: Db,
+  inventario: InventarioService,
+  ajustes: Pick<ReturnType<typeof createAjustesService>, 'leerGrupo'> = createAjustesService(db)
+) {
   function audit(ctx: SessionContext, operacion: string, entidad: string, id: number, antes: unknown, despues: unknown): void {
     writeAudit(db, {
       empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
@@ -51,6 +59,39 @@ export function createVentasService(db: Db, inventario: InventarioService) {
 
   function tiene(ctx: SessionContext, permiso: string): boolean {
     return ctx.permisos.includes(permiso)
+  }
+
+  /**
+   * Aprobación en el momento del alta: no cambia el estado del documento ni su
+   * contabilización (stock/CxC siguen intactos). Solo decide quién puede crear
+   * el documento final y deja constancia de la vía de autorización.
+   */
+  function verificarAprobacion(ctx: SessionContext, tipo: string, totalCent: number, docId: number): void {
+    const flujos = ajustes.leerGrupo(ctx.empresaId, 'flujos')
+    if (!flujos.ventasRequierenAprobacion || !DOCUMENTOS_CON_APROBACION.has(tipo)) return
+
+    const umbralCent = flujos.autoAprobarHastaCent
+    const porUmbral = umbralCent > 0 && totalCent <= umbralCent
+    if (!porUmbral) requirePermission(ctx, 'ventas.aprobar')
+
+    audit(ctx, 'AUTORIZAR_FLUJO', 'flujos_aprobacion', docId, null, {
+      tipo, totalCent, umbralCent,
+      via: porUmbral ? 'UMBRAL' : 'PERMISO',
+      permiso: porUmbral ? null : 'ventas.aprobar'
+    })
+  }
+
+  function motivoAnulacion(ctx: SessionContext, motivo: string | undefined): string {
+    const texto = (motivo ?? '').trim()
+    const flujos = ajustes.leerGrupo(ctx.empresaId, 'flujos')
+    if (!texto) {
+      if (flujos.anulacionRequiereMotivo) throw errors.validation('Indique el motivo de la anulación.')
+      return 'Anulación solicitada'
+    }
+    if (flujos.anulacionRequiereMotivo && texto.length < 3) {
+      throw errors.validation('El motivo de la anulación debe tener al menos 3 caracteres.')
+    }
+    return texto
   }
 
   function almacenPorDefecto(ctx: SessionContext, id?: number): number {
@@ -109,41 +150,11 @@ export function createVentasService(db: Db, inventario: InventarioService) {
     void almacenId
   }
 
-  function registrarPagos(
-    ctx: SessionContext, docId: number, tipo: string, totalCent: number,
-    pagos: PagoInput[] | undefined, sesionCajaId: number | null
+  function registrarCxC(
+    ctx: SessionContext, docId: number, numero: string, cliente: repo.Fila,
+    totalCent: number, fecha: string, vencimiento: string, validarLimite = true
   ): void {
-    if (!DOCUMENTOS_CON_COBRO.has(tipo)) return
-    // El crédito se documenta en CxC; los abonos son Fase 8, nunca un cobro automático.
-    if (tipo === 'FACTURA_CREDITO' && !pagos?.length) return
-    const lista = pagos?.length
-      ? pagos
-      : [{ metodo: 'EFECTIVO' as const, montoCent: totalCent, referencia: '' }]
-    const suma = lista.reduce((s, p) => s + p.montoCent, 0)
-    if (suma !== totalCent) {
-      throw errors.conflict(`Los pagos suman ${suma} centavos y el documento totaliza ${totalCent} centavos.`)
-    }
-    const caja = sesionCajaId
-      ? db.prepare('SELECT caja_id FROM caja_sesiones WHERE id = ? AND empresa_id = ?').get(sesionCajaId, ctx.empresaId) as { caja_id: number } | undefined
-      : undefined
-    for (const pago of lista) {
-      let movimientoId: number | null = null
-      if (pago.metodo === 'EFECTIVO' && sesionCajaId && caja) {
-        movimientoId = aux.movimientoCaja(db, {
-          empresaId: ctx.empresaId, cajaSesionId: sesionCajaId, cajaId: caja.caja_id,
-          tipo: 'INGRESO', metodo: pago.metodo, montoCent: pago.montoCent,
-          docTipo: tipo, docId, descripcion: `Cobro ${tipo}`, usuarioId: ctx.userId
-        })
-      }
-      repo.insertarPago(db, ctx.empresaId, docId, {
-        ...pago, referencia: pago.referencia ?? '',
-        cajaSesionId: sesionCajaId, cajaMovimientoId: movimientoId, usuarioId: ctx.userId
-      })
-    }
-  }
-
-  function registrarCxC(ctx: SessionContext, docId: number, numero: string, cliente: repo.Fila, totalCent: number, fecha: string, vencimiento: string): void {
-    if (cliente.limiteCreditoCent && Number(cliente.balanceCent) + totalCent > Number(cliente.limiteCreditoCent)) {
+    if (validarLimite && cliente.limiteCreditoCent && Number(cliente.balanceCent) + totalCent > Number(cliente.limiteCreditoCent)) {
       throw errors.conflict('El cliente superaría su límite de crédito con esta factura.')
     }
     const cxcId = aux.crearCxc(db, {
@@ -272,11 +283,16 @@ export function createVentasService(db: Db, inventario: InventarioService) {
 
       const totales = { ...resumenLineas(calculadas), costoTotalCent }
       repo.actualizarTotales(db, ctx.empresaId, docId, totales)
+      verificarAprobacion(ctx, input.tipo, totales.totalCent, docId)
 
-      if (input.tipo === 'FACTURA_CREDITO') {
-        registrarCxC(ctx, docId, numero, cliente, totales.totalCent, fecha, vencimiento)
+      if (DOCUMENTOS_CON_CXC.has(input.tipo)) {
+        // Contado y POS también quedan como cargo cobrable: la venta no entra en caja.
+        const esCredito = input.tipo === 'FACTURA_CREDITO'
+        registrarCxC(
+          ctx, docId, numero, cliente, totales.totalCent, fecha,
+          esCredito ? vencimiento : (vencimiento || fecha), esCredito
+        )
       }
-      registrarPagos(ctx, docId, input.tipo, totales.totalCent, input.pagos, opciones.sesionCajaId ?? null)
       audit(ctx, 'CREAR', 'documentos_venta', docId, null, {
         numero, tipo: input.tipo, clienteId: input.clienteId,
         totalCent: totales.totalCent, esNcf
@@ -367,7 +383,7 @@ export function createVentasService(db: Db, inventario: InventarioService) {
     },
 
     anular(ctx: SessionContext, input: AnularDocumentoInput) {
-      const motivo = input.motivo?.trim() || 'Anulación solicitada'
+      const motivo = motivoAnulacion(ctx, input.motivo)
       const doc = repo.getDocumento(db, ctx.empresaId, input.id)
       if (!doc) throw errors.notFound('Documento de venta')
       requirePermission(ctx, esCotizacion(doc.tipo) ? 'cotizaciones.anular' : 'ventas.anular')

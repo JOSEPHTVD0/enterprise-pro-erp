@@ -6,7 +6,10 @@ import { Card } from '@/components/ui/Card'
 import { Field, TextInput, inputClass } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
-import { money } from '@/lib/format'
+import {
+  mascararRncVisual, money, titleSi, usePreferenciasInterfaz
+} from '@/lib/format'
+import { opcionesImpresion } from '@/lib/formato-impresion'
 import {
   centavos, clave, esAnulado, estadosFinanzas, etiquetaFila, num, opciones, pendienteCent, pesos, txt,
   type AplicacionForm, type DetalleFinanzas, type Fila, type FiltroFinanzas
@@ -29,13 +32,14 @@ export function Accion({
   tono?: keyof typeof tonosAccion
   deshabilitado?: boolean
 }): React.JSX.Element {
+  const preferencias = usePreferenciasInterfaz()
   return (
     <button
       type="button"
       className={`rounded p-1.5 disabled:opacity-40 ${tonosAccion[tono]}`}
       onClick={onClick}
       disabled={deshabilitado}
-      title={etiqueta}
+      title={titleSi(preferencias.tooltips, etiqueta)}
       aria-label={etiqueta}
     >
       {icono}
@@ -56,6 +60,7 @@ export function BarraFiltros({
   estados?: string[]
   extra?: { clave: 'cuentaId' | 'cajaId'; etiqueta: string; items: Fila[] }
 }): React.JSX.Element {
+  const preferencias = usePreferenciasInterfaz()
   return (
     <Card className="mb-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
@@ -95,8 +100,8 @@ export function BarraFiltros({
             onChange={(e) => onChange({ ...filtro, limite: e.target.value })} />
         </Field>
         <div className="flex items-end gap-2 lg:col-span-6">
-          <Button variant="ghost" onClick={onLimpiar} title="Limpiar" aria-label="Limpiar">Limpiar</Button>
-          <Button variant="secondary" onClick={onAplicar} title="Aplicar filtros" aria-label="Aplicar filtros">Aplicar filtros</Button>
+          <Button variant="ghost" onClick={onLimpiar} title={titleSi(preferencias.tooltips, 'Limpiar')} aria-label="Limpiar">Limpiar</Button>
+          <Button variant="secondary" onClick={onAplicar} title={titleSi(preferencias.tooltips, 'Aplicar filtros')} aria-label="Aplicar filtros">Aplicar filtros</Button>
         </div>
       </div>
     </Card>
@@ -115,6 +120,7 @@ export function ModalAnulacion({
   onConfirmar: (motivo: string) => void
   onClose: () => void
 }): React.JSX.Element {
+  const preferencias = usePreferenciasInterfaz()
   function confirmar(): void {
     if (motivo.trim().length < 3) {
       toast.warning('Indique el motivo de la anulación (mínimo 3 caracteres).')
@@ -130,8 +136,8 @@ export function ModalAnulacion({
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} title="Cancelar" aria-label="Cancelar">Cancelar</Button>
-          <Button variant="danger" onClick={confirmar} title="Anular" aria-label="Anular">Anular</Button>
+          <Button variant="secondary" onClick={onClose} title={titleSi(preferencias.tooltips, 'Cancelar')} aria-label="Cancelar">Cancelar</Button>
+          <Button variant="danger" onClick={confirmar} title={titleSi(preferencias.tooltips, 'Anular')} aria-label="Anular">Anular</Button>
         </>
       }
     >
@@ -144,16 +150,17 @@ export function ModalAnulacion({
   )
 }
 
-function valorCelda(clave: string, valor: unknown): string {
+function valorCelda(clave: string, valor: unknown, mascararRnc = false): string {
   if (/cent$/i.test(clave)) return money(num(valor))
-  return txt(valor) || '—'
+  const texto = txt(valor) || '—'
+  return /rnc/i.test(clave) ? mascararRncVisual(texto, mascararRnc) : texto
 }
 
 function TituloSeccion({ children }: { children: ReactNode }): React.JSX.Element {
   return <p className="mb-2 mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{children}</p>
 }
 
-function TablaDetalle({ filas }: { filas: Fila[] }): React.JSX.Element {
+function TablaDetalle({ filas, mascararRnc }: { filas: Fila[]; mascararRnc: boolean }): React.JSX.Element {
   const columnas = Array.from(new Set(filas.flatMap((fila) => Object.keys(fila)))).slice(0, 8)
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
@@ -165,7 +172,7 @@ function TablaDetalle({ filas }: { filas: Fila[] }): React.JSX.Element {
           {filas.map((fila, indice) => (
             <tr key={num(fila.id) || indice}>
               {columnas.map((columna) => (
-                <td key={columna} className="max-w-[240px] truncate px-2 py-2">{valorCelda(columna, fila[columna])}</td>
+                <td key={columna} className="max-w-[240px] truncate px-2 py-2">{valorCelda(columna, fila[columna], mascararRnc)}</td>
               ))}
             </tr>
           ))}
@@ -185,6 +192,7 @@ export function DetalleFinanzasModal({
   onPrint?: () => void
   puedeImprimir?: boolean
 }): React.JSX.Element | null {
+  const preferencias = usePreferenciasInterfaz()
   if (!detalle) return null
   const { cabecera } = detalle
   const secciones: { titulo: string; filas: Fila[] }[] = [
@@ -202,9 +210,9 @@ export function DetalleFinanzasModal({
       width="max-w-5xl"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} title="Cerrar" aria-label="Cerrar">Cerrar</Button>
+          <Button variant="secondary" onClick={onClose} title={titleSi(preferencias.tooltips, 'Cerrar')} aria-label="Cerrar">Cerrar</Button>
           {puedeImprimir && onPrint && (
-            <Button onClick={onPrint} title="Imprimir documento" aria-label="Imprimir documento">
+            <Button onClick={onPrint} title={titleSi(preferencias.tooltips, 'Imprimir documento')} aria-label="Imprimir documento">
               <Printer size={14} /> Imprimir
             </Button>
           )}
@@ -227,7 +235,7 @@ export function DetalleFinanzasModal({
           .map(([clave, valor]) => (
             <div key={clave}>
               <p className="text-[11px] text-slate-500">{clave}</p>
-              <p className="font-medium">{valorCelda(clave, valor)}</p>
+              <p className="font-medium">{valorCelda(clave, valor, preferencias.mascararRnc)}</p>
             </div>
           ))}
       </div>
@@ -235,7 +243,7 @@ export function DetalleFinanzasModal({
       {secciones.map((seccion) => (
         <div key={seccion.titulo}>
           <TituloSeccion>{seccion.titulo} ({seccion.filas.length})</TituloSeccion>
-          <TablaDetalle filas={seccion.filas} />
+          <TablaDetalle filas={seccion.filas} mascararRnc={preferencias.mascararRnc} />
         </div>
       ))}
     </Modal>
@@ -249,10 +257,21 @@ export function SelectorFormato({
   onChange: (formato: string) => void
   formatos: string[]
 }): React.JSX.Element {
+  const preferencias = usePreferenciasInterfaz()
+  const impresion = opcionesImpresion()
+  // `formatos` son papeles (CARTA/TICKET…); `integraciones.formatos` son exportaciones.
+  const opciones = value && !formatos.includes(value) ? [value, ...formatos] : formatos
   return (
-    <select className={`${inputClass} w-32`} value={value}
-      onChange={(e) => onChange(e.target.value)} title="Formato de impresión" aria-label="Formato de impresión">
-      {formatos.map((formato) => <option key={formato} value={formato}>{formato}</option>)}
+    <select
+      className={`${inputClass} w-32`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      title={titleSi(preferencias.tooltips,
+        `Formato de impresión · impresora ${impresion.impresora || 'sistema'} · ${impresion.copias} copia(s) · margen ${impresion.margenMm} mm · exportación: ${preferencias.formatosPermitidos.join(', ')}`
+      )}
+      aria-label="Formato de impresión"
+    >
+      {opciones.map((formato) => <option key={formato} value={formato}>{formato}</option>)}
     </select>
   )
 }
@@ -313,6 +332,7 @@ export function AplicacionesEditor({
   montoCent: number
   documentoLabel?: string
 }): React.JSX.Element {
+  const preferencias = usePreferenciasInterfaz()
   const aplicado = aplicaciones.reduce((suma, fila) => suma + centavos(fila.monto), 0)
   const diferencia = montoCent - aplicado
 
@@ -342,12 +362,12 @@ export function AplicacionesEditor({
         </p>
         <div className="flex gap-2">
           <Button size="sm" variant="ghost" onClick={completarResto} disabled={diferencia <= 0}
-            title="Completar resto" aria-label="Completar resto">
+            title={titleSi(preferencias.tooltips, 'Completar resto')} aria-label="Completar resto">
             Completar resto
           </Button>
           <Button size="sm" variant="secondary"
             onClick={() => onChange([...aplicaciones, { key: clave(), documentoId: '', monto: '' }])}
-            title="Agregar aplicación" aria-label="Agregar aplicación">
+            title={titleSi(preferencias.tooltips, 'Agregar aplicación')} aria-label="Agregar aplicación">
             <Plus size={14} /> Agregar aplicación
           </Button>
         </div>
@@ -388,7 +408,7 @@ export function AplicacionesEditor({
                   <td className="px-1 py-1.5">
                     <button className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30"
                       onClick={() => onChange(aplicaciones.filter((item) => item.key !== fila.key))}
-                      title="Quitar aplicación" aria-label="Quitar aplicación">
+                      title={titleSi(preferencias.tooltips, 'Quitar aplicación')} aria-label="Quitar aplicación">
                       <Ban size={14} />
                     </button>
                   </td>

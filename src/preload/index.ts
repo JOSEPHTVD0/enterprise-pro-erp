@@ -3,6 +3,7 @@ import type { ErpApi, SerializedError } from '../shared/api'
 import { decodeIpcError } from '../shared/ipc-error'
 import type { Settings } from '../shared/settings'
 import type { AppInfo } from '../shared/app-info'
+import type { EstadoActualizacion, ProgresoDescarga } from '../shared/actualizaciones'
 
 /** El token de sesión vive solo en memoria del preload: no se persiste ni se expone a la BD. */
 let sessionToken = ''
@@ -41,6 +42,16 @@ const api: ErpApi = {
     } catch (error) {
       throw normalize(error)
     }
+  },
+  onEstadoActualizacion: (callback) => {
+    const escucha = (_evento: Electron.IpcRendererEvent, estado: EstadoActualizacion): void => callback(estado)
+    ipcRenderer.on('update.estado', escucha)
+    return () => ipcRenderer.removeListener('update.estado', escucha)
+  },
+  onProgresoDescarga: (callback) => {
+    const escucha = (_evento: Electron.IpcRendererEvent, progreso: ProgresoDescarga): void => callback(progreso)
+    ipcRenderer.on('update.progreso', escucha)
+    return () => ipcRenderer.removeListener('update.progreso', escucha)
   }
 }
 

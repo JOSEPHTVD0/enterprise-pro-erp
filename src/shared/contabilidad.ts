@@ -36,6 +36,7 @@ export const planCuentasBase: readonly CuentaBase[] = [
   { codigo: '4000', nombre: 'INGRESOS', tipo: 'INGRESO', naturaleza: 'ACREEDORA', nivel: 1, aceptaMovimiento: false },
   { codigo: '4100', nombre: 'Ventas', tipo: 'INGRESO', naturaleza: 'ACREEDORA', nivel: 2, aceptaMovimiento: true },
   { codigo: '4110', nombre: 'ITBIS por cobrar', tipo: 'INGRESO', naturaleza: 'ACREEDORA', nivel: 3, aceptaMovimiento: true },
+  { codigo: '4120', nombre: 'ITBIS pagado en compras', tipo: 'ACTIVO', naturaleza: 'DEUDORA', nivel: 3, aceptaMovimiento: true },
   { codigo: '5000', nombre: 'GASTOS', tipo: 'GASTO', naturaleza: 'DEUDORA', nivel: 1, aceptaMovimiento: false },
   { codigo: '5100', nombre: 'Costo de ventas', tipo: 'GASTO', naturaleza: 'DEUDORA', nivel: 2, aceptaMovimiento: true },
   { codigo: '5200', nombre: 'Gastos operativos', tipo: 'GASTO', naturaleza: 'DEUDORA', nivel: 2, aceptaMovimiento: true }
@@ -47,6 +48,6 @@ export const padresPlanCuentasBase: Readonly<Record<string, string>> = {
   '1500': '1000', '1510': '1500',
   '2100': '2000', '2110': '2100',
   '3100': '3000',
-  '4100': '4000', '4110': '4100',
+  '4100': '4000', '4110': '4100', '4120': '1100',
   '5100': '5000', '5200': '5000'
 }

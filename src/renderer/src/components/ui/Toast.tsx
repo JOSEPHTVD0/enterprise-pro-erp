@@ -1,7 +1,15 @@
 import { create } from 'zustand'
 import { CheckCircle2, AlertTriangle, XCircle, Info, X } from 'lucide-react'
+import { preferenciasActuales } from '@/lib/format'
 
 export type ToastKind = 'success' | 'error' | 'warning' | 'info'
+type EventoNotificacion =
+  | 'VENTA' | 'COMPRA' | 'STOCK_BAJO' | 'CXC_VENCIDO' | 'SERIE_ALERTA' | 'BACKUP' | 'ACTUALIZACION'
+
+interface OpcionesToast {
+  evento?: EventoNotificacion
+  firma?: string
+}
 
 interface ToastItem {
   id: number
@@ -11,20 +19,49 @@ interface ToastItem {
 
 interface ToastState {
   toasts: ToastItem[]
-  push: (kind: ToastKind, message: string) => void
+  push: (kind: ToastKind, message: string, opciones?: OpcionesToast) => void
   dismiss: (id: number) => void
 }
 
 let nextId = 1
+const firmasEmitidas = new Set<string>()
+
+/** Pitido breve; si el navegador bloquea el audio, la notificación sigue visible. */
+function sonar(): void {
+  try {
+    const conWindow = window as Window & { webkitAudioContext?: typeof AudioContext }
+    const Contexto = window.AudioContext ?? conWindow.webkitAudioContext
+    if (!Contexto) return
+    const contexto = new Contexto()
+    const oscilador = contexto.createOscillator()
+    const volumen = contexto.createGain()
+    oscilador.type = 'sine'
+    oscilador.frequency.value = 880
+    volumen.gain.setValueAtTime(0.03, contexto.currentTime)
+    volumen.gain.exponentialRampToValueAtTime(0.001, contexto.currentTime + 0.12)
+    oscilador.connect(volumen).connect(contexto.destination)
+    oscilador.start()
+    oscilador.stop(contexto.currentTime + 0.12)
+    oscilador.onended = () => { void contexto.close() }
+  } catch {
+    // Audio es una preferencia accesoria: nunca interrumpe la interfaz.
+  }
+}
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
-  push: (kind, message) => {
+  push: (kind, message, opciones = {}) => {
+    if (opciones.firma) {
+      if (firmasEmitidas.has(opciones.firma)) return
+      firmasEmitidas.add(opciones.firma)
+    }
     const id = nextId++
+    const duracion = preferenciasActuales().notificaciones.duracionToastMs
     set((s) => ({ toasts: [...s.toasts, { id, kind, message }] }))
+    if (preferenciasActuales().notificaciones.sonido) sonar()
     setTimeout(() => {
       set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
-    }, 4500)
+    }, duracion)
   },
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }))
 }))
@@ -33,7 +70,17 @@ export const toast = {
   success: (message: string) => useToastStore.getState().push('success', message),
   error: (message: string) => useToastStore.getState().push('error', message),
   warning: (message: string) => useToastStore.getState().push('warning', message),
-  info: (message: string) => useToastStore.getState().push('info', message)
+  info: (message: string) => useToastStore.getState().push('info', message),
+  /**
+   * Advertencias generadas localmente: respetan `notificaciones.eventos`,
+   * `notificaciones.duracionToastMs`, `sonido` y `alertas.destinos`.
+   */
+  evento: (evento: EventoNotificacion, message: string, firma?: string): void => {
+    const preferencias = preferenciasActuales()
+    if (!preferencias.notificaciones.eventos.includes(evento)) return
+    if (!preferencias.alertas.destinos.includes('TOAST')) return
+    useToastStore.getState().push('warning', message, { evento, firma })
+  }
 }
 
 const icons: Record<ToastKind, typeof Info> = {

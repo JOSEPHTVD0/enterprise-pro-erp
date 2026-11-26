@@ -33,12 +33,6 @@ const lineaVentaSchema = z.object({
   lote: texto(60)
 })
 
-const pagoSchema = z.object({
-  metodo: z.enum(metodosPago),
-  montoCent: z.number().int().positive('El monto del pago debe ser mayor que cero.'),
-  referencia: texto(60)
-})
-
 const cabeceraVenta = z.object({
   clienteId: id,
   almacenId: id.optional(),
@@ -49,11 +43,14 @@ const cabeceraVenta = z.object({
   lineas: z.array(lineaVentaSchema).min(1, 'Agregue al menos una línea.').max(200)
 })
 
+/**
+ * Las ventas solo documentan la operación: no reciben pagos. El cobro se
+ * registra exclusivamente desde el módulo de Cobros mediante recibos CxC.
+ */
 export const documentoVentaSchema = cabeceraVenta.extend({
   tipo: z.enum(tiposDocumentoVenta),
   motivo: texto(300),
-  docOrigenId: id.optional(),
-  pagos: z.array(pagoSchema).min(1).max(10).optional()
+  docOrigenId: id.optional()
 })
 
 export const posCarritoSchema = cabeceraVenta
@@ -63,8 +60,7 @@ export const cotizacionCarritoSchema = cabeceraVenta
 export const posVentaSchema = posCarritoSchema.extend({
   /** Si se omite, se usa la sesión abierta del usuario. */
   cajaSesionId: id.optional(),
-  suspensionId: id.optional(),
-  pagos: z.array(pagoSchema).min(1, 'Registre al menos un pago.').max(10)
+  suspensionId: id.optional()
 })
 
 export const suspenderVentaSchema = z.object({
@@ -136,7 +132,6 @@ export const cerrarCajaSchema = z.object({
  * llamadas internas (POS, conversiones, pruebas) pueden omitirlos.
  */
 export type LineaVentaInput = z.input<typeof lineaVentaSchema>
-export type PagoInput = z.input<typeof pagoSchema>
 export type DocumentoVentaInput = z.input<typeof documentoVentaSchema>
 export type PosCarritoInput = z.input<typeof posCarritoSchema>
 export type CotizacionCarritoInput = z.input<typeof cotizacionCarritoSchema>

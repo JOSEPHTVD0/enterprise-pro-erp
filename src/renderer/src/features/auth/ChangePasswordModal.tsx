@@ -28,10 +28,8 @@ export function ChangePasswordModal({
   async function submit(e: FormEvent): Promise<void> {
     e.preventDefault()
     setError('')
-    if (next.length < 10) { setError('La nueva contraseña debe tener al menos 10 caracteres.'); return }
-    if (!/[A-Z]/.test(next) || !/[a-z]/.test(next) || !/\d/.test(next) || !/[^A-Za-z0-9]/.test(next)) {
-      setError('Debe incluir mayúscula, minúscula, número y carácter especial.'); return
-    }
+    if (next.length < 4) { setError('La contraseña debe tener al menos 4 caracteres (pueden ser 4 dígitos).'); return }
+    if (next.length > 128) { setError('La contraseña no puede superar los 128 caracteres.'); return }
     if (next !== confirm) { setError('La confirmación no coincide.'); return }
     setSaving(true)
     try {
@@ -62,7 +60,7 @@ export function ChangePasswordModal({
           </p>
         )}
         <p className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-          <KeyRound size={14} /> Requisitos: 10+ caracteres, mayúscula, minúscula, número y especial.
+          <KeyRound size={14} /> Requisitos: 4 o más caracteres. Puede usar solo dígitos (PIN).
         </p>
         {[
           { id: 'current', label: 'Contraseña actual', value: current, set: setCurrent },
@@ -76,6 +74,7 @@ export function ChangePasswordModal({
             <input
               id={f.id}
               type="password"
+              maxLength={128}
               autoComplete={f.id === 'current' ? 'current-password' : 'new-password'}
               value={f.value}
               onChange={(e) => f.set(e.target.value)}

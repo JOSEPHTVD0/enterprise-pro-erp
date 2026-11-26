@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import type { Db } from '../db/connection'
 import type { SessionContext } from './context'
 import { requirePermission } from './context'
+import { createAjustesService } from './ajustes.service'
 import { errors } from '@shared/errors'
 import { writeAudit } from '../repositories/auditoria.repo'
 import { camel } from '../repositories/ventas.repo'
@@ -9,18 +10,27 @@ import { getEmpresa, getSerie, nextSerieNumber } from '../repositories/configura
 import * as repo from '../repositories/compras.repo'
 import * as aux from '../repositories/auxiliares.repo'
 import * as cxp from '../repositories/cxp.repo'
-import { calcularLinea, resumenLineas, type LineaCalculada } from '../core/impuestos'
-import { dividirCentavos, redondear, redondearCantidad } from '../core/dinero'
-import type {
-  DocumentoCompraInput, DocumentosFiltroCompraInput, RecepcionInput,
-  ConvertirCompraInput, AnularCompraInput, ImprimirCompraInput,
-  LineaCompraInput, PagoCompraInput
+import * as contab from '../repositories/contabilidad.repo'
+import {
+  calcularLinea, resumenLineas,
+  type ImpuestoAgrupado, type LineaCalculada
+} from '../core/impuestos'
+import { dividirCentavos, multiplicarCentavos, redondear, redondearCantidad } from '../core/dinero'
+import {
+  ingresoMercanciaSchema, editarIngresoSchema, imprimirCompraSchema, historialIngresoSchema,
+  type DocumentoCompraInput, type DocumentosFiltroCompraInput, type RecepcionInput,
+  type ConvertirCompraInput, type AnularCompraInput, type ImprimirCompraInput,
+  type LineaCompraInput, type PagoCompraInput, type IngresoMercanciaInput,
+  type EditarIngresoInput, type HistorialIngresoInput
 } from '@shared/schemas/compras'
 
 type InventarioService = ReturnType<typeof import('./inventario.service').createInventarioService>
 type Fila = import('../repositories/ventas.repo').Fila
+type DatosCrearCompra = DocumentoCompraInput & Partial<Omit<IngresoMercanciaInput, 'tipo'>>
 
 const EPS = 1e-9
+/** Solo la factura de compra es un documento final que requiere aprobación en el alta. */
+const DOCUMENTOS_CON_APROBACION = new Set(['FACTURA_COMPRA'])
 
 function hoy(): string {
   return new Date().toISOString().slice(0, 10)
@@ -46,7 +56,11 @@ function gastoProporcional(cantidad: number, cantidadOrigen: number, gastoCent: 
  * CxP y caja) se escriben en una sola transacción. Los NCF del proveedor solo
  * se guardan como referencia; este módulo nunca los genera.
  */
-export function createComprasService(db: Db, inventario: InventarioService) {
+export function createComprasService(
+  db: Db,
+  inventario: InventarioService,
+  ajustes: Pick<ReturnType<typeof createAjustesService>, 'leerGrupo'> = createAjustesService(db)
+) {
   function audit(ctx: SessionContext, operacion: string, entidad: string, id: number, antes: unknown, despues: unknown): void {
     writeAudit(db, {
       empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
@@ -55,6 +69,112 @@ export function createComprasService(db: Db, inventario: InventarioService) {
 
   function tiene(ctx: SessionContext, permiso: string): boolean {
     return ctx.permisos.includes(permiso)
+  }
+
+  /**
+   * Aprobación en el momento del alta: no altera el estado ni la contabilización
+   * (stock y CxP se registran igual); documenta únicamente la vía de autorización.
+   */
+  function verificarAprobacion(ctx: SessionContext, tipo: string, totalCent: number, docId: number): void {
+    const flujos = ajustes.leerGrupo(ctx.empresaId, 'flujos')
+    if (!flujos.comprasRequierenAprobacion || !DOCUMENTOS_CON_APROBACION.has(tipo)) return
+
+    const umbralCent = flujos.autoAprobarHastaCent
+    const porUmbral = umbralCent > 0 && totalCent <= umbralCent
+    if (!porUmbral) requirePermission(ctx, 'compras.aprobar')
+
+    audit(ctx, 'AUTORIZAR_FLUJO', 'flujos_aprobacion', docId, null, {
+      tipo, totalCent, umbralCent,
+      via: porUmbral ? 'UMBRAL' : 'PERMISO',
+      permiso: porUmbral ? null : 'compras.aprobar'
+    })
+  }
+
+  function motivoAnulacion(ctx: SessionContext, motivo: string | undefined): string {
+    const texto = (motivo ?? '').trim()
+    const flujos = ajustes.leerGrupo(ctx.empresaId, 'flujos')
+    if (!texto) {
+      if (flujos.anulacionRequiereMotivo) throw errors.validation('Indique el motivo de la anulación.')
+      return 'Anulación solicitada'
+    }
+    if (flujos.anulacionRequiereMotivo && texto.length < 3) {
+      throw errors.validation('El motivo de la anulación debe tener al menos 3 caracteres.')
+    }
+    return texto
+  }
+
+  /** Moneda base de la empresa, leída de parámetros reales; nunca estimada. */
+  function monedaBase(empresaId: number): string {
+    const parametro = db.prepare(`
+      SELECT valor FROM parametros WHERE empresa_id = ? AND clave = 'moneda_base'
+    `).get(empresaId) as { valor?: string } | undefined
+    if (parametro?.valor) return parametro.valor.toUpperCase()
+    const empresa = db.prepare('SELECT moneda_base FROM empresas WHERE id = ?')
+      .get(empresaId) as { moneda_base?: string } | undefined
+    return (empresa?.moneda_base ?? 'DOP').toUpperCase()
+  }
+
+  /**
+   * Resuelve la tasa vigente de `tasas_cambio`. Una tasa distinta de 1 escrita a mano
+   * requiere `compras.tasa`; el cambio automático sale de la tabla de tasas reales.
+   */
+  function resolverMoneda(
+    ctx: SessionContext, fecha: string, codigoSolicitado?: string, tasaSolicitada?: number
+  ): { codigo: string; tasa: number; extranjera: boolean } {
+    const base = monedaBase(ctx.empresaId)
+    const codigo = (codigoSolicitado ?? base).toUpperCase()
+    const moneda = db.prepare(`
+      SELECT codigo FROM monedas WHERE empresa_id = ? AND codigo = ? AND activa = 1
+    `).get(ctx.empresaId, codigo) as { codigo: string } | undefined
+    if (!moneda) throw errors.notFound('Moneda')
+    if (codigo === base) return { codigo, tasa: 1, extranjera: false }
+
+    const manual = tasaSolicitada !== undefined && redondear(tasaSolicitada * 10000) !== 10000
+    if (manual) requirePermission(ctx, 'compras.tasa')
+    const tasa = manual
+      ? Number(tasaSolicitada)
+      : Number((db.prepare(`
+          SELECT tasa FROM tasas_cambio
+          WHERE empresa_id = ? AND moneda_codigo = ? AND date(fecha) <= date(?)
+          ORDER BY fecha DESC, id DESC LIMIT 1
+        `).get(ctx.empresaId, codigo, fecha) as { tasa?: number } | undefined)?.tasa ?? 0)
+    if (!Number.isFinite(tasa) || tasa <= 0) {
+      throw errors.conflict(`No hay tasa de cambio vigente para ${codigo} en ${fecha}.`)
+    }
+    return { codigo, tasa, extranjera: true }
+  }
+
+  function validarDescuentos(ctx: SessionContext, lineas: LineaCompraInput[]): void {
+    const conDescuento = lineas.some((l) => [
+      l.descuentoPctBp, l.descuentoCent, l.descuento2PctBp, l.descuento2Cent,
+      l.descuento3PctBp, l.descuento3Cent
+    ].some((v) => Number(v ?? 0) !== 0))
+    if (conDescuento) requirePermission(ctx, 'compras.descuento')
+  }
+
+  function validarDuplicado(
+    empresaId: number, tipo: string, numeroProveedor: string | undefined,
+    proveedorId: number, excluirId?: number
+  ): void {
+    if (tipo !== 'FACTURA_COMPRA' || !numeroProveedor?.trim()) return
+    if (repo.existeNumeroProveedor(db, empresaId, tipo, numeroProveedor, proveedorId, excluirId)) {
+      throw errors.conflict(
+        `La factura/NCF ${numeroProveedor.trim()} ya está registrada para este proveedor.`
+      )
+    }
+  }
+
+  /** Reparte un importe entero entre líneas sin perder ni inventar centavos. */
+  function prorratear(totalCent: number, pesos: number[]): number[] {
+    const suma = pesos.reduce((s, p) => s + Math.max(0, p), 0)
+    if (totalCent === 0 || suma <= 0) return pesos.map(() => 0)
+    const signo = totalCent < 0 ? -1 : 1
+    const importe = Math.abs(totalCent)
+    const base = pesos.map((p) => Math.floor(importe * Math.max(0, p) / suma))
+    let resto = importe - base.reduce((s, p) => s + p, 0)
+    const orden = pesos.map((p, i) => ({ p, i })).sort((a, b) => b.p - a.p || a.i - b.i)
+    for (let k = 0; resto > 0; k++, resto--) base[orden[k % orden.length].i] += 1
+    return base.map((p) => p * signo)
   }
 
   function almacenPorDefecto(ctx: SessionContext, id?: number): number {
@@ -186,6 +306,76 @@ export function createComprasService(db: Db, inventario: InventarioService) {
       })
       cxp.ajustarBalanceProveedor(db, ctx.empresaId, Number(proveedor.id), totalCent)
     }
+  }
+
+  /**
+   * Asiento COMPRA en borrador, igual que la integración de ventas: el documento
+   * queda vinculado al asiento real y el historial conserva el número generado.
+   */
+  function contabilizarIngreso(
+    ctx: SessionContext, docId: number, datos: {
+      numero: string; fecha: string; proveedorNombre: string; totalCent: number
+      impuestoCent: number; credito: boolean; metodoPago?: string
+      clasificacionContable: string
+    }
+  ): number {
+    const inventarioCuenta = contab.obtenerCuentaPorCodigo(
+      db, ctx.empresaId, datos.clasificacionContable || '1200'
+    )
+    const itbisCuenta = contab.obtenerCuentaPorCodigo(db, ctx.empresaId, '4120')
+    const codigoAcreedor = datos.credito ? '2110'
+      : (datos.metodoPago === 'EFECTIVO' ? '1110' : '1120')
+    const acreedorCuenta = contab.obtenerCuentaPorCodigo(db, ctx.empresaId, codigoAcreedor)
+    if (!inventarioCuenta || !itbisCuenta || !acreedorCuenta || !inventarioCuenta.acepta_movimiento) {
+      throw errors.validation('El plan de cuentas no tiene las cuentas de compra necesarias.')
+    }
+    if (datos.totalCent < datos.impuestoCent) {
+      throw errors.validation('El total de la compra no puede ser menor que el ITBIS.')
+    }
+
+    const anio = Number(datos.fecha.slice(0, 4))
+    const mes = Number(datos.fecha.slice(5, 7))
+    const periodoId = contab.crearPeriodoSiFalta(db, ctx.empresaId, anio, mes)
+    const periodo = contab.obtenerPeriodo(db, ctx.empresaId, periodoId)
+    if (periodo && String(periodo.estado) !== 'ABIERTO') {
+      throw errors.conflict(`El periodo ${anio}-${String(mes).padStart(2, '0')} está cerrado.`)
+    }
+
+    const asiento = contab.insertarAsiento(db, ctx.empresaId, {
+      fecha: datos.fecha,
+      descripcion: `Compra ${datos.numero} - ${datos.proveedorNombre}`.slice(0, 200),
+      tipo: 'COMPRA', periodoId, usuarioId: ctx.userId
+    })
+    const costoCent = datos.totalCent - datos.impuestoCent
+    contab.insertarLineas(db, asiento.id, [
+      { cuentaId: Number(inventarioCuenta.id), debeCent: costoCent, haberCent: 0, descripcion: `Mercancía ${datos.numero}` },
+      { cuentaId: Number(itbisCuenta.id), debeCent: datos.impuestoCent, haberCent: 0, descripcion: 'ITBIS pagado en compras' },
+      { cuentaId: Number(acreedorCuenta.id), debeCent: 0, haberCent: datos.totalCent, descripcion: `Proveedor ${datos.proveedorNombre}` }
+    ])
+    repo.setAsiento(db, ctx.empresaId, docId, asiento.id)
+    writeAudit(db, {
+      empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
+    }, 'INTEGRAR_COMPRA', 'asientos', asiento.id, null, {
+      documentoId: docId, numero: datos.numero, totalCent: datos.totalCent,
+      impuestoCent: datos.impuestoCent, asiento: asiento.numero
+    })
+    return asiento.id
+  }
+
+  function anularAsiento(ctx: SessionContext, docId: number, motivo: string): void {
+    const doc = repo.getDocumento(db, ctx.empresaId, docId)
+    const asientoId = Number(doc?.asientoId ?? 0)
+    if (!asientoId) return
+    const asiento = contab.obtenerAsiento(db, ctx.empresaId, asientoId)
+    if (asiento && String(asiento.estado) !== 'ANULADO') {
+      contab.actualizarEstadoAsiento(db, ctx.empresaId, asientoId, 'ANULADO')
+      writeAudit(db, {
+        empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
+      }, 'ANULAR_COMPRA', 'asientos', asientoId, { estado: asiento.estado }, {
+        estado: 'ANULADO', documentoId: docId, motivo
+      })
+    }
+    repo.setAsiento(db, ctx.empresaId, docId, null)
   }
 
   function reversarPagosEfectivo(ctx: SessionContext, docId: number, motivo: string, docTipo: string, docIdDestino: number | null): void {
@@ -354,7 +544,7 @@ export function createComprasService(db: Db, inventario: InventarioService) {
 
   /** Único punto de alta de documentos de compra (excepto recepciones). */
   function crearDocumento(
-    ctx: SessionContext, input: DocumentoCompraInput
+    ctx: SessionContext, input: DatosCrearCompra
   ): { id: number; numero: string; totalCent: number } {
     requirePermission(ctx, input.tipo === 'DEVOLUCION_COMPRA' ? 'compras.devolucion' : 'compras.crear')
     if (input.tipo === 'RECEPCION') {
@@ -363,8 +553,18 @@ export function createComprasService(db: Db, inventario: InventarioService) {
 
     const proveedor = repo.getProveedor(db, ctx.empresaId, input.proveedorId)
     if (!proveedor) throw errors.notFound('Proveedor')
+    if (input.almacenId) {
+      const destino = db.prepare(`
+        SELECT principal FROM almacenes WHERE id = ? AND empresa_id = ? AND activo = 1
+      `).get(input.almacenId, ctx.empresaId) as { principal: number } | undefined
+      if (!destino) throw errors.notFound('Almacén')
+      if (!destino.principal) requirePermission(ctx, 'compras.almacen')
+    }
     const almacenId = almacenPorDefecto(ctx, input.almacenId)
     const fecha = input.fecha ?? hoy()
+    const moneda = resolverMoneda(ctx, fecha, input.monedaCodigo, input.tasaAplicada)
+    validarDescuentos(ctx, input.lineas)
+    validarDuplicado(ctx.empresaId, input.tipo, input.numeroProveedor, input.proveedorId)
     const origen = input.docOrigenId ? repo.getDocumento(db, ctx.empresaId, input.docOrigenId) : undefined
     if (input.docOrigenId && !origen) throw errors.notFound('Documento de origen')
     if (origen && ['ANULADO', 'CONVERTIDA'].includes(String(origen.estado))) {
@@ -410,47 +610,88 @@ export function createComprasService(db: Db, inventario: InventarioService) {
         proveedorRnc: String(proveedor.rnc ?? ''), fecha, vencimiento, almacenId,
         condicion, estado, usuarioId: ctx.userId,
         docOrigenId: origen ? Number(origen.id) : null,
-        motivo: input.motivo ?? '', comentarios: input.comentarios ?? ''
+        motivo: input.motivo ?? '', comentarios: input.comentarios ?? '',
+        nota: input.nota ?? '', fechaLlegada: input.fechaLlegada ?? '',
+        numeroOrdenCompra: input.numeroOrdenCompra ?? '',
+        clasificacionContable: input.clasificacionContable ?? '1200',
+        monedaCodigo: moneda.codigo, tasaAplicada: moneda.tasa,
+        montoFacturaMonedaCent: input.montoFacturaMonedaCent ?? 0,
+        montoFacturaCent: input.montoFacturaCent ?? 0,
+        ajusteCent: input.ajusteCent ?? 0
       })
 
       const mueveStock = input.tipo === 'FACTURA_COMPRA' && origen?.tipo !== 'RECEPCION'
-      const calculadas: LineaCalculada[] = []
-      let gastoTotalCent = 0
-      let gastoLineasCent = 0
-      let costoTotalCent = 0
+      const fleteCent = input.fleteCent ?? 0
+      const preparadas: {
+        linea: LineaCompraInput; producto: Fila; impuesto: Fila | undefined
+        exento: boolean; calculo: LineaCalculada; cantidad: number
+        gastoPropioCent: number; numeroSerie: string; lote: string
+        precioBaseCent: number
+      }[] = []
 
       for (const linea of lineas) {
         const producto = repo.getProducto(db, ctx.empresaId, linea.productoId)
         if (!producto) throw errors.notFound('Producto')
-        const precio = linea.precioCent ?? (
+        const precioDocumento = linea.precioCent ?? (
           Number(producto.costoUltimaCompraCent ?? 0) > 0
             ? Number(producto.costoUltimaCompraCent)
             : Number(producto.costoPromedioCent ?? 0)
         )
-        if (!precio && linea.precioCent === undefined) {
+        if (!precioDocumento && linea.precioCent === undefined) {
           throw errors.validation(`Indique el costo de ${producto.descripcion}.`)
         }
-        const descuentoPctBp = linea.descuentoPctBp ?? 0
-        const gastoCent = linea.gastoCent ?? 0
-        const numeroSerie = linea.numeroSerie ?? ''
-        const lote = linea.lote ?? ''
+        const precioBaseCent = multiplicarCentavos(precioDocumento, moneda.tasa)
         const impuesto = repo.getImpuesto(
           db, ctx.empresaId,
           linea.impuestoId ?? (producto.impuestoId ? Number(producto.impuestoId) : undefined)
         )
         const exento = Boolean(linea.exento) || Boolean(impuesto?.exento)
+        const descuentoCent = linea.descuentoCent === undefined
+          ? undefined : multiplicarCentavos(linea.descuentoCent, moneda.tasa)
+        const descuento2Cent = linea.descuento2Cent === undefined
+          ? undefined : multiplicarCentavos(linea.descuento2Cent, moneda.tasa)
+        const descuento3Cent = linea.descuento3Cent === undefined
+          ? undefined : multiplicarCentavos(linea.descuento3Cent, moneda.tasa)
         const calculo = calcularLinea({
-          cantidad: linea.cantidad, precioCent: precio, descuentoPctBp,
-          descuentoCent: linea.descuentoCent, tasaBp: Number(impuesto?.tasaBp ?? 0), exento
+          cantidad: linea.cantidad, precioCent: precioBaseCent,
+          descuentoPctBp: linea.descuentoPctBp ?? 0, descuentoCent,
+          descuento2PctBp: linea.descuento2PctBp ?? 0, descuento2Cent,
+          descuento3PctBp: linea.descuento3PctBp ?? 0, descuento3Cent,
+          tasaBp: Number(impuesto?.tasaBp ?? 0), exento,
+          impuestoCodigo: String(impuesto?.codigo ?? '')
         })
+        const numeroSerie = linea.numeroSerie ?? ''
+        const lote = linea.lote ?? ''
         validarSerieYLote(ctx.empresaId, producto, { ...linea, numeroSerie, lote })
+        preparadas.push({
+          linea, producto, impuesto, exento, calculo,
+          cantidad: redondearCantidad(linea.cantidad),
+          gastoPropioCent: linea.gastoCent ?? 0, numeroSerie, lote, precioBaseCent
+        })
+      }
 
-        const cantidad = redondearCantidad(linea.cantidad)
+      const fletePorLinea = prorratear(fleteCent, preparadas.map((p) => p.calculo.baseCent))
+      const calculadas: LineaCalculada[] = []
+      let gastoTotalCent = 0
+      let costoTotalCent = 0
+
+      for (let i = 0; i < preparadas.length; i++) {
+        const { linea, producto, impuesto, exento, calculo, cantidad, gastoPropioCent, numeroSerie, lote, precioBaseCent } = preparadas[i]
+        const gastoCent = gastoPropioCent + fletePorLinea[i]
         const costoUnitCent = dividirCentavos(calculo.baseCent + gastoCent, cantidad)
         const datosLinea: Omit<repo.LineaNueva, 'empresaId' | 'docId' | 'productoId' | 'descripcion' | 'cantidad' | 'impuestoId' | 'exento'> = {
           cantidadRecibida: mueveStock || origen?.tipo === 'RECEPCION' ? cantidad : 0,
           cantidadDevuelta: 0,
-          precioCent: precio, descuentoPctBp, descuentoCent: calculo.descuentoCent,
+          precioCent: precioBaseCent,
+          descuentoPctBp: linea.descuentoPctBp ?? 0,
+          descuentoCent: calculo.descuento1Cent,
+          descuento2PctBp: linea.descuento2PctBp ?? 0,
+          descuento2Cent: calculo.descuento2Cent,
+          descuento3PctBp: linea.descuento3PctBp ?? 0,
+          descuento3Cent: calculo.descuento3Cent,
+          baseCent: calculo.baseCent,
+          referencia: linea.referencia ?? '',
+          pvsCent: linea.pvsCent === undefined ? 0 : multiplicarCentavos(linea.pvsCent, moneda.tasa),
           gastoCent, impuestoCodigo: String(impuesto?.codigo ?? ''),
           tasaBp: exento ? 0 : Number(impuesto?.tasaBp ?? 0),
           impuestoCent: calculo.impuestoCent, subtotalCent: calculo.subtotalCent,
@@ -481,18 +722,37 @@ export function createComprasService(db: Db, inventario: InventarioService) {
 
         calculadas.push(calculo)
         gastoTotalCent += gastoCent
-        gastoLineasCent += gastoCent
       }
 
-      // El gasto se capitaliza al costo y se adeuda al proveedor, pero no se
-      // vuelve a gravar: el motor de impuestos ya calculó el ITBIS por línea.
+      // El flete y los gastos se capitalizan al costo y se adeudan al proveedor,
+      // pero no se gravan dos veces: el ITBIS ya se calculó por línea.
       const resumen = resumenLineas(calculadas)
-      const totalCent = resumen.totalCent + gastoLineasCent
+      const ajusteCent = input.ajusteCent ?? 0
+      const totalCent = resumen.totalCent + gastoTotalCent + ajusteCent
+      if (totalCent < 0) throw errors.validation('El total de la compra no puede ser negativo.')
+      const montoFacturaCent = input.montoFacturaCent ?? totalCent
+      const montoFacturaMonedaCent = input.montoFacturaMonedaCent ?? (
+        moneda.extranjera ? dividirCentavos(totalCent, moneda.tasa) : totalCent
+      )
       repo.actualizarTotales(db, ctx.empresaId, docId, {
-        subtotalCent: resumen.subtotalCent, descuentoCent: resumen.descuentoCent,
-        impuestoCent: resumen.impuestoCent, gastoCent: gastoTotalCent,
-        totalCent, costoTotalCent
+        subtotalCent: resumen.subtotalCent,
+        descuentoCent: resumen.descuentoCent,
+        descuento1Cent: resumen.descuento1Cent,
+        descuento2Cent: resumen.descuento2Cent,
+        descuentoItemsCent: resumen.descuento3Cent,
+        impuestoCent: resumen.impuestoCent,
+        gastoCent: gastoTotalCent, fleteCent,
+        baseCent: resumen.baseCent, exentoCent: resumen.exentoCent,
+        gravadoCent: resumen.gravadoCent,
+        totalCent, costoTotalCent,
+        montoFacturaCent, diferenciaCent: montoFacturaCent - totalCent,
+        motivoDiferencia: input.nota ?? ''
       })
+      db.prepare(`
+        UPDATE documentos_compra SET monto_factura_moneda_cent = ? WHERE id = ? AND empresa_id = ?
+      `).run(montoFacturaMonedaCent, docId, ctx.empresaId)
+      repo.insertarImpuestos(db, ctx.empresaId, docId, resumen.impuestosPorTasa as ImpuestoAgrupado[])
+      verificarAprobacion(ctx, input.tipo, totalCent, docId)
 
       if (input.tipo === 'FACTURA_COMPRA') {
         if (credito) {
@@ -500,6 +760,16 @@ export function createComprasService(db: Db, inventario: InventarioService) {
         } else {
           registrarPagos(ctx, docId, totalCent, input.pagos, false)
         }
+        contabilizarIngreso(ctx, docId, {
+          numero, fecha, proveedorNombre: String(proveedor.nombreComercial),
+          totalCent, impuestoCent: resumen.impuestoCent, credito,
+          metodoPago: input.pagos?.[0]?.metodo ?? 'EFECTIVO',
+          clasificacionContable: input.clasificacionContable ?? '1200'
+        })
+        repo.insertarVersion(db, ctx.empresaId, {
+          docId, numero, operacion: 'CREAR', antes: null,
+          despues: repo.getDocumento(db, ctx.empresaId, docId), usuarioId: ctx.userId
+        })
       }
       if (origen && input.tipo === 'FACTURA_COMPRA') {
         repo.setEstadoDocumento(db, ctx.empresaId, Number(origen.id), 'CONVERTIDA')
@@ -510,6 +780,245 @@ export function createComprasService(db: Db, inventario: InventarioService) {
         totalCent, condicion, docOrigenId: origen ? Number(origen.id) : null
       })
       return { id: docId, numero, totalCent }
+    })()
+  }
+
+  /**
+   * Edición real del ingreso directo: revierte kardex, CxP, pagos y asiento anterior
+   * dentro de la misma transacción, y vuelve a aplicar la factura corregida.
+   */
+  function editarIngreso(ctx: SessionContext, entrada: EditarIngresoInput) {
+    requirePermission(ctx, 'compras.modificar')
+    const input = editarIngresoSchema.parse(entrada)
+    const doc = repo.getDocumento(db, ctx.empresaId, input.id)
+    if (!doc || doc.tipo !== 'FACTURA_COMPRA') throw errors.notFound('Ingreso de mercancía')
+    if (doc.estado === 'ANULADO') throw errors.conflict('El ingreso está anulado; no puede editarse.')
+    if (doc.docOrigenId) {
+      throw errors.conflict('Este ingreso procede de otro documento; edite el documento de origen.')
+    }
+    const hijos = db.prepare(`
+      SELECT id FROM documentos_compra
+      WHERE empresa_id = ? AND doc_origen_id = ? AND estado <> 'ANULADO'
+    `).all(ctx.empresaId, doc.id) as { id: number }[]
+    if (hijos.length) throw errors.conflict('El ingreso tiene documentos hijos activos.')
+
+    const fecha = input.fecha ?? String(doc.fecha)
+    const proveedor = repo.getProveedor(db, ctx.empresaId, input.proveedorId)
+    if (!proveedor) throw errors.notFound('Proveedor')
+    validarDescuentos(ctx, input.lineas)
+    if (input.lineas.some((l) => l.precioCent !== undefined)) requirePermission(ctx, 'compras.costo')
+    if (input.almacenId && Number(input.almacenId) !== Number(doc.almacenId)) {
+      requirePermission(ctx, 'compras.almacen')
+    }
+    const almacenId = almacenPorDefecto(ctx, input.almacenId ?? (doc.almacenId ? Number(doc.almacenId) : undefined))
+    const moneda = resolverMoneda(ctx, fecha, input.monedaCodigo ?? String(doc.monedaCodigo), input.tasaAplicada)
+    if (moneda.codigo !== doc.monedaCodigo || moneda.tasa !== doc.tasaAplicada) {
+      requirePermission(ctx, 'compras.tasa')
+    }
+    validarDuplicado(ctx.empresaId, 'FACTURA_COMPRA', input.numeroProveedor, input.proveedorId, input.id)
+
+    return db.transaction(() => {
+      const antes = {
+        cabecera: doc,
+        lineas: repo.listarLineas(db, ctx.empresaId, Number(doc.id)),
+        impuestos: repo.listarImpuestos(db, ctx.empresaId, Number(doc.id)),
+        pagos: repo.listarPagos(db, ctx.empresaId, Number(doc.id))
+      }
+      const movimientos = movimientosPorLinea('FACTURA_COMPRA', Number(doc.id), ctx.empresaId)
+      for (const linea of antes.lineas) {
+        const cantidad = redondearCantidad(
+          Number(linea.cantidadRecibida ?? 0) - Number(linea.cantidadDevuelta ?? 0)
+        )
+        const movimiento = movimientos.get(Number(linea.id))
+        if (cantidad <= EPS || !movimiento) continue
+        const producto = repo.getProducto(db, ctx.empresaId, Number(linea.productoId))
+        if (!producto) throw errors.notFound('Producto')
+        inventario.movimientoDocumento(ctx, {
+          tipo: 'DEV_COMPRA', productoId: Number(linea.productoId),
+          almacenId: Number(doc.almacenId), cantidad: -cantidad,
+          costoUnitCent: Number(movimiento.costoUnitCent),
+          docTipo: 'FACTURA_COMPRA', docId: Number(doc.id), docLineaId: Number(linea.id),
+          motivo: input.motivo, referencia: String(doc.numero), recalcular: false
+        })
+        registrarSerieYLoteSalida(ctx.empresaId, producto, {
+          numeroSerie: String(linea.numeroSerie ?? ''), lote: String(linea.lote ?? ''), cantidad
+        }, Number(doc.almacenId), Number(doc.id), 'FACTURA_COMPRA')
+      }
+
+      const cxpDocumento = cxp.getCxpPorDocumento(db, ctx.empresaId, Number(doc.id))
+      if (cxpDocumento && cxpDocumento.estado !== 'ANULADO') {
+        const saldoCent = Number(cxpDocumento.saldoCent ?? 0)
+        cxp.anularCxp(db, ctx.empresaId, Number(doc.id))
+        if (saldoCent > 0) {
+          cxp.movimientoCxp(db, {
+            empresaId: ctx.empresaId, proveedorId: Number(doc.proveedorId),
+            cxpDocumentoId: Number(cxpDocumento.id), docCompraId: Number(doc.id),
+            tipo: 'ANULACION', montoCent: saldoCent,
+            referencia: `Edición ${input.motivo}`, usuarioId: ctx.userId
+          })
+          cxp.ajustarBalanceProveedor(db, ctx.empresaId, Number(doc.proveedorId), -saldoCent)
+        }
+      }
+      reversarPagosEfectivo(ctx, Number(doc.id), input.motivo, 'FACTURA_COMPRA', Number(doc.id))
+      repo.eliminarPagos(db, ctx.empresaId, Number(doc.id))
+      repo.eliminarImpuestos(db, ctx.empresaId, Number(doc.id))
+      repo.eliminarLineas(db, ctx.empresaId, Number(doc.id))
+      anularAsiento(ctx, Number(doc.id), input.motivo)
+
+      const credito = Boolean(input.credito)
+      const vencimiento = credito
+        ? (input.vencimiento ?? sumarDias(fecha, Number(proveedor.condicionPagoDias ?? 0)))
+        : ''
+      repo.actualizarIngreso(db, ctx.empresaId, Number(doc.id), {
+        proveedorId: Number(proveedor.id),
+        proveedorNombre: String(proveedor.nombreComercial),
+        proveedorRnc: String(proveedor.rnc ?? ''),
+        almacenId: Number(almacenId), fecha,
+        fechaLlegada: input.fechaLlegada ?? '', vencimiento,
+        numeroProveedor: input.numeroProveedor ?? '',
+        numeroOrdenCompra: input.numeroOrdenCompra ?? '',
+        clasificacionContable: input.clasificacionContable ?? '1200',
+        monedaCodigo: moneda.codigo, tasaAplicada: moneda.tasa,
+        montoFacturaMonedaCent: input.montoFacturaMonedaCent ?? 0,
+        ajusteCent: input.ajusteCent ?? 0,
+        comentarios: input.comentarios ?? '', nota: input.nota ?? '',
+        condicion: credito ? 'CREDITO' : 'CONTADO'
+      })
+
+      const fleteCent = input.fleteCent ?? 0
+      const preparadas: {
+        linea: LineaCompraInput; producto: Fila; impuesto: Fila | undefined
+        exento: boolean; calculo: LineaCalculada; cantidad: number
+        gastoPropioCent: number; numeroSerie: string; lote: string
+        precioBaseCent: number
+      }[] = []
+      for (const linea of input.lineas) {
+        const producto = repo.getProducto(db, ctx.empresaId, linea.productoId)
+        if (!producto) throw errors.notFound('Producto')
+        const precioDocumento = linea.precioCent ?? (
+          Number(producto.costoUltimaCompraCent ?? 0) > 0
+            ? Number(producto.costoUltimaCompraCent)
+            : Number(producto.costoPromedioCent ?? 0)
+        )
+        if (!precioDocumento && linea.precioCent === undefined) {
+          throw errors.validation(`Indique el costo de ${producto.descripcion}.`)
+        }
+        const precioBaseCent = multiplicarCentavos(precioDocumento, moneda.tasa)
+        const impuesto = repo.getImpuesto(
+          db, ctx.empresaId,
+          linea.impuestoId ?? (producto.impuestoId ? Number(producto.impuestoId) : undefined)
+        )
+        const exento = Boolean(linea.exento) || Boolean(impuesto?.exento)
+        const fijo = (valor?: number) => valor === undefined ? undefined : multiplicarCentavos(valor, moneda.tasa)
+        const calculo = calcularLinea({
+          cantidad: linea.cantidad, precioCent: precioBaseCent,
+          descuentoPctBp: linea.descuentoPctBp ?? 0, descuentoCent: fijo(linea.descuentoCent),
+          descuento2PctBp: linea.descuento2PctBp ?? 0, descuento2Cent: fijo(linea.descuento2Cent),
+          descuento3PctBp: linea.descuento3PctBp ?? 0, descuento3Cent: fijo(linea.descuento3Cent),
+          tasaBp: Number(impuesto?.tasaBp ?? 0), exento,
+          impuestoCodigo: String(impuesto?.codigo ?? '')
+        })
+        const numeroSerie = linea.numeroSerie ?? ''
+        const lote = linea.lote ?? ''
+        validarSerieYLote(ctx.empresaId, producto, { ...linea, numeroSerie, lote })
+        preparadas.push({
+          linea, producto, impuesto, exento, calculo,
+          cantidad: redondearCantidad(linea.cantidad),
+          gastoPropioCent: linea.gastoCent ?? 0, numeroSerie, lote, precioBaseCent
+        })
+      }
+
+      const fletePorLinea = prorratear(fleteCent, preparadas.map((p) => p.calculo.baseCent))
+      const calculadas: LineaCalculada[] = []
+      let gastoTotalCent = 0
+      let costoTotalCent = 0
+      for (let i = 0; i < preparadas.length; i++) {
+        const p = preparadas[i]
+        const gastoCent = p.gastoPropioCent + fletePorLinea[i]
+        const costoUnitCent = dividirCentavos(p.calculo.baseCent + gastoCent, p.cantidad)
+        const lineaId = repo.insertarLinea(db, {
+          empresaId: ctx.empresaId, docId: Number(doc.id),
+          productoId: Number(p.producto.id),
+          descripcion: p.linea.descripcion || String(p.producto.descripcion),
+          cantidad: p.cantidad, cantidadRecibida: p.cantidad, cantidadDevuelta: 0,
+          precioCent: p.precioBaseCent,
+          descuentoPctBp: p.linea.descuentoPctBp ?? 0,
+          descuentoCent: p.calculo.descuento1Cent,
+          descuento2PctBp: p.linea.descuento2PctBp ?? 0,
+          descuento2Cent: p.calculo.descuento2Cent,
+          descuento3PctBp: p.linea.descuento3PctBp ?? 0,
+          descuento3Cent: p.calculo.descuento3Cent,
+          baseCent: p.calculo.baseCent,
+          referencia: p.linea.referencia ?? '',
+          pvsCent: p.linea.pvsCent === undefined ? 0 : multiplicarCentavos(p.linea.pvsCent, moneda.tasa),
+          gastoCent, impuestoId: p.impuesto ? Number(p.impuesto.id) : null,
+          impuestoCodigo: String(p.impuesto?.codigo ?? ''),
+          tasaBp: p.exento ? 0 : Number(p.impuesto?.tasaBp ?? 0), exento: p.exento,
+          impuestoCent: p.calculo.impuestoCent, subtotalCent: p.calculo.subtotalCent,
+          totalCent: p.calculo.totalCent + gastoCent, costoUnitCent,
+          numeroSerie: p.numeroSerie, lote: p.lote
+        })
+        const movimiento = inventario.movimientoDocumento(ctx, {
+          tipo: 'COMPRA', productoId: Number(p.producto.id),
+          almacenId: Number(almacenId), cantidad: p.cantidad, costoUnitCent,
+          docTipo: 'FACTURA_COMPRA', docId: Number(doc.id), docLineaId: lineaId,
+          motivo: input.motivo, referencia: String(doc.numero)
+        })
+        registrarSerieYLoteEntrada(ctx.empresaId, p.producto, {
+          ...p.linea, numeroSerie: p.numeroSerie, lote: p.lote
+        }, Number(almacenId), Number(doc.id), 'FACTURA_COMPRA')
+        calculadas.push(p.calculo)
+        gastoTotalCent += gastoCent
+        costoTotalCent += Math.abs(movimiento.costoTotalCent)
+      }
+
+      const resumen = resumenLineas(calculadas)
+      const ajusteCent = input.ajusteCent ?? 0
+      const totalCent = resumen.totalCent + gastoTotalCent + ajusteCent
+      if (totalCent < 0) throw errors.validation('El total de la compra no puede ser negativo.')
+      const montoFacturaCent = input.montoFacturaCent ?? totalCent
+      const montoFacturaMonedaCent = input.montoFacturaMonedaCent ?? (
+        moneda.extranjera ? dividirCentavos(totalCent, moneda.tasa) : totalCent
+      )
+      repo.actualizarTotales(db, ctx.empresaId, Number(doc.id), {
+        subtotalCent: resumen.subtotalCent, descuentoCent: resumen.descuentoCent,
+        descuento1Cent: resumen.descuento1Cent, descuento2Cent: resumen.descuento2Cent,
+        descuentoItemsCent: resumen.descuento3Cent,
+        impuestoCent: resumen.impuestoCent, gastoCent: gastoTotalCent, fleteCent,
+        baseCent: resumen.baseCent, exentoCent: resumen.exentoCent,
+        gravadoCent: resumen.gravadoCent, totalCent, costoTotalCent,
+        montoFacturaCent, diferenciaCent: montoFacturaCent - totalCent,
+        motivoDiferencia: input.nota ?? ''
+      })
+      db.prepare(`
+        UPDATE documentos_compra SET monto_factura_moneda_cent = ? WHERE id = ? AND empresa_id = ?
+      `).run(montoFacturaMonedaCent, doc.id, ctx.empresaId)
+      repo.insertarImpuestos(db, ctx.empresaId, Number(doc.id), resumen.impuestosPorTasa as ImpuestoAgrupado[])
+
+      if (credito) {
+        registrarCxp(ctx, Number(doc.id), String(doc.numero), proveedor, totalCent, fecha, vencimiento)
+      } else {
+        registrarPagos(ctx, Number(doc.id), totalCent, input.pagos, false)
+      }
+      contabilizarIngreso(ctx, Number(doc.id), {
+        numero: String(doc.numero), fecha, proveedorNombre: String(proveedor.nombreComercial),
+        totalCent, impuestoCent: resumen.impuestoCent, credito,
+        metodoPago: input.pagos?.[0]?.metodo ?? 'EFECTIVO',
+        clasificacionContable: input.clasificacionContable ?? '1200'
+      })
+      repo.insertarVersion(db, ctx.empresaId, {
+        docId: Number(doc.id), numero: String(doc.numero), operacion: 'MODIFICAR',
+        antes, despues: {
+          cabecera: repo.getDocumento(db, ctx.empresaId, Number(doc.id)),
+          lineas: repo.listarLineas(db, ctx.empresaId, Number(doc.id)),
+          impuestos: repo.listarImpuestos(db, ctx.empresaId, Number(doc.id))
+        },
+        motivo: input.motivo, usuarioId: ctx.userId
+      })
+      audit(ctx, 'MODIFICAR', 'documentos_compra', Number(doc.id), antes, {
+        motivo: input.motivo, totalCent
+      })
+      return { id: Number(doc.id), numero: String(doc.numero), totalCent }
     })()
   }
 
@@ -610,7 +1119,7 @@ export function createComprasService(db: Db, inventario: InventarioService) {
   }
 
   function anular(ctx: SessionContext, input: AnularCompraInput): { id: number; devolucionId: number | null } {
-    const motivo = input.motivo ?? 'Anulación solicitada'
+    const motivo = motivoAnulacion(ctx, input.motivo)
     const doc = repo.getDocumento(db, ctx.empresaId, input.id)
     if (!doc) throw errors.notFound('Documento de compra')
     requirePermission(ctx, 'compras.anular')
@@ -690,7 +1199,13 @@ export function createComprasService(db: Db, inventario: InventarioService) {
         }
       }
 
+      anularAsiento(ctx, Number(doc.id), motivo)
       repo.setEstadoDocumento(db, ctx.empresaId, Number(doc.id), 'ANULADO')
+      repo.insertarVersion(db, ctx.empresaId, {
+        docId: Number(doc.id), numero: String(doc.numero), operacion: 'ANULAR',
+        antes: { estado: doc.estado, totalCent: doc.totalCent },
+        despues: { estado: 'ANULADO', motivo }, usuarioId: ctx.userId
+      })
       audit(ctx, 'ANULAR', 'documentos_compra', Number(doc.id), { estado: doc.estado }, { estado: 'ANULADO', motivo })
       return { id: Number(doc.id), devolucionId }
     })()
@@ -751,6 +1266,35 @@ export function createComprasService(db: Db, inventario: InventarioService) {
       return crearDocumento(ctx, { ...input, tipo: 'FACTURA_COMPRA' })
     },
 
+    /** Ingreso de mercancía: contrato estricto con totalización y campos ERP. */
+    ingreso(ctx: SessionContext, entrada: IngresoMercanciaInput) {
+      const input = ingresoMercanciaSchema.parse({ ...entrada, tipo: 'FACTURA_COMPRA' })
+      return crearDocumento(ctx, input)
+    },
+
+    editarIngreso,
+
+    historial(ctx: SessionContext, entrada?: HistorialIngresoInput) {
+      requirePermission(ctx, 'compras.historial')
+      const filtro = historialIngresoSchema.parse(entrada ?? {})
+      const documentos = repo.listarDocumentos(db, ctx.empresaId, filtro)
+      const ids = new Set(documentos.map((d) => Number(d.id)))
+      const porDocumento = <T extends { docId?: unknown }>(filas: T[]): T[] =>
+        filas.filter((f) => ids.has(Number(f.docId)))
+      const asientos = documentos
+        .filter((d) => d.asientoId)
+        .map((d) => contab.obtenerAsiento(db, ctx.empresaId, Number(d.asientoId)))
+        .filter((a): a is Fila => Boolean(a))
+      return {
+        documentos,
+        versiones: porDocumento(repo.listarVersiones(db, ctx.empresaId)),
+        reimpresiones: porDocumento(repo.listarReimpresiones(db, ctx.empresaId)),
+        auditoria: repo.listarAuditoriaDocumento(db, ctx.empresaId)
+          .filter((a) => ids.has(Number(a.entidadId))),
+        asientos
+      }
+    },
+
     devolucion(ctx: SessionContext, input: DocumentoCompraInput) {
       requirePermission(ctx, 'compras.devolucion')
       if (!input.docOrigenId) throw errors.validation('La devolución requiere un documento de origen.')
@@ -782,12 +1326,13 @@ export function createComprasService(db: Db, inventario: InventarioService) {
       const cabecera = repo.getDocumento(db, ctx.empresaId, id)
       if (!cabecera) throw errors.notFound('Documento de compra')
       const lineas = repo.listarLineas(db, ctx.empresaId, id)
+      const impuestos = repo.listarImpuestos(db, ctx.empresaId, id)
       const pagos = repo.listarPagos(db, ctx.empresaId, id)
       if (!tiene(ctx, 'compras.costo')) {
         for (const linea of lineas) delete linea.costoUnitCent
         delete cabecera.costoTotalCent
       }
-      return { cabecera, lineas, pagos }
+      return { cabecera, lineas, impuestos, pagos }
     },
 
     cabeceras(ctx: SessionContext, tipo: string) {
@@ -808,7 +1353,7 @@ export function createComprasService(db: Db, inventario: InventarioService) {
           FROM proveedores WHERE empresa_id = ? AND activo = 1 ORDER BY nombre_comercial
         `, tiene(ctx, 'proveedores.consultar')),
         productos: maestros(`
-          SELECT id, codigo, descripcion, impuesto_id AS impuestoId, tipo,
+          SELECT id, codigo, descripcion, referencia, precio1_cent AS precio1Cent, impuesto_id AS impuestoId, tipo,
                  maneja_serie AS manejaSerie, maneja_lote AS manejaLote,
                  costo_promedio_cent AS costoPromedioCent,
                  costo_ultima_compra_cent AS costoUltimaCompraCent
@@ -824,19 +1369,46 @@ export function createComprasService(db: Db, inventario: InventarioService) {
         `).all(ctx.empresaId) as Record<string, unknown>[],
         impuestoPorDefecto: String((db.prepare(`
           SELECT valor FROM parametros WHERE empresa_id = ? AND clave = 'itbis_por_defecto'
-        `).get(ctx.empresaId) as { valor?: string } | undefined)?.valor ?? 'ITBIS18')
+        `).get(ctx.empresaId) as { valor?: string } | undefined)?.valor ?? 'ITBIS18'),
+        monedaBase: monedaBase(ctx.empresaId),
+        monedas: db.prepare(`
+          SELECT codigo, nombre, simbolo, decimales FROM monedas
+          WHERE empresa_id = ? AND activa = 1 ORDER BY codigo
+        `).all(ctx.empresaId) as Record<string, unknown>[],
+        clasificacionesContables: db.prepare(`
+          SELECT codigo, nombre FROM plan_cuentas
+          WHERE empresa_id = ? AND activa = 1 AND acepta_movimiento = 1
+          ORDER BY codigo
+        `).all(ctx.empresaId) as Record<string, unknown>[],
+        tasasCambio: db.prepare(`
+          SELECT moneda_codigo AS monedaCodigo, tasa, fecha FROM tasas_cambio
+          WHERE empresa_id = ? ORDER BY fecha DESC, id DESC LIMIT 300
+        `).all(ctx.empresaId) as Record<string, unknown>[]
       }
     },
 
-    datosImpresion(ctx: SessionContext, input: ImprimirCompraInput) {
+    datosImpresion(ctx: SessionContext, entrada: ImprimirCompraInput) {
       requirePermission(ctx, 'compras.imprimir')
+      const input = imprimirCompraSchema.parse(entrada)
       const doc = repo.getDocumento(db, ctx.empresaId, input.id)
       if (!doc) throw errors.notFound('Documento de compra')
+      db.transaction(() => {
+        repo.insertarReimpresion(db, ctx.empresaId, {
+          docId: Number(doc.id), formato: input.formato,
+          motivo: input.motivo, usuarioId: ctx.userId, sesionId: ctx.sesionId
+        })
+        repo.insertarVersion(db, ctx.empresaId, {
+          docId: Number(doc.id), numero: String(doc.numero), operacion: 'IMPRIMIR',
+          antes: null, despues: { formato: input.formato, motivo: input.motivo },
+          motivo: input.motivo, usuarioId: ctx.userId
+        })
+      })()
       return {
-        formato: input.formato ?? 'CARTA',
+        formato: input.formato,
         empresa: camel(getEmpresa(db, ctx.empresaId)) ?? {},
         documento: doc,
         lineas: repo.listarLineas(db, ctx.empresaId, Number(doc.id)),
+        impuestos: repo.listarImpuestos(db, ctx.empresaId, Number(doc.id)),
         pagos: repo.listarPagos(db, ctx.empresaId, Number(doc.id))
       }
     },

@@ -35,25 +35,20 @@ describe('esquemas de ventas y POS', () => {
     }).success).toBe(false)
   })
 
-  it('exige pagos en POS y permite suspender sin pagos', () => {
+  it('POS no exige pagos y permite suspender sin pagos', () => {
     const base = { clienteId: 1, lineas: [linea] }
-    expect(posVentaSchema.safeParse(base).success).toBe(false)
-    expect(posVentaSchema.safeParse({
-      ...base, pagos: [{ metodo: 'EFECTIVO', montoCent: 40000 }]
-    }).success).toBe(true)
+    expect(posVentaSchema.safeParse(base).success).toBe(true)
     expect(suspenderVentaSchema.safeParse({ nombre: 'Mesa 1', carrito: base }).success).toBe(true)
   })
 
-  it('acepta pago combinado y rechaza montos no positivos', () => {
-    expect(posVentaSchema.safeParse({
-      clienteId: 1, lineas: [linea], pagos: [
-        { metodo: 'EFECTIVO', montoCent: 30000 },
-        { metodo: 'TARJETA', montoCent: 10000, referencia: '****4242' }
-      ]
-    }).success).toBe(true)
-    expect(posVentaSchema.safeParse({
-      clienteId: 1, lineas: [linea], pagos: [{ metodo: 'EFECTIVO', montoCent: 0 }]
-    }).success).toBe(false)
+  it('Ventas y POS no transportan pagos: el cobro es un módulo aparte', () => {
+    const pagos = [{ metodo: 'EFECTIVO', montoCent: 40000 }]
+    const factura = documentoVentaSchema.parse({
+      tipo: 'FACTURA_CONTADO', clienteId: 1, lineas: [linea], pagos
+    })
+    const pos = posVentaSchema.parse({ clienteId: 1, lineas: [linea], pagos })
+    expect('pagos' in factura).toBe(false)
+    expect('pagos' in pos).toBe(false)
   })
 
   it('aplica default de motivo y de filtro', () => {

@@ -7,9 +7,11 @@ import { aplicarTemaAvanzado } from '@/lib/tema-avanzado'
 import { findModule, modulePermission } from '@/app/modules'
 import { Sidebar } from '@/app/Sidebar'
 import { Topbar } from '@/app/Topbar'
+import { CommandPalette } from '@/app/CommandPalette'
 import { StatusBar } from '@/app/StatusBar'
 import { useSessionStore } from '@/app/session'
 import { Toaster, toast } from '@/components/ui/Toast'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { Card } from '@/components/ui/Card'
 import { ModulePlaceholder } from '@/components/ui/ModulePlaceholder'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
@@ -23,18 +25,23 @@ import { ConfiguracionPage } from '@/features/configuracion/ConfiguracionPage'
 import { ConfiguracionAvanzadaPage } from '@/features/configuracion/ConfiguracionAvanzadaPage'
 import { CentroControlPage } from '@/features/configuracion/CentroControlPage'
 import { InteligenciaOperativaPage } from '@/features/inteligencia/InteligenciaOperativaPage'
+import { AgendaPage } from '@/features/agenda/AgendaPage'
 import { SaludPage } from '@/features/sistema/SaludPage'
 import { Modulos2026Page } from '@/features/modulos2026/Modulos2026Page'
+import { Panel2026Page } from '@/features/panel2026/Panel2026Page'
+import { Capacidades2026Page } from '@/features/capacidades/Capacidades2026Page'
 import { AuditoriaPage } from '@/features/auditoria/AuditoriaPage'
 import { ClientesPage } from '@/features/maestros/ClientesPage'
 import { ProveedoresPage } from '@/features/maestros/ProveedoresPage'
 import { ProductosPage } from '@/features/maestros/ProductosPage'
 import { CatalogosPage } from '@/features/maestros/CatalogosPage'
 import { InventarioPage } from '@/features/inventario/InventarioPage'
+import { StockPanelPage } from '@/features/inventario/StockPanelPage'
 import { FacturacionPage } from '@/features/ventas/FacturacionPage'
 import { PosPage } from '@/features/ventas/PosPage'
 import { CotizacionesPage } from '@/features/ventas/CotizacionesPage'
 import { ComprasPage } from '@/features/compras/ComprasPage'
+import { CobrosPage } from '@/features/cobros/CobrosPage'
 import { CxcPage } from '@/features/finanzas/CxcPage'
 import { CxpPage } from '@/features/finanzas/CxpPage'
 import { BancosPage } from '@/features/finanzas/BancosPage'
@@ -91,6 +98,7 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'configuracion-avanzada') return <ConfiguracionAvanzadaPage />
   if (activeView === 'centro-control') return <CentroControlPage />
   if (activeView === 'inteligencia') return <InteligenciaOperativaPage />
+  if (activeView === 'agenda') return <AgendaPage />
   if (activeView === 'salud') return <SaludPage />
   if (activeView === 'presupuestos' || activeView === 'servicios' || activeView === 'activos' || activeView === 'crm') {
     return <Modulos2026Page modulo={activeView} />
@@ -101,10 +109,12 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'productos') return <ProductosPage />
   if (activeView === 'catalogos' || activeView === 'vendedores') return <CatalogosPage />
   if (activeView === 'inventario') return <InventarioPage />
+  if (activeView === 'control-stock') return <StockPanelPage />
   if (activeView === 'facturacion') return <FacturacionPage />
   if (activeView === 'pos') return <PosPage />
   if (activeView === 'cotizaciones') return <CotizacionesPage />
   if (activeView === 'compras') return <ComprasPage />
+  if (activeView === 'cobros') return <CobrosPage />
   if (activeView === 'cxc') return <CxcPage />
   if (activeView === 'cxp') return <CxpPage />
   if (activeView === 'bancos') return <BancosPage />
@@ -113,6 +123,8 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'reportes') return <ReportesPage />
   if (activeView === 'contabilidad') return <ContabilidadPage />
   if (activeView === 'respaldos') return <RespaldosPage />
+  if (activeView === 'panel-2026') return <Panel2026Page />
+  if (activeView === 'capacidades-2026') return <Capacidades2026Page />
   const module = findModule(activeView)
   if (module) return <ModulePlaceholder module={module} />
   return <DashboardPage />
@@ -146,9 +158,12 @@ export default function App(): React.JSX.Element {
   // Ajustes de la empresa: llegan con token, por lo que se cargan tras la sesión.
   const cargarAjustes = useAjustesStore((s) => s.cargar)
   const temaAvanzado = useAjustesStore((s) => s.ajustes.tema)
+  const densidadTablas = useAjustesStore((s) => s.ajustes.interfaz?.densidadTablas)
   useEffect(() => {
-    if (status === 'authenticated') void cargarAjustes()
-  }, [cargarAjustes, status])
+    // Mientras el cambio de clave es obligatorio el backend bloquea otros canales;
+    // se recargan los ajustes en cuanto se completa y el shell vuelve a mostrarse.
+    if (status === 'authenticated' && !mustChangePassword) void cargarAjustes()
+  }, [cargarAjustes, status, mustChangePassword])
   useEffect(() => {
     aplicarTemaAvanzado(temaAvanzado)
   }, [temaAvanzado])
@@ -198,6 +213,13 @@ export default function App(): React.JSX.Element {
   if (mustChangePassword) {
     return (
       <>
+        {/* Fondo visible: si el portal del modal falla, la ventana nunca queda negra. */}
+        <div className="flex h-full flex-col items-center justify-center gap-2 bg-slate-100 text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+          <p className="text-lg font-semibold">ENTERPRISE PRO ERP</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Establezca su contraseña para continuar.
+          </p>
+        </div>
         <ChangePasswordModal open forced onDone={NOOP} />
         <Toaster />
       </>
@@ -210,13 +232,19 @@ export default function App(): React.JSX.Element {
         <Sidebar />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar onChangePassword={() => setPasswordOpen(true)} />
-          <main className="min-h-0 flex-1 overflow-y-auto p-5" key={activeView}>
-            <ActiveView />
+          <main
+            className={`min-h-0 flex-1 overflow-y-auto p-5 ${densidadTablas === 'compacta' ? 'erp-densidad-compacta' : ''}`}
+            key={activeView}
+          >
+            <ErrorBoundary compact>
+              <ActiveView />
+            </ErrorBoundary>
           </main>
           <StatusBar />
         </div>
       </div>
       <ChangePasswordModal open={passwordOpen} forced={false} onDone={() => setPasswordOpen(false)} />
+      <CommandPalette />
       <Toaster />
     </div>
   )

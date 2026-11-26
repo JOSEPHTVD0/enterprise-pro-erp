@@ -88,11 +88,12 @@ test.beforeAll(async () => {
     await page.getByLabel('Contraseña actual').fill('Admin1234!')
     // Regresión: escribir tecla por tecla no debe perder el foco del campo.
     const nueva = page.getByLabel('Nueva contraseña', { exact: true })
-    await nueva.pressSequentially('E2ePass2026!')
-    await expect(nueva).toHaveValue('E2ePass2026!')
+    // Política 0.5.2+: se acepta un PIN numérico de 4 dígitos.
+    await nueva.pressSequentially('4821')
+    await expect(nueva).toHaveValue('4821')
     const confirmar = page.getByLabel('Confirmar nueva contraseña')
-    await confirmar.pressSequentially('E2ePass2026!')
-    await expect(confirmar).toHaveValue('E2ePass2026!')
+    await confirmar.pressSequentially('4821')
+    await expect(confirmar).toHaveValue('4821')
     await page.getByRole('button', { name: 'Establecer contraseña' }).click()
     await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
   } catch (error) {
@@ -114,6 +115,26 @@ test.afterAll(async () => {
 test('el ERP inicia, autentica y expone el menú real', async () => {
   await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
   await expect(page).toHaveTitle(/ENTERPRISE PRO ERP/)
+})
+
+test('app:reload recarga la interfaz y permite volver a entrar', async () => {
+  await page.evaluate(async () => { await window.api.invoke('app:reload') })
+  await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
+  await page.getByLabel('Usuario').fill('admin')
+  await page.getByLabel('Contraseña', { exact: true }).fill('4821')
+  await page.getByRole('button', { name: 'Entrar al sistema' }).click()
+  await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
+})
+
+test('las actualizaciones se gestionan desde un panel del programa', async () => {
+  await page.getByRole('button', { name: 'Actualizaciones', exact: true }).click()
+  const modal = page.getByRole('dialog', { name: 'Actualizaciones de ENTERPRISE PRO ERP' })
+  await expect(modal).toBeVisible()
+  await expect(modal).toContainText('Busque y descargue el instalador en Descargas.')
+  await expect(modal.getByRole('button', { name: /Buscar/ })).toBeVisible()
+  await expect(modal).not.toContainText('Instalar y reiniciar')
+  await modal.getByRole('button', { name: 'Cerrar' }).last().click()
+  await expect(modal).toHaveCount(0)
 })
 
 test('pdf.generar produce un PDF real mediante IPC seguro', async () => {
@@ -184,6 +205,153 @@ test('los permisos personalizados se crean con descripción y auditoría', async
   await expect(page.getByText('Permiso personalizado guardado y auditado.')).toBeVisible()
   await expect(page.getByRole('cell', { name: 'Prueba E2E' }).last()).toBeVisible()
   await expect(page.getByRole('cell', { name: 'custom.prueba_e2e' }).last()).toBeVisible()
+})
+
+test('Ventas y Cobros son áreas separadas en el menú', async () => {
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await expect(menu.getByRole('button', { name: 'Cobros', exact: true }).last()).toBeVisible()
+  await menu.getByRole('button', { name: 'Cobros', exact: true }).last().click()
+  await expect(page.getByRole('heading', { name: 'Cobros' })).toBeVisible()
+  await expect(page.getByText('independiente de Ventas')).toBeVisible()
+})
+
+test('la interfaz y las capas por rol/permiso se configuran desde el centro de control', async () => {
+  await page.getByRole('button', { name: 'Centro de control', exact: true }).click()
+  await page.getByRole('button', { name: 'Interfaz', exact: true }).click()
+  await expect(page.getByText('Título de la aplicación')).toBeVisible()
+  await expect(page.getByText('Orden de los grupos del menú')).toBeVisible()
+
+  await page.getByRole('button', { name: 'Por rol / permiso' }).click()
+  await page.getByRole('button', { name: 'Nueva capa' }).click()
+  const modal = page.getByRole('dialog', { name: 'Nueva capa de personalización' })
+  await expect(modal).toBeVisible()
+  await expect(modal.getByText('Solo grupos visuales')).toBeVisible()
+  await modal.getByRole('button', { name: 'Cancelar' }).click()
+})
+
+test('la auditoría filtra por registro y por contenido de los cambios', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Auditoría', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Auditoría y control' })).toBeVisible()
+  await page.getByPlaceholder('Ej. 42').fill('1')
+  await page.getByPlaceholder('Ej. cliente, RNC…').fill('ERP')
+  await expect(page.getByText('Historial de operaciones')).toBeVisible()
+})
+
+test('la agenda de vencimientos filtra cobros y pagos con escritura continua', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' })
+    .getByRole('button', { name: 'Agenda de vencimientos', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Agenda de vencimientos' })).toBeVisible()
+  await page.getByPlaceholder('Ej. FAC-00000012').pressSequentially('FAC-')
+  await expect(page.getByPlaceholder('Ej. FAC-00000012')).toHaveValue('FAC-')
+  await expect(page.getByRole('heading', { name: 'Cuentas por cobrar' })).toBeVisible()
+})
+
+test('el panel de stock filtra existencias y respeta permisos de costo', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' })
+    .getByRole('button', { name: 'Panel de stock', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Panel de control de stock' })).toBeVisible()
+  await page.getByPlaceholder('Ej. ACEITE, A-01…').pressSequentially('A-')
+  await expect(page.getByPlaceholder('Ej. ACEITE, A-01…')).toHaveValue('A-')
+  await expect(page.getByText('Existencias por producto')).toBeVisible()
+})
+
+test('las plantillas rápidas aplican ajustes visuales auditados', async () => {
+  await page.getByRole('button', { name: 'Centro de control', exact: true }).click()
+  await page.getByRole('button', { name: 'Interfaz', exact: true }).click()
+  await expect(page.getByText('Plantillas rápidas')).toBeVisible()
+  await page.getByRole('button', { name: /Compacto/ }).click()
+  await expect(page.getByText('Plantilla «Compacto» aplicada y auditada.')).toBeVisible()
+})
+
+test('la paleta global Ctrl+K abre módulos permitidos', async () => {
+  await page.keyboard.press('Control+k')
+  const paleta = page.getByRole('textbox', { name: 'Buscar en todo el ERP' })
+  await expect(paleta).toBeVisible()
+  await paleta.fill('cobros')
+  await expect(page.getByRole('button', { name: /Cobros/ }).first()).toBeVisible()
+  await paleta.press('Escape')
+  await expect(paleta).toHaveCount(0)
+})
+
+test('el centro de tareas muestra el estado real sin tareas inventadas', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Inicio', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Inicio' })).toBeVisible()
+  await expect(page.getByText('Centro de tareas')).toBeVisible()
+})
+
+test('los favoritos organizan el menú sin perder navegación', async () => {
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await menu.getByRole('button', { name: 'Agregar favorito: Auditoría' }).click()
+  await expect(menu.getByRole('region', { name: 'Favoritos' })).toBeVisible()
+  await menu.getByRole('button', { name: 'Quitar favorito: Auditoría' }).first().click()
+  await expect(menu.getByRole('region', { name: 'Favoritos' })).toHaveCount(0)
+})
+
+test('los filtros avanzados y las vistas guardadas admiten escritura continua', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' })
+    .getByRole('button', { name: 'Auditoría', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Auditoría y control' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Filtros avanzados' }).click()
+  await page.getByRole('button', { name: 'Agregar condición' }).click()
+  const valor = page.getByLabel('Valor de la condición 1')
+  await valor.pressSequentially('ERP')
+  await expect(valor).toHaveValue('ERP')
+  await expect(page.getByText('«ERP»')).toBeVisible()
+
+  const nombre = page.getByLabel('Nombre de la vista')
+  await nombre.pressSequentially('Prueba E2E')
+  await expect(nombre).toHaveValue('Prueba E2E')
+  await page.getByRole('button', { name: 'Guardar vista' }).click()
+  await expect(page.getByRole('button', { name: 'Aplicar vista Prueba E2E' })).toBeVisible()
+})
+
+test('el panel operativo 2026 consulta datos reales y respeta ajustes', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' })
+    .getByRole('button', { name: 'Panel operativo 2026', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Panel operativo 2026' })).toBeVisible()
+  await expect(page.getByText('Proyección de efectivo')).toBeVisible()
+  await expect(page.getByText('Umbrales aplicados', { exact: false })).toBeVisible()
+})
+
+test('el mapa de capacidades 2026 muestra el alcance real', async () => {
+  await page.getByRole('navigation', { name: 'Módulos' })
+    .getByRole('button', { name: 'Mapa de capacidades 2026', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Mapa de capacidades 2026' })).toBeVisible()
+  await expect(page.getByText('Módulos activos', { exact: true })).toBeVisible()
+  await page.getByPlaceholder('Ej. cobros, stock, CRM…').fill('Panel operativo 2026')
+  await expect(page.getByRole('cell', { name: 'Panel operativo 2026' })).toBeVisible()
+})
+
+test('el árbol de React sigue presente tras autenticar y navegar', async () => {
+  const hijos = await page.evaluate(() => document.getElementById('root')?.childElementCount ?? 0)
+  expect(hijos).toBeGreaterThan(0)
+  await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
+})
+
+test('un perfil con ajustes parciales no deja la interfaz en negro', async () => {
+  // Se siembra una fila heredada con un solo campo del grupo `interfaz`, como
+  // aparece en perfiles migrados. El backend debe completarla y el renderer
+  // debe seguir dibujando el shell aunque la capa llegue incompleta.
+  const Database = require('better-sqlite3') as typeof import('better-sqlite3')
+  const db = new Database(join(perfil, 'data', 'enterprise.db'))
+  db.prepare(`
+    INSERT INTO ajustes (empresa_id, grupo, datos_json, usuario_id)
+    VALUES (1, 'interfaz', ?, 1)
+    ON CONFLICT(empresa_id, grupo) DO UPDATE SET datos_json = excluded.datos_json
+  `).run(JSON.stringify({ tituloApp: 'PRUEBA SUCIA' }))
+  db.close()
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
+  await page.getByLabel('Usuario').fill('admin')
+  await page.getByLabel('Contraseña', { exact: true }).fill('4821')
+  await page.getByRole('button', { name: 'Entrar al sistema' }).click()
+
+  await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
+  await expect(page.getByText('PRUEBA SUCIA')).toBeVisible()
+  const hijos = await page.evaluate(() => document.getElementById('root')?.childElementCount ?? 0)
+  expect(hijos).toBeGreaterThan(0)
 })
 
 test('sin errores de consola inesperados', async () => {

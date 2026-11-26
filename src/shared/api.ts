@@ -1,5 +1,6 @@
 import type { Settings } from './settings'
 import type { AppInfo } from './app-info'
+import type { EstadoActualizacion, ProgresoDescarga } from './actualizaciones'
 
 /** Contrato del API expuesto por preload. Implementado en main, consumido por renderer. */
 export interface SerializedError {
@@ -22,4 +23,7 @@ export interface ErpApi {
     clearToken: () => void
   }
   invoke: <T>(channel: string, input?: unknown) => Promise<T>
+  /** Eventos push del proceso principal. Devuelven una función para cancelar la suscripción. */
+  onEstadoActualizacion: (callback: (estado: EstadoActualizacion) => void) => () => void
+  onProgresoDescarga: (callback: (progreso: ProgresoDescarga) => void) => () => void
 }

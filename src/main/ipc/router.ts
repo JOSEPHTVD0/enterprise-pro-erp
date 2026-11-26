@@ -3,21 +3,26 @@ import type { ZodType } from 'zod'
 import { z } from 'zod'
 import { join } from 'node:path'
 import { closeDatabase, type Db } from '../db/connection'
-import { buildContext, type SessionContext } from '../services/context'
+import { buildContext, contextoPublico, type SessionContext } from '../services/context'
 import { createAuthService } from '../services/auth.service'
 import { createSeguridadService } from '../services/seguridad.service'
 import { createConfiguracionService } from '../services/configuracion.service'
 import { createDashboardService } from '../services/dashboard.service'
 import { createMaestrosService } from '../services/maestros.service'
+import { createBusquedaService } from '../services/busqueda.service'
 import { createInventarioService } from '../services/inventario.service'
 import { createVentasService } from '../services/ventas.service'
 import { createPosService } from '../services/pos.service'
 import { createComprasService } from '../services/compras.service'
 import { createFinanzasService } from '../services/finanzas.service'
+import { createCobrosService } from '../services/cobros.service'
 import { createReportesService } from '../services/reportes.service'
 import { createBackupsService } from '../services/backups.service'
 import { generarPdf } from '../services/pdf.service'
 import { createDashboardEjecutivoService } from '../services/dashboard-ejecutivo.service'
+import { createPanel2026Service } from '../services/panel2026.service'
+import { createPanelPreferenciasService } from '../services/panel-preferencias.service'
+import { loadSettings } from '../settings'
 import { createSaludService } from '../services/salud.service'
 import { createModulos2026Service } from '../services/modulos2026.service'
 import { createContabilidadService } from '../services/contabilidad.service'
@@ -27,7 +32,7 @@ import { serializeError, errors, encodeIpcError } from '@shared/errors'
 import { assertCanProceed } from './policy'
 import {
   loginSchema, changePasswordSchema, createUserSchema, updateUserSchema,
-  createRoleSchema, rolePermissionsReplaceSchema,
+  createRoleSchema, rolePermissionsReplaceSchema, deleteRoleSchema,
   customPermissionCreateSchema, customPermissionDeleteSchema
 } from '@shared/schemas/auth'
 import {
@@ -50,7 +55,8 @@ import {
 import {
   documentoCompraSchema, recepcionSchema, convertirCompraSchema,
   anularCompraSchema, documentosFiltroCompraSchema, exportarComprasSchema,
-  imprimirCompraSchema, tiposDocumentoCompra
+  imprimirCompraSchema, tiposDocumentoCompra,
+  ingresoMercanciaSchema, editarIngresoSchema, historialIngresoSchema
 } from '@shared/schemas/compras'
 import {
   finanzasFiltroSchema, movimientosBancoFiltroSchema, sesionesCajaFiltroSchema,
@@ -71,7 +77,13 @@ import { pdfGenerarSchema } from '@shared/schemas/pdf'
 import {
   ajustesGetSchema, ajustesResetSchema, ajustesSaveSchema
 } from '@shared/schemas/ajustes'
-import { dashboardEjecutivoSchema, inteligenciaFiltroSchema } from '@shared/schemas/paneles'
+import {
+  ajustesPersonalizadosGetSchema, ajustesPersonalizadoSaveSchema, ajustesPersonalizadoDeleteSchema
+} from '@shared/schemas/personalizacion'
+import {
+  dashboardEjecutivoSchema, inteligenciaFiltroSchema, panel2026FiltroSchema
+} from '@shared/schemas/paneles'
+import { busquedaGlobalSchema, type BusquedaGlobalInput } from '@shared/schemas/busqueda'
 import {
   idModuloSchema, filtroModulosSchema, cambiarEstadoSchema, presupuestoCrearSchema,
   presupuestoEjecutarSchema, servicioCatalogoSchema, ordenServicioCrearSchema,
@@ -129,28 +141,37 @@ function route(
 }
 
 /** Registra todos los canales. El renderer jamás envía SQL, rutas ni lógica de negocio. */
-export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => boolean): void {
+export function registerIpc(
+  db: Db,
+  isTrusted: (event: IpcMainInvokeEvent) => boolean,
+  opciones: { instanciasActivas?: () => number } = {}
+): void {
   const auth = createAuthService(db)
   const seguridad = createSeguridadService(db)
   const config = createConfiguracionService(db)
   const dashboard = createDashboardService(db)
   const maestros = createMaestrosService(db)
+  const busqueda = createBusquedaService(db)
   const inventario = createInventarioService(db)
   const ventas = createVentasService(db, inventario)
   const pos = createPosService(db, ventas)
   const compras = createComprasService(db, inventario)
   const finanzas = createFinanzasService(db)
+  const cobros = createCobrosService(db)
   const reportes = createReportesService(db)
-  const ejecutivo = createDashboardEjecutivoService(db)
+  const ajustes = createAjustesService(db)
+  const panel2026 = createPanel2026Service(db, ajustes, loadSettings)
+  const preferenciasPanel = createPanelPreferenciasService(db, ajustes, loadSettings)
+  const ejecutivo = createDashboardEjecutivoService(db, ajustes, loadSettings)
   const salud = createSaludService(db)
   const modulos2026 = createModulos2026Service(db)
   const contabilidad = createContabilidadService(db)
-  const ajustes = createAjustesService(db)
   const inteligencia = createInteligenciaService(db, ajustes)
   const backups = createBackupsService({
     db,
     userDataPath: app.getPath('userData'),
     dbPath: join(app.getPath('userData'), 'data', 'enterprise.db'),
+    instanciasActivas: opciones.instanciasActivas,
     reiniciar: () => { closeDatabase(); app.relaunch(); app.exit(0) }
   })
 
@@ -160,11 +181,30 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
   const routes: Record<string, Route> = {
     'dashboard.resumen': route((ctx) => dashboard.resumen(ctx), { permission: 'dashboard.consultar' }),
     'auth.login': route(
-      (_ctx, input) => auth.login(input as z.infer<typeof loginSchema>, 'ESTACION_LOCAL'),
+      (_ctx, input) => {
+        const res = auth.login(input as z.infer<typeof loginSchema>, 'ESTACION_LOCAL')
+        // El token viaja una sola vez al preload; el contexto expuesto al renderer no lo incluye.
+        return { ...res, context: res.context ? contextoPublico(res.context) : undefined }
+      },
       { schema: loginSchema, auth: false }
     ),
-    'auth.me': route((ctx) => ctx),
+    'auth.me': route((ctx) => ({
+      ...contextoPublico(ctx),
+      empresas: auth.userCompanies(ctx.userId)
+    })),
     'auth.logout': route((ctx) => auth.logout(ctx)),
+    'auth.switchCompany': route(
+      (ctx, input) => {
+        const res = auth.switchCompany(ctx, input as number, 'ESTACION_LOCAL')
+        return {
+          token: res.token,
+          context: res.context ? contextoPublico(res.context) : undefined,
+          debeCambiarClave: res.debeCambiarClave,
+          empresas: res.empresas
+        }
+      },
+      { schema: zId }
+    ),
     'auth.changePassword': route(
       (ctx, input) => auth.changePassword(ctx, (input as { currentPassword: string }).currentPassword, (input as { newPassword: string }).newPassword),
       { schema: changePasswordSchema }
@@ -188,6 +228,10 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     'seguridad.roles.update': route(
       (ctx, input) => seguridad.updateRole(ctx, input as never),
       { schema: createRoleSchema.extend({ id: zId }) }
+    ),
+    'seguridad.roles.delete': route(
+      (ctx, input) => seguridad.deleteRole(ctx, (input as { id: number }).id),
+      { schema: deleteRoleSchema }
     ),
     'seguridad.permissions.list': route((ctx) => seguridad.listPermissions(ctx), { permission: 'seguridad.consultar' }),
     'seguridad.permissions.catalog': route((ctx) => seguridad.permissionCatalog(ctx), { permission: 'seguridad.consultar' }),
@@ -214,17 +258,27 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     'seguridad.departments.list': route((ctx) => seguridad.listDepartments(ctx), { permission: 'seguridad.consultar' }),
     'seguridad.departments.create': route((ctx, input) => seguridad.createDepartment(ctx, input as string), { schema: string.min(2).max(60) }),
     'seguridad.sessions.list': route((ctx) => seguridad.listSessions(ctx)),
+    'seguridad.sessions.close': route(
+      (ctx, input) => seguridad.closeSession(ctx, input as number),
+      { schema: zId }
+    ),
     'seguridad.audit.list': route(
       (ctx, input) => seguridad.listAudit(ctx, input as never),
       { schema: z.object({
         fechaDesde: string.optional(), fechaHasta: string.optional(),
-        usuarioId: zId.optional(), entidad: string.optional(), operacion: string.optional()
+        usuarioId: zId.optional(), entidad: string.optional(), entidadId: string.optional(),
+        operacion: string.optional(), texto: string.optional()
       }).default({}) }
     ),
 
     'maestros.list': route(
       (ctx, input) => maestros.list(ctx, input as { entidad: MaestroEntidad; incluirInactivos?: boolean }),
       { schema: entidadPayload.extend({ incluirInactivos: z.boolean().optional() }) }
+    ),
+    // Sin permiso global: el servicio decide entidad por entidad y nunca mezcla empresas.
+    'busqueda.global': route(
+      (ctx, input) => busqueda.global(ctx, input as BusquedaGlobalInput),
+      { schema: busquedaGlobalSchema }
     ),
     'maestros.get': route(
       (ctx, input) => {
@@ -373,22 +427,27 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
       (ctx, input) => ajustes.save(ctx, input),
       { schema: ajustesSaveSchema }
     ),
+    // Sin permiso adicional: entrega solo los grupos visuales efectivos del usuario.
+    'config.ajustes.efectivos': route((ctx) => ajustes.efectivos(ctx)),
     'config.ajustes.reset': route(
       (ctx, input) => ajustes.reset(ctx, input),
       { schema: ajustesResetSchema }
     ),
+    // Capas por rol/permiso. Solo lectura para el usuario; escritura auditada para administradores.
+    'config.ajustes.personalizados.list': route(
+      (ctx, input) => ajustes.listPersonalizados(ctx, input),
+      { schema: ajustesPersonalizadosGetSchema }
+    ),
+    'config.ajustes.personalizados.save': route(
+      (ctx, input) => ajustes.savePersonalizado(ctx, input as never),
+      { schema: ajustesPersonalizadoSaveSchema }
+    ),
+    'config.ajustes.personalizados.delete': route(
+      (ctx, input) => ajustes.deletePersonalizado(ctx, input as never),
+      { schema: ajustesPersonalizadoDeleteSchema }
+    ),
     'config.backup.config': route(
-      (ctx, input) => {
-        const cfg = backupConfigSchema.parse(input)
-        const tx = db.transaction(() => {
-          for (const [k, v] of Object.entries({ backup_carpeta: cfg.carpeta, backup_frecuencia: cfg.frecuencia, backup_hora: cfg.hora, backup_retencion_dias: cfg.retencionDias })) {
-            db.prepare('INSERT INTO parametros (empresa_id, clave, valor) VALUES (?, ?, ?) ON CONFLICT(empresa_id, clave) DO UPDATE SET valor = excluded.valor')
-              .run(ctx.empresaId, k, String(v))
-          }
-        })
-        tx()
-        return { ok: true }
-      },
+      (ctx, input) => backups.configurar(ctx, input),
       { schema: backupConfigSchema, permission: 'configuracion.respaldo.crear' }
     ),
 
@@ -509,6 +568,18 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
       (ctx, input) => compras.factura(ctx, input as never),
       { schema: documentoCompraSchema }
     ),
+    'compras.ingreso.crear': route(
+      (ctx, input) => compras.ingreso(ctx, input as never),
+      { schema: ingresoMercanciaSchema }
+    ),
+    'compras.ingreso.editar': route(
+      (ctx, input) => compras.editarIngreso(ctx, input as never),
+      { schema: editarIngresoSchema }
+    ),
+    'compras.ingreso.historial': route(
+      (ctx, input) => compras.historial(ctx, (input as never) ?? undefined),
+      { schema: historialIngresoSchema, permission: 'compras.historial' }
+    ),
     'compras.devolucion.crear': route(
       (ctx, input) => compras.devolucion(ctx, input as never),
       { schema: documentoCompraSchema }
@@ -537,6 +608,17 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
       (ctx, input) => compras.exportar(ctx, ((input as { filtro?: never }).filtro ?? {}) as never),
       { schema: exportarComprasSchema }
     ),
+
+    // Cobros: área independiente de Ventas. La fachada verifica permisos propios.
+    'cobros.documentos': route((ctx, input) => cobros.documentos(ctx, input as never), { schema: finanzasFiltroSchema }),
+    'cobros.recibos': route((ctx, input) => cobros.recibos(ctx, input as never), { schema: finanzasFiltroSchema }),
+    'cobros.anticipos': route((ctx, input) => cobros.anticipos(ctx, input as never), { schema: finanzasFiltroSchema }),
+    'cobros.detalle': route((ctx, input) => cobros.detalle(ctx, input as never), { schema: referenciaFinanzasSchema }),
+    'cobros.recibo.crear': route((ctx, input) => cobros.cobrar(ctx, input as never), { schema: cxcReciboCrearSchema }),
+    'cobros.anticipo.crear': route((ctx, input) => cobros.anticipar(ctx, input as never), { schema: anticipoCrearSchema }),
+    'cobros.recibo.anular': route((ctx, input) => cobros.anular(ctx, input as never), { schema: anularFinanzasSchema }),
+    'cobros.imprimir': route((ctx, input) => cobros.imprimir(ctx, input as never), { schema: imprimirFinanzasSchema }),
+    'cobros.exportar': route((ctx, input) => cobros.exportar(ctx, input as never), { schema: exportarFinanzasSchema }),
 
     // Fase 8 — Finanzas. El permiso fino se verifica también dentro del servicio.
     'finanzas.catalogos': route((ctx) => finanzas.catalogos(ctx)),
@@ -655,6 +737,10 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
       (ctx, input) => finanzas.cajasSesiones(ctx, input as never),
       { schema: sesionesCajaFiltroSchema, permission: 'cajas.consultar' }
     ),
+    'cajas.cierreAutomatico': route(
+      (ctx) => finanzas.cajaCierreAutomatico(ctx),
+      { permission: 'cajas.consultar' }
+    ),
     'cajas.detalle': route(
       (ctx, input) => finanzas.cajasDetalle(ctx, input as number),
       { schema: zId, permission: 'cajas.consultar' }
@@ -752,7 +838,7 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
 
     // PDF real (pdfmake): reutiliza los servicios de impresión y sus permisos.
     'pdf.generar': route(
-      (ctx, input) => generarPdf(ctx, input as never, { ventas, compras, finanzas, reportes }),
+      (ctx, input) => generarPdf(ctx, input as never, { ventas, compras, finanzas, cobros, reportes }),
       { schema: pdfGenerarSchema }
     ),
 
@@ -782,6 +868,15 @@ export function registerIpc(db: Db, isTrusted: (event: IpcMainInvokeEvent) => bo
     'salud.resumen': route(
       (ctx) => salud.resumen(ctx),
       { permission: 'salud.consultar' }
+    ),
+    // Panel 2026: el renderer solo envía un filtro validado; los ajustes se leen en backend.
+    'panel2026.resumen': route(
+      (ctx, input) => panel2026.resumen(ctx, input as never),
+      { schema: panel2026FiltroSchema, permission: 'inteligencia.consultar' }
+    ),
+    'panel.preferencias.get': route(
+      (ctx) => preferenciasPanel.get(ctx),
+      { permission: 'dashboard.consultar' }
     ),
     // v0.5.0 — Inteligencia operativa: solo lectura, cálculos locales reales.
     'inteligencia.resumen': route(

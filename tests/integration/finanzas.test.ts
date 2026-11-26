@@ -3,6 +3,8 @@ import { testDb } from '../helpers/db'
 import { FIRST_RUN_USER, FIRST_RUN_PASSWORD } from '../../src/main/db/seed'
 import { createAuthService } from '../../src/main/services/auth.service'
 import { createFinanzasService } from '../../src/main/services/finanzas.service'
+import { createAjustesService } from '../../src/main/services/ajustes.service'
+import { defaultAjustes } from '@shared/schemas/ajustes'
 import * as aux from '../../src/main/repositories/auxiliares.repo'
 import * as cxp from '../../src/main/repositories/cxp.repo'
 import type { SessionContext } from '@shared/session'
@@ -13,7 +15,8 @@ function setup() {
   const db = testDb()
   const auth = createAuthService(db)
   const ctx = auth.login({ username: FIRST_RUN_USER, password: FIRST_RUN_PASSWORD }, 'TEST-PC').context as SessionContext
-  const finanzas = createFinanzasService(db)
+  const ajustes = createAjustesService(db)
+  const finanzas = createFinanzasService(db, ajustes)
 
   const clienteId = Number(db.prepare(`
     INSERT INTO clientes (empresa_id, codigo, nombre, tipo, rnc_cedula)
@@ -79,7 +82,7 @@ function setup() {
   const saldoBanco = (id: number) => Number((db.prepare('SELECT saldo_cent FROM bancos_cuentas WHERE id = ?').get(id) as Fila).saldo_cent)
 
   return {
-    db, ctx, finanzas, clienteId, proveedorId, vendedorId, categoriaId,
+    db, ctx, ajustes, finanzas, clienteId, proveedorId, vendedorId, categoriaId,
     crearCxc, crearCxp, saldoCxc, estadoCxc, saldoCxp, balanceCliente, balanceProveedor, saldoBanco
   }
 }
@@ -87,6 +90,14 @@ function setup() {
 const sinPermiso = (ctx: SessionContext, clave: string): SessionContext => ({
   ...ctx, permisos: ctx.permisos.filter((p) => p !== clave)
 })
+
+function guardarFlujos(
+  ajustes: ReturnType<typeof createAjustesService>,
+  ctx: SessionContext,
+  cambios: Partial<typeof defaultAjustes.flujos>
+): void {
+  ajustes.save(ctx, { grupo: 'flujos', datos: { ...defaultAjustes.flujos, ...cambios } })
+}
 
 describe('Fase 8 — finanzas: CxC, CxP, bancos, caja, gastos y comisiones', () => {
   it('la migración 006 crea tablas, columnas de arqueo y series internas', () => {
@@ -303,3 +314,26 @@ function dbInsertVenta(db: ReturnType<typeof testDb>, clienteId: number): number
     VALUES (1, 'FACTURA_CONTADO', 'FAC-FIN-COM', ?, 'Cliente Finanzas', 'ACTIVO', 10000)
   `).run(clienteId).lastInsertRowid)
 }
+
+describe('Ajustes administrativos — cierre automático de caja', () => {
+  it('cajaCierreAutomatico es de solo lectura, exige cajas.consultar y no cierra caja', () => {
+    const s = setup()
+    expect(s.finanzas.cajaCierreAutomatico(s.ctx)).toBe(false)
+    expect(() => s.finanzas.cajaCierreAutomatico(sinPermiso(s.ctx, 'cajas.consultar'))).toThrow(/permiso/i)
+
+    guardarFlujos(s.ajustes, s.ctx, { cierreCajaAutomatico: true })
+    expect(s.finanzas.cajaCierreAutomatico(s.ctx)).toBe(true)
+
+    const auditAntes = Number((s.db.prepare('SELECT COUNT(*) AS n FROM auditoria').get() as Fila).n)
+    s.finanzas.cajaCierreAutomatico(s.ctx)
+    expect(Number((s.db.prepare('SELECT COUNT(*) AS n FROM auditoria').get() as Fila).n)).toBe(auditAntes)
+
+    const sesionId = Number((s.finanzas.cajasAbrir(s.ctx, { montoCent: 1000 }) as { id: number }).id)
+    expect(() => s.finanzas.cajasCerrar(sinPermiso(s.ctx, 'cajas.cerrar_caja'), {
+      sesionId, arqueoEfectivoCent: 1000
+    })).toThrow(/permiso/i)
+    expect((s.db.prepare('SELECT estado FROM caja_sesiones WHERE id = ?').get(sesionId) as Fila).estado).toBe('ABIERTA')
+    expect(s.finanzas.cajaCierreAutomatico(s.ctx)).toBe(true)
+    s.db.close()
+  })
+})

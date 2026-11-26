@@ -22,17 +22,27 @@ export function findUserById(db: Db, id: number): UserRow | undefined {
   return db.prepare('SELECT * FROM usuarios WHERE id = ?').get(id) as UserRow | undefined
 }
 
-export function listUsers(db: Db): Record<string, unknown>[] {
+export function userBelongsToCompany(db: Db, userId: number, empresaId: number): boolean {
+  return Boolean(db.prepare(`
+    SELECT 1 FROM usuario_roles WHERE usuario_id = ? AND empresa_id = ? LIMIT 1
+  `).get(userId, empresaId))
+}
+
+export function listUsers(db: Db, empresaId: number): Record<string, unknown>[] {
   return db.prepare(`
     SELECT u.id, u.username, u.nombre, u.email, u.activo, u.bloqueado, u.debe_cambiar_clave,
            u.creado_en, d.nombre AS departamento,
            GROUP_CONCAT(r.nombre, ', ') AS roles
     FROM usuarios u
-    LEFT JOIN departamentos d ON d.id = u.departamento_id
-    LEFT JOIN usuario_roles ur ON ur.usuario_id = u.id
-    LEFT JOIN roles r ON r.id = ur.rol_id
+    LEFT JOIN departamentos d ON d.id = u.departamento_id AND d.empresa_id = ?
+    LEFT JOIN usuario_roles ur ON ur.usuario_id = u.id AND ur.empresa_id = ?
+    LEFT JOIN roles r ON r.id = ur.rol_id AND r.empresa_id = ?
+    WHERE EXISTS (
+      SELECT 1 FROM usuario_roles pertenencia
+      WHERE pertenencia.usuario_id = u.id AND pertenencia.empresa_id = ?
+    )
     GROUP BY u.id ORDER BY u.id
-  `).all() as Record<string, unknown>[]
+  `).all(empresaId, empresaId, empresaId, empresaId) as Record<string, unknown>[]
 }
 
 export function insertUser(
@@ -82,10 +92,18 @@ export function clearFailedAttempts(db: Db, id: number): void {
   db.prepare('UPDATE usuarios SET intentos_fallidos = 0 WHERE id = ?').run(id)
 }
 
-export function replaceUserRoles(db: Db, userId: number, roles: { rolId: number; empresaId: number }[]): void {
-  db.prepare('DELETE FROM usuario_roles WHERE usuario_id = ?').run(userId)
+export function findDepartment(db: Db, empresaId: number, id: number): { id: number } | undefined {
+  return db.prepare('SELECT id FROM departamentos WHERE id = ? AND empresa_id = ?')
+    .get(id, empresaId) as { id: number } | undefined
+}
+
+/** Solo reemplaza los roles de la empresa activa; respeta pertenencias de otras empresas. */
+export function replaceUserRoles(
+  db: Db, userId: number, roles: { rolId: number; empresaId: number }[], empresaId: number
+): void {
+  db.prepare('DELETE FROM usuario_roles WHERE usuario_id = ? AND empresa_id = ?').run(userId, empresaId)
   const ins = db.prepare('INSERT OR IGNORE INTO usuario_roles (usuario_id, rol_id, empresa_id) VALUES (?, ?, ?)')
-  for (const r of roles) ins.run(userId, r.rolId, r.empresaId)
+  for (const r of roles) ins.run(userId, r.rolId, empresaId)
 }
 
 export function companyName(db: Db, empresaId: number): string {
@@ -93,9 +111,14 @@ export function companyName(db: Db, empresaId: number): string {
   return row?.nombre ?? 'Empresa sin configurar'
 }
 
-export function rolesForUser(db: Db, userId: number): { rolId: number; empresaId: number }[] {
-  return db.prepare('SELECT rol_id AS rolId, empresa_id AS empresaId FROM usuario_roles WHERE usuario_id = ?')
-    .all(userId) as { rolId: number; empresaId: number }[]
+export function rolesForUser(
+  db: Db, userId: number, empresaId?: number
+): { rolId: number; empresaId: number }[] {
+  return empresaId === undefined
+    ? db.prepare('SELECT rol_id AS rolId, empresa_id AS empresaId FROM usuario_roles WHERE usuario_id = ?')
+      .all(userId) as { rolId: number; empresaId: number }[]
+    : db.prepare('SELECT rol_id AS rolId, empresa_id AS empresaId FROM usuario_roles WHERE usuario_id = ? AND empresa_id = ?')
+      .all(userId, empresaId) as { rolId: number; empresaId: number }[]
 }
 
 export function userCompanies(db: Db, userId: number): { id: number; nombre: string }[] {

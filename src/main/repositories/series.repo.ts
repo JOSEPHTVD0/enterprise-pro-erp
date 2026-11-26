@@ -48,9 +48,15 @@ export interface AlertaSerie {
 const texto = (v: unknown): string => String(v ?? '').trim()
 const entero = (v: unknown): number => Number(v ?? 0)
 
+/**
+ * Si existen varias series activas para el mismo tipo, se usa siempre la de menor id.
+ * El preview de la pantalla de series muestra cuál se aplicará; así la numeración
+ * nunca depende del orden físico de SQLite.
+ */
 export function obtenerSerie(db: Db, empresaId: number, tipoDoc: string): FilaSerie | undefined {
   return db.prepare(`
     SELECT * FROM series_documento WHERE empresa_id = ? AND tipo_doc = ?
+    ORDER BY activa DESC, id ASC LIMIT 1
   `).get(empresaId, tipoDoc) as FilaSerie | undefined
 }
 

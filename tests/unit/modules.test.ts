@@ -22,14 +22,15 @@ describe('catálogo de módulos', () => {
     }
   })
 
-  it('los módulos activos en 0.5.0 son los previstos', () => {
+  it('los módulos activos son los previstos', () => {
     const active = allModules.filter((m) => m.available).map((m) => m.id)
     expect(active.sort()).toEqual([
-      'activos', 'apariencia', 'auditoria', 'bancos', 'cajas', 'catalogos', 'centro-control',
-      'clientes', 'compras', 'configuracion', 'configuracion-avanzada', 'contabilidad',
-      'cotizaciones', 'crm', 'cxc', 'cxp', 'dashboard', 'dashboard-ejecutivo', 'facturacion',
-      'gastos', 'inteligencia', 'inventario', 'pos', 'presupuestos', 'productos', 'proveedores',
-      'reportes', 'respaldos', 'roles', 'salud', 'servicios', 'usuarios', 'vendedores'
+      'activos', 'agenda', 'apariencia', 'auditoria', 'bancos', 'cajas', 'capacidades-2026',
+      'catalogos', 'centro-control', 'clientes', 'cobros', 'compras', 'configuracion',
+      'configuracion-avanzada', 'contabilidad', 'control-stock', 'cotizaciones', 'crm', 'cxc', 'cxp',
+      'dashboard', 'dashboard-ejecutivo', 'facturacion', 'gastos', 'inteligencia', 'inventario',
+      'panel-2026', 'pos', 'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos',
+      'roles', 'salud', 'servicios', 'usuarios', 'vendedores'
     ])
   })
 
@@ -39,6 +40,12 @@ describe('catálogo de módulos', () => {
       const permiso = modulePermission(m.id)
       if (permiso) expect(permissionKeys).toContain(permiso)
     }
+  })
+
+  it('las vistas de acceso general no exigen un permiso de módulo inexistente', () => {
+    expect(modulePermission('apariencia')).toBeUndefined()
+    expect(modulePermission('agenda')).toBeUndefined()
+    expect(modulePermission('control-stock')).toBe('inventario.consultar')
   })
 
   it('findModule encuentra todos los módulos del catálogo', () => {

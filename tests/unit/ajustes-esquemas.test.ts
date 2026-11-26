@@ -4,11 +4,30 @@ import {
 } from '@shared/schemas/ajustes'
 
 describe('esquemas del centro de control', () => {
-  it('produce defaults válidos para los diez grupos', () => {
-    expect(Object.keys(defaultAjustes)).toHaveLength(10)
+  it('produce defaults válidos para los grupos configurables', () => {
+    expect(Object.keys(defaultAjustes)).toHaveLength(12)
     expect(defaultAjustes.alertas.stockBajoUmbral).toBe(5)
     expect(defaultAjustes.widgets.widgets).toHaveLength(13)
     expect(defaultAjustes.featureFlags.modulos.length).toBeGreaterThan(20)
+    expect(defaultAjustes.interfaz.tituloApp).toBe('ENTERPRISE PRO')
+    expect(defaultAjustes.interfaz.ordenGrupos).toContain('cobros')
+    expect(defaultAjustes.panel2026).toMatchObject({
+      vista: 'OPERATIVA', metricaPrincipal: 'VENTAS', diasProyeccion: 28,
+      filas: 10, compararPeriodo: true, mostrarAlertas: true
+    })
+  })
+
+  it('valida el grupo panel2026 y rechaza rangos y vistas inválidos', () => {
+    expect(ajustesSaveSchema.parse({
+      grupo: 'panel2026',
+      datos: { ...defaultAjustes.panel2026, vista: 'RIESGO', metricaPrincipal: 'CXC', filas: 15 }
+    }).grupo).toBe('panel2026')
+    expect(() => ajustesSaveSchema.parse({
+      grupo: 'panel2026', datos: { ...defaultAjustes.panel2026, diasProyeccion: 3 }
+    })).toThrow()
+    expect(() => ajustesSaveSchema.parse({
+      grupo: 'panel2026', datos: { ...defaultAjustes.panel2026, vista: 'OTRA' }
+    })).toThrow()
   })
 
   it('rechaza umbrales y formatos fuera de rango', () => {

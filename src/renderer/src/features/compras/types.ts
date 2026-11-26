@@ -17,6 +17,8 @@ export interface ProductoOp {
   id: number
   codigo?: string
   descripcion: string
+  referencia?: string
+  precio1Cent?: number
   impuestoId?: number | null
   tipo?: string
   manejaSerie: number | boolean
@@ -41,10 +43,15 @@ export interface CatalogosCompras {
   almacenes: AlmacenOp[]
   impuestos: ImpuestoOp[]
   impuestoPorDefecto: string
+  monedaBase?: string
+  monedas?: { codigo: string; nombre: string; simbolo: string; decimales: number }[]
+  clasificacionesContables?: { codigo: string; nombre: string }[]
+  tasasCambio?: { monedaCodigo: string; tasa: number; fecha: string }[]
 }
 
 export const catalogosVacios: CatalogosCompras = {
-  proveedores: [], productos: [], almacenes: [], impuestos: [], impuestoPorDefecto: 'ITBIS18'
+  proveedores: [], productos: [], almacenes: [], impuestos: [], impuestoPorDefecto: 'ITBIS18',
+  monedaBase: 'DOP', monedas: [], clasificacionesContables: [], tasasCambio: []
 }
 
 export type MetodoPago = 'EFECTIVO' | 'TARJETA' | 'TRANSFERENCIA' | 'CHEQUE' | 'OTRO'
@@ -70,6 +77,11 @@ export interface LineaCompra {
   /** Costo en pesos para el campo de texto. */
   costo: string
   descuentoPct: string
+  descuento2Pct: string
+  descuento3Pct: string
+  /** Precio de venta sugerido, en pesos de la moneda del documento. */
+  pvs: string
+  referencia: string
   /** Gasto asociado en pesos; se capitaliza al costo y no se grava dos veces. */
   gasto: string
   impuestoId: string
@@ -92,6 +104,16 @@ export interface FormularioCompra {
   fecha: string
   vencimiento: string
   numeroProveedor: string
+  fechaLlegada: string
+  numeroOrdenCompra: string
+  clasificacionContable: string
+  monedaCodigo: string
+  tasa: string
+  montoFactura: string
+  montoFacturaMoneda: string
+  ajuste: string
+  flete: string
+  nota: string
   comentarios: string
   motivo: string
   docOrigenId: string
@@ -114,16 +136,22 @@ export function formularioVacio(
     proveedorId: catalogos.proveedores[0] ? String(catalogos.proveedores[0].id) : '',
     almacenId: catalogos.almacenes[0] ? String(catalogos.almacenes[0].id) : '',
     fecha: new Date().toISOString().slice(0, 10),
-    vencimiento: '', numeroProveedor: '', comentarios: '', motivo: '', docOrigenId: '',
+    fechaLlegada: new Date().toISOString().slice(0, 10),
+    vencimiento: '', numeroProveedor: '', numeroOrdenCompra: '',
+    clasificacionContable: '1200',
+    monedaCodigo: catalogos.monedaBase ?? 'DOP',
+    tasa: '1', montoFactura: '', montoFacturaMoneda: '', ajuste: '0.00', flete: '0.00',
+    nota: '', comentarios: '', motivo: '', docOrigenId: '',
     credito: false, lineas: [], pagos: []
   }
 }
 
-export interface DetalleCompra { cabecera: Fila; lineas: Fila[]; pagos: Fila[] }
+export interface DetalleCompra { cabecera: Fila; lineas: Fila[]; impuestos?: Fila[]; pagos: Fila[] }
 export interface DatosImpresionCompra {
   formato: string
   empresa: Fila
   documento: Fila
   lineas: Fila[]
+  impuestos?: Fila[]
   pagos: Fila[]
 }

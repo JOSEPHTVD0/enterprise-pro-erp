@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Pencil, Plus, Search, ShieldCheck } from 'lucide-react'
+import { Pencil, Plus, Search, ShieldCheck, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { Modal } from '@/components/ui/Modal'
 import { DataTable, type Column } from '@/components/ui/DataTable'
-import { Field, TextInput } from '@/components/ui/Field'
+import { Field, TextInput, inputClass } from '@/components/ui/Field'
 import { toast } from '@/components/ui/Toast'
 import { can, errorInfo, useSessionStore } from '@/app/session'
-import { moduleLabels, type PermissionDef } from '@shared/permissions'
+import { moduleLabels, roleTemplates, type PermissionDef } from '@shared/permissions'
+import { coincideTexto } from '@shared/texto'
 
 interface RoleRow { id: number; nombre: string; descripcion: string; total_permisos: number }
 type PermDef = PermissionDef
@@ -21,6 +22,7 @@ export function RolesPage(): React.JSX.Element {
   const [catalog, setCatalog] = useState<PermDef[]>([])
   const [editing, setEditing] = useState<RoleDetail | null>(null)
   const [filtroPermisos, setFiltroPermisos] = useState('')
+  const [plantillaId, setPlantillaId] = useState('')
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -37,6 +39,7 @@ export function RolesPage(): React.JSX.Element {
 
   async function openEditor(id?: number): Promise<void> {
     if (!id) {
+      setPlantillaId('')
       setEditing({ id: 0, nombre: '', descripcion: '', permisos: [] })
       return
     }
@@ -62,11 +65,27 @@ export function RolesPage(): React.JSX.Element {
     } catch (e) { toast.error(errorInfo(e).message) } finally { setSaving(false) }
   }
 
+  async function eliminar(rol: RoleRow): Promise<void> {
+    if (!window.confirm(`¿Eliminar el rol personalizado «${rol.nombre}»?`)) return
+    try {
+      await window.api.invoke('seguridad.roles.delete', { id: rol.id })
+      toast.success('Rol eliminado.')
+      await load()
+      await refreshSession()
+    } catch (e) { toast.error(errorInfo(e).message) }
+  }
+
+  function aplicarPlantilla(id: string): void {
+    setPlantillaId(id)
+    const plantilla = roleTemplates.find((t) => t.id === id)
+    if (!plantilla) return
+    setEditing({ id: 0, nombre: plantilla.nombre, descripcion: plantilla.descripcion, permisos: [...plantilla.permisos] })
+  }
+
   const grouped = useMemo(() => {
-    const q = filtroPermisos.trim().toLowerCase()
     const map = new Map<string, PermDef[]>()
     for (const p of catalog) {
-      if (q && !`${p.label} ${p.descripcion} ${p.key}`.toLowerCase().includes(q)) continue
+      if (!coincideTexto(`${p.label} ${p.descripcion} ${p.key}`, filtroPermisos)) continue
       map.set(p.module, [...(map.get(p.module) ?? []), p])
     }
     return [...map.entries()]
@@ -100,9 +119,16 @@ export function RolesPage(): React.JSX.Element {
           rowKey={(r) => r.id}
           searchPlaceholder="Buscar rol…"
           actions={(r) => (
-            <button onClick={() => void openEditor(r.id)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="Editar permisos">
-              <Pencil size={15} />
-            </button>
+            <div className="flex justify-end gap-1">
+              <button onClick={() => void openEditor(r.id)} className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="Editar permisos" aria-label="Editar permisos">
+                <Pencil size={15} />
+              </button>
+              {!['Administrador', 'Gerente', 'Vendedor'].includes(r.nombre) && can('seguridad.rol.eliminar') && (
+                <button onClick={() => void eliminar(r)} className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30" title="Eliminar rol" aria-label="Eliminar rol">
+                  <Trash2 size={15} />
+                </button>
+              )}
+            </div>
           )}
         />
       </Card>
@@ -119,6 +145,21 @@ export function RolesPage(): React.JSX.Element {
       >
         {editing && (
           <div className="space-y-4">
+            {!editing.id && (
+              <Field label="Crear desde plantilla" hint="Carga una base segura; después puede ajustar cada permiso.">
+                <select
+                  className={inputClass}
+                  value={plantillaId}
+                  onChange={(e) => aplicarPlantilla(e.target.value)}
+                  aria-label="Plantilla de rol"
+                >
+                  <option value="">Personalizado desde cero</option>
+                  {roleTemplates.map((t) => (
+                    <option key={t.id} value={t.id}>{t.nombre} — {t.descripcion}</option>
+                  ))}
+                </select>
+              </Field>
+            )}
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Nombre del rol">
                 <TextInput value={editing.nombre} disabled={locked || !!editing.id} onChange={(e) => setEditing({ ...editing, nombre: e.target.value })} />
@@ -146,6 +187,7 @@ export function RolesPage(): React.JSX.Element {
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800">
                   <tr><th className="px-3 py-2 text-left">Módulo</th><th className="px-3 py-2 text-left">Permisos (para qué sirven)</th></tr>
+                  <tr><td colSpan={2} className="bg-amber-50 px-3 py-2 text-[11px] text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">Los permisos «informativo» son etiquetas personalizadas: se pueden asignar y auditar, pero no habilitan rutas del sistema.</td></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {grouped.map(([modulo, perms]) => (
@@ -169,6 +211,7 @@ export function RolesPage(): React.JSX.Element {
                               <span>
                                 <span className="font-medium">{p.label}</span>
                                 {p.critico && <span className="ml-1 rounded bg-red-100 px-1 text-[9px] text-red-700 dark:bg-red-950/50 dark:text-red-300">crítico</span>}
+                                  {(p.personalizado || p.key.startsWith('custom.')) && <span className="ml-1 rounded bg-slate-200 px-1 text-[9px] text-slate-600 dark:bg-slate-700 dark:text-slate-300">informativo</span>}
                                 <span className="block text-[10px] text-slate-400">{p.descripcion}</span>
                               </span>
                             </label>

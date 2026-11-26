@@ -17,7 +17,11 @@ export function useComprasCatalogos() {
         productos: res.productos ?? [],
         almacenes: res.almacenes ?? [],
         impuestos: res.impuestos ?? [],
-        impuestoPorDefecto: res.impuestoPorDefecto ?? 'ITBIS18'
+        impuestoPorDefecto: res.impuestoPorDefecto ?? 'ITBIS18',
+        monedaBase: res.monedaBase ?? 'DOP',
+        monedas: res.monedas ?? [],
+        clasificacionesContables: res.clasificacionesContables ?? [],
+        tasasCambio: res.tasasCambio ?? []
       })
     } catch (error) {
       toast.error(errorInfo(error).message)

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   anularCompraSchema, convertirCompraSchema, documentoCompraSchema,
-  documentosFiltroCompraSchema, recepcionSchema
+  documentosFiltroCompraSchema, recepcionSchema,
+  ingresoMercanciaSchema, editarIngresoSchema, historialIngresoSchema, imprimirCompraSchema
 } from '@shared/schemas/compras'
 
 const linea = { productoId: 1, cantidad: 2, precioCent: 10000 }
@@ -59,7 +60,44 @@ describe('esquemas de compras y CxP', () => {
   })
 
   it('aplica el límite por defecto del filtro', () => {
-    expect(documentosFiltroCompraSchema.parse(undefined)).toEqual({ limite: 300 })
+    expect(documentosFiltroCompraSchema.parse(undefined)).toEqual({
+      limite: 300, offset: 0, incluirAnulados: true, numero: '', numeroProveedor: ''
+    })
     expect(documentosFiltroCompraSchema.parse({ tipo: 'FACTURA_COMPRA' }).tipo).toBe('FACTURA_COMPRA')
+  })
+})
+
+describe('Ingreso de mercancía — contratos compartidos', () => {
+  it('aplica defaults de moneda, tasa, clasificación y descuentos', () => {
+    const ingreso = ingresoMercanciaSchema.parse({ proveedorId: 1, lineas: [linea] })
+    expect(ingreso).toMatchObject({
+      tipo: 'FACTURA_COMPRA', monedaCodigo: 'DOP', tasaAplicada: 1,
+      clasificacionContable: '1200', fleteCent: 0, ajusteCent: 0,
+      numeroProveedor: '', numeroOrdenCompra: '', nota: '', credito: false
+    })
+    expect(ingreso.lineas[0]).toMatchObject({
+      descuentoPctBp: 0, descuento2PctBp: 0, descuento3PctBp: 0, exento: false
+    })
+  })
+
+  it('valida fecha, moneda, cuenta y tasa antes de llegar al servicio', () => {
+    const base = { proveedorId: 1, lineas: [linea] }
+    expect(ingresoMercanciaSchema.safeParse({ ...base, fecha: '15-01-2026' }).success).toBe(false)
+    expect(ingresoMercanciaSchema.safeParse({ ...base, monedaCodigo: 'peso' }).success).toBe(false)
+    expect(ingresoMercanciaSchema.safeParse({ ...base, clasificacionContable: '12' }).success).toBe(false)
+    expect(ingresoMercanciaSchema.safeParse({ ...base, tasaAplicada: 0 }).success).toBe(false)
+    expect(ingresoMercanciaSchema.safeParse({ ...base, fleteCent: -1 }).success).toBe(false)
+    expect(ingresoMercanciaSchema.safeParse({ ...base, ajusteCent: -500 }).success).toBe(true)
+  })
+
+  it('exige id y motivo para corregir, y acepta búsqueda e impresión con defaults', () => {
+    expect(editarIngresoSchema.safeParse({ proveedorId: 1, lineas: [linea], motivo: 'ab' }).success).toBe(false)
+    expect(editarIngresoSchema.safeParse({
+      id: 1, proveedorId: 1, lineas: [linea], motivo: 'Corrección de cantidad'
+    }).success).toBe(true)
+    expect(historialIngresoSchema.parse({ texto: 'B010' })).toMatchObject({
+      texto: 'B010', limite: 300, offset: 0, incluirAnulados: true
+    })
+    expect(imprimirCompraSchema.parse({ id: 1 })).toMatchObject({ id: 1, formato: 'CARTA' })
   })
 })

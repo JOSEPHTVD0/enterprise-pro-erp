@@ -135,8 +135,10 @@ Reglas: ningún archivo > ~400 líneas sin justificación; lógica de negocio **
    operación crítica (usuario, fecha, operación, entidad, id, valores antes/después).
 5. **Documentos contabilizados**: inmutables. Corrección = anulación/reversión que
    genera movimientos contrarios (inventario, CxC/CxP, caja) enlazados al original.
-6. **Concurrencia**: WAL + `busy_timeout` + transacciones inmediatas; lock de
-   instancia única; numeración de documentos con `UPDATE ... RETURNING` atómico.
+6. **Concurrencia**: WAL + `busy_timeout` + transacciones inmediatas; arranque
+   serializado por archivo de bloqueo; liderazgo de instancias para tareas globales;
+   numeración de documentos con `UPDATE ... RETURNING` atómico. Detalle en
+   [docs/25](25-instancias-y-pantalla-negra.md).
 7. **Recuperación**: WAL + checkpoints; backup automático programado; verificación
    `PRAGMA integrity_check` en cada respaldo.
 

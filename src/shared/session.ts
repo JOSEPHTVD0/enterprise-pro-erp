@@ -9,6 +9,15 @@ export interface SessionContext {
   empresaNombre: string
   debeCambiarClave: boolean
   permisos: string[]
+  /** Marcas de tiempo de la sesión; permiten mostrar el tiempo restante sin exponer el token. */
+  iniciaEn?: string
+  ultimaActividad?: string
+}
+
+/** Lo que el renderer puede ver: el token se guarda solo en el preload. */
+export type PublicSessionContext = Omit<SessionContext, 'token'> & {
+  /** Empresas a las que este usuario tiene acceso, para el cambio rápido de empresa. */
+  empresas?: EmpresaOption[]
 }
 
 export interface EmpresaOption {
@@ -18,7 +27,7 @@ export interface EmpresaOption {
 
 export interface LoginResult {
   token?: string
-  context?: SessionContext
+  context?: PublicSessionContext
   debeCambiarClave?: boolean
   empresas?: EmpresaOption[]
 }

@@ -5,6 +5,14 @@ import * as repo from '../repositories/seguridad.repo'
 import type { SessionContext } from '@shared/session'
 
 export type { SessionContext } from '@shared/session'
+import type { PublicSessionContext } from '@shared/session'
+
+/** Elimina el token antes de cruzar el contextoBridge hacia el renderer. */
+export function contextoPublico(ctx: SessionContext): PublicSessionContext {
+  const publico: Partial<SessionContext> = { ...ctx }
+  delete publico.token
+  return publico as PublicSessionContext
+}
 
 export const INACTIVITY_MINUTES = 30
 export const ABSOLUTE_HOURS = 12
@@ -46,6 +54,8 @@ export function buildContext(db: Db, token: string): SessionContext {
     nombre: user.nombre,
     empresaNombre: repo.companyName(db, session.empresa_id),
     debeCambiarClave: user.debe_cambiar_clave === 1,
-    permisos
+    permisos,
+    iniciaEn: session.inicio,
+    ultimaActividad: session.ultima_actividad
   }
 }

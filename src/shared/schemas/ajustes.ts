@@ -25,11 +25,20 @@ const unique = (valores: string[], nombre: string, ctx: z.RefinementCtx): void =
 
 export const ajustesGrupos = [
   'alertas', 'flujos', 'widgets', 'rendimiento', 'integraciones',
-  'tema', 'fiscal', 'notificaciones', 'seguridad', 'featureFlags'
+  'tema', 'fiscal', 'notificaciones', 'seguridad', 'featureFlags', 'interfaz', 'panel2026'
 ] as const
 
 export type AjustesGrupo = (typeof ajustesGrupos)[number]
-const ajustesGrupoEnum = z.enum(ajustesGrupos as unknown as [AjustesGrupo, ...AjustesGrupo[]])
+export const ajustesGrupoEnum = z.enum(ajustesGrupos as unknown as [AjustesGrupo, ...AjustesGrupo[]])
+
+/**
+ * Grupos que cualquier usuario autenticado puede leer para recibir su interfaz
+ * efectiva. Siguen fuera `seguridad`, `integraciones`, `rendimiento` y `fiscal`:
+ * sus valores se aplican en el backend o se exponen solo como derivados seguros.
+ */
+export const ajustesGruposVisuales = [
+  'tema', 'widgets', 'featureFlags', 'interfaz', 'alertas', 'notificaciones', 'panel2026'
+] as const
 
 export const widgetIds = [
   'kpi-ventas', 'kpi-compras', 'kpi-utilidad', 'kpi-margen', 'kpi-cobros', 'kpi-pagos',
@@ -65,13 +74,8 @@ export const flujosSchema = conDefaultsDeObjetoVacio(z.object({
   cierreCajaAutomatico: z.boolean().default(false)
 }).superRefine((valor, ctx) => {
   unique(valor.estadosOrden, 'estadosOrden', ctx)
-  if ((valor.ventasRequierenAprobacion || valor.comprasRequierenAprobacion) && valor.autoAprobarHastaCent > 0) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['autoAprobarHastaCent'],
-      message: 'Si se exige aprobación, el umbral de autoaprobación debe ser 0.'
-    })
-  }
+  // El umbral en centavos permite despachar importes pequeños sin aprobación
+  // explícita; 0 significa que siempre se exige el permiso correspondiente.
 }))
 
 const widgetSchema = z.object({
@@ -104,6 +108,18 @@ export const rendimientoSchema = conDefaultsDeObjetoVacio(z.object({
   vacuumProgramado: z.enum(['DESACTIVADO', 'SEMANAL', 'MENSUAL']).default('MENSUAL'),
   modoBajoConsumo: z.boolean().default(false),
   lazyCargaModulos: z.boolean().default(true)
+}))
+
+/** Panel 2026: preferencias operativas aplicadas por los servicios de solo lectura. */
+export const panel2026Schema = conDefaultsDeObjetoVacio(z.object({
+  vista: z.enum(['OPERATIVA', 'FINANCIERA', 'RIESGO']).default('OPERATIVA'),
+  metricaPrincipal: z.enum(['VENTAS', 'COBROS', 'CXC', 'STOCK']).default('VENTAS'),
+  diasProyeccion: entero(7, 90).default(28),
+  umbralCxcDias: entero(1, 365).default(15),
+  umbralStockBajo: entero(0, 100000).default(5),
+  filas: entero(3, 50).default(10),
+  compararPeriodo: z.boolean().default(true),
+  mostrarAlertas: z.boolean().default(true)
 }))
 
 export const integracionesSchema = conDefaultsDeObjetoVacio(z.object({
@@ -168,6 +184,55 @@ export const featureFlagsSchema = conDefaultsDeObjetoVacio(z.object({
   })
 }))
 
+/** Identificadores estables de los grupos del menú; el renderer los usa para reordenar. */
+export const gruposMenu = [
+  'principal', 'ventas', 'cobros', 'compras', 'inventario', 'maestros',
+  'finanzas', 'analisis', 'planificacion', 'admin'
+] as const
+
+export const elementosOcultables = [
+  'buscadorModulos', 'barraEstado', 'distintivoFase', 'avatarUsuario', 'botonTema',
+  'botonActualizaciones', 'botonAcerca'
+] as const
+
+/** Vistas del menú que se pueden renombrar sin alterar permisos ni rutas. */
+export const vistasPersonalizables = [
+  'dashboard', 'apariencia', 'dashboard-ejecutivo', 'centro-control', 'inteligencia', 'agenda',
+  'facturacion', 'pos', 'cotizaciones', 'cobros', 'compras', 'productos', 'inventario', 'control-stock',
+  'clientes', 'proveedores', 'vendedores', 'catalogos', 'cxc', 'cxp', 'bancos', 'cajas',
+  'gastos', 'contabilidad', 'reportes', 'presupuestos', 'servicios', 'activos', 'crm',
+  'usuarios', 'roles', 'configuracion', 'configuracion-avanzada', 'salud', 'auditoria', 'respaldos'
+] as const
+
+export const interfazSchema = conDefaultsDeObjetoVacio(z.object({
+  tituloApp: z.string().trim().min(2).max(40).default('ENTERPRISE PRO'),
+  anchoSidebar: entero(200, 360).default(240),
+  densidadTablas: z.enum(['compacta', 'normal']).default('normal'),
+  mostrarIconos: z.boolean().default(true),
+  ordenGrupos: z.array(z.enum(gruposMenu)).default([...gruposMenu]),
+  etiquetasModulo: z.record(z.string(), z.string().trim().min(1).max(60)).default({}),
+  ocultarElementos: z.array(z.enum(elementosOcultables)).default([]),
+  piePersonalizado: z.string().trim().max(120).default('')
+}).superRefine((valor, ctx) => {
+  unique(valor.ordenGrupos, 'ordenGrupos', ctx)
+  unique(valor.ocultarElementos, 'ocultarElementos', ctx)
+  const conocidos = new Set<string>([...vistasPersonalizables, ...gruposMenu])
+  for (const [modulo, etiqueta] of Object.entries(valor.etiquetasModulo)) {
+    if (!conocidos.has(modulo)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom, path: ['etiquetasModulo', modulo],
+        message: `${modulo} no es un módulo conocido.`
+      })
+    }
+    if (etiqueta.length > 60) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom, path: ['etiquetasModulo', modulo],
+        message: 'La etiqueta no puede superar 60 caracteres.'
+      })
+    }
+  }
+}))
+
 export const ajustesPorGrupo = {
   alertas: alertasSchema,
   flujos: flujosSchema,
@@ -178,7 +243,9 @@ export const ajustesPorGrupo = {
   fiscal: fiscalAvanzadoSchema,
   notificaciones: notificacionesSchema,
   seguridad: seguridadAvanzadaSchema,
-  featureFlags: featureFlagsSchema
+  featureFlags: featureFlagsSchema,
+  interfaz: interfazSchema,
+  panel2026: panel2026Schema
 } as const
 
 export type Ajustes = { [K in AjustesGrupo]: z.infer<(typeof ajustesPorGrupo)[K]> }
@@ -194,7 +261,9 @@ export const defaultAjustes: Ajustes = {
   fiscal: fiscalAvanzadoSchema.parse({}),
   notificaciones: notificacionesSchema.parse({}),
   seguridad: seguridadAvanzadaSchema.parse({}),
-  featureFlags: featureFlagsSchema.parse({})
+  featureFlags: featureFlagsSchema.parse({}),
+  interfaz: interfazSchema.parse({}),
+  panel2026: panel2026Schema.parse({})
 }
 
 export const ajustesGetSchema = z.object({ grupo: ajustesGrupoEnum.optional() }).default({})
@@ -210,7 +279,9 @@ export const ajustesSaveSchema = z.discriminatedUnion('grupo', [
   z.object({ grupo: z.literal('fiscal'), datos: fiscalAvanzadoSchema }),
   z.object({ grupo: z.literal('notificaciones'), datos: notificacionesSchema }),
   z.object({ grupo: z.literal('seguridad'), datos: seguridadAvanzadaSchema }),
-  z.object({ grupo: z.literal('featureFlags'), datos: featureFlagsSchema })
+  z.object({ grupo: z.literal('featureFlags'), datos: featureFlagsSchema }),
+  z.object({ grupo: z.literal('interfaz'), datos: interfazSchema }),
+  z.object({ grupo: z.literal('panel2026'), datos: panel2026Schema })
 ])
 
 export type AjustesSave = z.infer<typeof ajustesSaveSchema>

@@ -4,7 +4,7 @@ import { reportesImprimirSchema } from './reportes'
 
 /** Entrada para generar un PDF real con pdfmake a partir de datos ya autorizados. */
 export const pdfGenerarSchema = z.object({
-  origen: z.enum(['venta', 'compra', 'cxc', 'cxp', 'banco', 'caja', 'reporte']),
+  origen: z.enum(['venta', 'compra', 'cxc', 'cobros', 'cxp', 'banco', 'caja', 'reporte']),
   id: z.number().int().positive().optional(),
   formato: z.enum(formatosImpresion).default('CARTA'),
   tipo: z.enum(['DOCUMENTO', 'RECIBO', 'PAGO']).optional(),

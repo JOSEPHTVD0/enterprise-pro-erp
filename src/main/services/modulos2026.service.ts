@@ -1,6 +1,7 @@
 import type { Db } from '../db/connection'
 import type { SessionContext } from './context'
 import { errors } from '@shared/errors'
+import { createAjustesService } from './ajustes.service'
 import { writeAudit } from '../repositories/auditoria.repo'
 import { nextSerieNumber } from '../repositories/configuracion.repo'
 import type {
@@ -34,7 +35,10 @@ function normFiltro(entrada?: FiltroModulos): {
  * Módulos incorporados en 0.3.0. Toda escritura es transaccional, audita el cambio
  * y vuelve a verificar permisos aunque el router ya los haya comprobado.
  */
-export function createModulos2026Service(db: Db) {
+export function createModulos2026Service(
+  db: Db,
+  ajustes: Pick<ReturnType<typeof createAjustesService>, 'leerGrupo'> = createAjustesService(db)
+) {
   function exigir(ctx: SessionContext, clave: string): void {
     if (!ctx.permisos.includes(clave)) throw errors.forbidden()
   }
@@ -208,6 +212,7 @@ export function createModulos2026Service(db: Db) {
 
   function ordenServicioCrear(ctx: SessionContext, input: OrdenServicioCrear): Record<string, unknown> {
     exigir(ctx, 'servicios.crear')
+    const estadoInicial = ajustes.leerGrupo(ctx.empresaId, 'flujos').estadosOrden[0]
     let numero = ''
     const id = db.transaction(() => {
       const cliente = uno('SELECT id, nombre FROM clientes WHERE id = ? AND empresa_id = ? AND activo = 1', input.clienteId, ctx.empresaId)
@@ -233,10 +238,10 @@ export function createModulos2026Service(db: Db) {
       const result = db.prepare(`
         INSERT INTO ordenes_servicio
           (empresa_id, numero, cliente_id, cliente_nombre, tecnico_id, fecha_compromiso, prioridad,
-           subtotal_cent, impuesto_cent, total_cent, diagnostico, observaciones, usuario_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           estado, subtotal_cent, impuesto_cent, total_cent, diagnostico, observaciones, usuario_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(ctx.empresaId, numero, input.clienteId, txt(cliente, 'nombre'), input.tecnicoId ?? null,
-        input.fechaCompromiso ?? '', input.prioridad ?? 'NORMAL', subtotal, impuesto, subtotal + impuesto,
+        input.fechaCompromiso ?? '', input.prioridad ?? 'NORMAL', estadoInicial, subtotal, impuesto, subtotal + impuesto,
         input.diagnostico ?? '', input.observaciones ?? '', ctx.userId)
       const ordenId = Number(result.lastInsertRowid)
       const add = db.prepare(`
@@ -246,15 +251,20 @@ export function createModulos2026Service(db: Db) {
       for (const linea of lineas) {
         add.run(ctx.empresaId, ordenId, linea.servicioId, linea.descripcion, linea.cantidad, linea.precioCent, linea.totalCent)
       }
-      auditoria(ctx, 'CREAR_ORDEN_SERVICIO', 'ordenes_servicio', ordenId, null, { numero, totalCent: subtotal + impuesto })
+      auditoria(ctx, 'CREAR_ORDEN_SERVICIO', 'ordenes_servicio', ordenId, null, {
+        numero, estado: estadoInicial, totalCent: subtotal + impuesto
+      })
       return ordenId
     })()
     return { id, numero }
   }
 
   function ordenServicioEstado(ctx: SessionContext, input: CambiarEstado): Record<string, unknown> {
-    const estados = ['RECIBIDA', 'EN_PROCESO', 'PENDIENTE_CLIENTE', 'FINALIZADA', 'ENTREGADA', 'ANULADA']
-    if (!estados.includes(input.estado)) throw errors.validation('Estado de orden no válido.')
+    const flujos = ajustes.leerGrupo(ctx.empresaId, 'flujos')
+    // ANULADA y ENTREGADA son terminales legacy: se conservan aunque la empresa
+    // configure una lista más corta para no romper operaciones ya existentes.
+    const estados = new Set<string>([...flujos.estadosOrden, 'ANULADA', 'ENTREGADA'])
+    if (!estados.has(input.estado)) throw errors.validation('Estado de orden no válido.')
     const permiso = ['FINALIZADA', 'ENTREGADA'].includes(input.estado)
       ? 'servicios.finalizar'
       : input.estado === 'ANULADA' ? 'servicios.anular' : 'servicios.modificar'
@@ -266,7 +276,8 @@ export function createModulos2026Service(db: Db) {
       db.prepare(`UPDATE ordenes_servicio SET estado = ?, observaciones = ?, actualizado_en = datetime('now')
         WHERE id = ? AND empresa_id = ?`).run(input.estado, input.motivo || txt(actual, 'observaciones'), input.id, ctx.empresaId)
       auditoria(ctx, `ORDEN_SERVICIO_${input.estado}`, 'ordenes_servicio', input.id,
-        { estado: txt(actual, 'estado') }, { estado: input.estado, motivo: input.motivo })
+        { estado: txt(actual, 'estado') },
+        { estado: input.estado, motivo: input.motivo, estadosOrden: flujos.estadosOrden })
       return { id: input.id, estado: input.estado }
     })()
   }

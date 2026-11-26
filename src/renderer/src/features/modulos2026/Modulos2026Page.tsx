@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Plus, RefreshCw } from 'lucide-react'
+import { Plus, RefreshCw, Eye } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
-import { money } from '@/lib/format'
+import { money, titleSi, usePreferenciasInterfaz } from '@/lib/format'
 
 type Fila = Record<string, unknown>
 type Modulo = 'presupuestos' | 'servicios' | 'activos' | 'crm'
@@ -58,6 +58,51 @@ const action = async (channel: string, input?: unknown, mensaje = 'Operación re
   }
 }
 
+const camposRequeridos: Record<string, string[]> = {
+  presupuesto: ['nombre', 'descripcion', 'periodo'],
+  ejecutar: ['montoCent'],
+  servicio: ['codigo', 'nombre'],
+  orden: ['clienteId', 'servicioId', 'cantidad'],
+  activo: ['nombre', 'valorAdquisicionCent'],
+  depreciar: ['periodo'],
+  lead: ['nombre'],
+  seguimiento: ['descripcion']
+}
+
+function validarFormulario(nombre: string, values: Record<string, string>): boolean {
+  for (const clave of camposRequeridos[nombre] ?? []) {
+    if (!String(values[clave] ?? '').trim()) {
+      toast.warning(`Complete el campo ${clave}.`)
+      return false
+    }
+  }
+  const montos = ['montoCent', 'precioCent', 'valorAdquisicionCent', 'valorResidualCent']
+  for (const clave of montos) {
+    const valor = Number(values[clave] ?? 0)
+    if (!Number.isFinite(valor) || valor < 0) {
+      toast.warning(`Revise el importe de ${clave}.`)
+      return false
+    }
+  }
+  if (nombre === 'presupuesto' && Number(values.montoCent) <= 0) {
+    toast.warning('El monto del presupuesto debe ser mayor que cero.')
+    return false
+  }
+  if (nombre === 'ejecutar' && Number(values.montoCent) <= 0) {
+    toast.warning('El monto de la ejecución debe ser mayor que cero.')
+    return false
+  }
+  if (nombre === 'activo' && Number(values.valorAdquisicionCent) <= 0) {
+    toast.warning('El valor de adquisición debe ser mayor que cero.')
+    return false
+  }
+  if (nombre === 'activo' && Number(values.valorResidualCent || 0) > Number(values.valorAdquisicionCent)) {
+    toast.warning('El valor residual no puede superar el valor de adquisición.')
+    return false
+  }
+  return true
+}
+
 /** Interfaz de los módulos añadidos en 0.3.0. Cada acción pasa por IPC validado. */
 export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Element {
   const [filas, setFilas] = useState<Fila[]>([])
@@ -68,6 +113,21 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
   const [seleccionado, setSeleccionado] = useState<Fila | null>(null)
   const [form, setForm] = useState<Record<string, string>>({})
   const [cargando, setCargando] = useState(false)
+  const [guardando, setGuardando] = useState(false)
+  const [detalle, setDetalle] = useState<{ titulo: string; datos: unknown } | null>(null)
+  const preferencias = usePreferenciasInterfaz()
+  const title = (texto: string): string | undefined => titleSi(preferencias.tooltips, texto)
+
+  const etiquetasEstado: Record<string, string> = {
+    RECIBIDA: 'Recibida',
+    EN_PROCESO: 'Procesar',
+    PENDIENTE_CLIENTE: 'Pendiente cliente',
+    FINALIZADA: 'Finalizar',
+    ENTREGADA: 'Entregar',
+    ANULADA: 'Anular'
+  }
+  const estadosConfigurados = preferencias.estadosOrden.filter((valor) => valor !== 'ANULADA')
+  const esTerminal = (fila: Fila): boolean => ['ANULADA', 'ENTREGADA'].includes(txt(fila, 'estado'))
 
   const f = (k: string): string => form[k] ?? ''
   const setf = (k: string, v: string): void => setForm((p) => ({ ...p, [k]: v }))
@@ -101,12 +161,30 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
   useEffect(() => { void cargar() }, [cargar])
 
   const abrir = (nombre: string, fila?: Fila): void => {
+    const hoy = new Date().toISOString()
+    const defaults: Record<string, Record<string, string>> = {
+      presupuesto: { periodo: hoy.slice(0, 7), centroCosto: 'GENERAL', categoria: 'GENERAL' },
+      servicio: { duracionMin: '60' },
+      orden: { prioridad: 'NORMAL', cantidad: '1', tasaBp: '1800' },
+      activo: { categoria: 'EQUIPO', fechaCompra: hoy.slice(0, 10), vidaUtilMeses: '60' },
+      depreciar: { periodo: hoy.slice(0, 7) },
+      lead: { origen: 'OTRO', probabilidad: '10' }
+    }
     setModal(nombre)
     setSeleccionado(fila ?? null)
-    setForm(fila ? Object.fromEntries(Object.entries(fila).map(([k, v]) => [k, String(v ?? '')])) : {})
+    setForm(fila
+      ? Object.fromEntries(Object.entries(fila).flatMap(([k, v]) => {
+        const valor = String(v ?? '')
+        const camel = k.replace(/_([a-z])/g, (_, letra: string) => letra.toUpperCase())
+        return camel === k ? [[k, valor]] : [[k, valor], [camel, valor]]
+      }))
+      : (defaults[nombre] ?? {}))
   }
 
   const guardar = async (): Promise<void> => {
+    if (guardando) return
+    if (!validarFormulario(modal, form)) return
+    setGuardando(true)
     try {
       if (modal === 'presupuesto') {
         await window.api.invoke('presupuestos.crear', {
@@ -162,6 +240,17 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
       await cargar()
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo guardar.')
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  const verDetalle = async (canal: string, id: number, titulo: string): Promise<void> => {
+    try {
+      const datos = await window.api.invoke<unknown>(canal, id)
+      setDetalle({ titulo, datos })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'No se pudo cargar el detalle.')
     }
   }
 
@@ -206,6 +295,7 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
           ]} data={filas} rowKey={(r) => num(r, 'id')} pageSize={10}
             actions={(r) => (
               <div className="flex justify-end gap-1">
+                <Button size="sm" variant="ghost" title={title('Ver detalle')} onClick={() => void verDetalle('presupuestos.detalle', num(r, 'id'), `Presupuesto ${txt(r, 'numero') || `#${num(r, 'id')}`}`)}><Eye size={14} /></Button>
                 <Button size="sm" variant="ghost" onClick={() => estado(r, 'presupuestos.estado', 'APROBADO')}>Aprobar</Button>
                 <Button size="sm" variant="ghost" onClick={() => abrir('ejecutar', r)}>Ejecutar</Button>
                 <Button size="sm" variant="ghost" onClick={() => estado(r, 'presupuestos.estado', 'ANULADO')}>Anular</Button>
@@ -231,9 +321,23 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
               ]} data={filas} rowKey={(r) => num(r, 'id')}
                 actions={(r) => (
                   <div className="flex justify-end gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => estado(r, 'servicios.orden.estado', 'EN_PROCESO')}>Procesar</Button>
-                    <Button size="sm" variant="ghost" onClick={() => estado(r, 'servicios.orden.estado', 'FINALIZADA')}>Finalizar</Button>
-                    <Button size="sm" variant="ghost" onClick={() => estado(r, 'servicios.orden.estado', 'ANULADA')}>Anular</Button>
+                    <Button size="sm" variant="ghost" title={title('Ver detalle')} onClick={() => void verDetalle('servicios.orden.detalle', num(r, 'id'), `Orden ${txt(r, 'numero') || `#${num(r, 'id')}`}`)}><Eye size={14} /></Button>
+                    {!esTerminal(r) && estadosConfigurados
+                      .filter((valor) => valor !== txt(r, 'estado'))
+                      .map((valor) => (
+                        <Button key={valor} size="sm" variant="ghost"
+                          onClick={() => estado(r, 'servicios.orden.estado', valor)}>
+                          {etiquetasEstado[valor] ?? valor}
+                        </Button>
+                      ))}
+                    {/* ANULADA no es configurable en flujos, pero la acción terminal existente se conserva. */}
+                    {!esTerminal(r) && (
+                      <Button size="sm" variant="ghost"
+                        onClick={() => estado(r, 'servicios.orden.estado', 'ANULADA')}>Anular</Button>
+                    )}
+                    {txt(r, 'estado') === 'ENTREGADA' && (
+                      <Badge tone="success">ENTREGADA</Badge>
+                    )}
                   </div>
                 )} />
             </Card>
@@ -265,6 +369,7 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
           ]} data={filas} rowKey={(r) => num(r, 'id')}
             actions={(r) => (
               <div className="flex justify-end gap-1">
+                <Button size="sm" variant="ghost" title={title('Ver detalle')} onClick={() => void verDetalle('activos.detalle', num(r, 'id'), `Activo ${txt(r, 'nombre')}`)}><Eye size={14} /></Button>
                 <Button size="sm" variant="ghost" onClick={() => abrir('depreciar', r)}>Depreciar</Button>
                 <Button size="sm" variant="ghost" onClick={() => estado(r, 'activos.estado', 'BAJA')}>Dar de baja</Button>
               </div>
@@ -301,7 +406,7 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
         open={modal !== ''}
         title={modal === 'ejecutar' ? 'Registrar ejecución' : modal === 'depreciar' ? 'Registrar depreciación' : modal === 'seguimiento' ? 'Nuevo seguimiento' : `Nuevo registro — ${titulos[modulo].title}`}
         onClose={() => setModal('')}
-        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setModal('')}>Cancelar</Button><Button onClick={() => void guardar()}>Guardar</Button></div>}
+        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setModal('')}>Cancelar</Button><Button onClick={() => void guardar()} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</Button></div>}
       >
         <div className="grid gap-3 md:grid-cols-2">
           {modal === 'presupuesto' && (
@@ -395,6 +500,31 @@ export function Modulos2026Page({ modulo }: { modulo: Modulo }): React.JSX.Eleme
             </>
           )}
         </div>
+      </Modal>
+
+      <Modal
+        open={!!detalle}
+        title={`Detalle — ${detalle?.titulo ?? ''}`}
+        onClose={() => setDetalle(null)}
+        width="max-w-3xl"
+        footer={<Button variant="secondary" onClick={() => setDetalle(null)}>Cerrar</Button>}
+      >
+        {detalle && (
+          <div className="max-h-[60vh] space-y-3 overflow-y-auto text-sm">
+            {Object.entries(detalle.datos as Record<string, unknown> ?? {}).map(([clave, valor]) => (
+              <div key={clave} className="rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <p className="mb-1 text-xs uppercase text-slate-500">{clave.replace(/_/g, ' ')}</p>
+                {Array.isArray(valor) ? (
+                  valor.length
+                    ? <pre className="overflow-x-auto text-xs">{JSON.stringify(valor, null, 2)}</pre>
+                    : <p className="text-slate-400">Sin registros.</p>
+                ) : (
+                  <p className="break-words">{typeof valor === 'object' && valor !== null ? JSON.stringify(valor) : String(valor ?? '—')}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   )

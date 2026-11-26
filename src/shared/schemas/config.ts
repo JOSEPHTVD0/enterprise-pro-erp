@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { documentTypes } from '../document-types'
+import { formatosImpresion } from './ventas'
 
 const id = z.number().int().positive()
 
@@ -85,14 +86,27 @@ export const impresoraSchema = z.object({
   predeterminada: z.boolean().default(false)
 })
 
+/** Acepta los valores históricos guardados por versiones anteriores. */
+const formatoImpresionSchema = z.preprocess(
+  (valor) => valor === 'MEDIA_PAGINA' ? 'MEDIA'
+    : valor === 'TICKET80' ? 'TICKET_80'
+      : valor === 'TICKET58' ? 'TICKET_58' : valor,
+  z.enum(formatosImpresion)
+)
+
 export const formatoSchema = z.object({
   tipoDoc: z.enum(documentTypes),
-  formato: z.enum(['CARTA', 'MEDIA_PAGINA', 'TICKET_80', 'TICKET_58']),
+  formato: formatoImpresionSchema,
   copias: z.number().int().min(1).max(5).default(1)
 })
 
 export const backupConfigSchema = z.object({
-  carpeta: z.string().trim().max(300).default(''),
+  /** Ruta relativa dentro de userData/backups; nunca absoluta ni con `..`. */
+  carpeta: z.string().trim().max(300).refine(
+    (valor) => !/^([a-zA-Z]:[\\/]|\\\\|\/)/.test(valor) &&
+      !valor.split(/[\\/]/).includes('..'),
+    'Use una ruta relativa dentro de la carpeta de respaldos.'
+  ).default(''),
   frecuencia: z.enum(['DESACTIVADO', 'DIARIO', 'SEMANAL', 'MENSUAL']).default('DIARIO'),
   hora: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).default('02:00'),
   retencionDias: z.number().int().min(1).max(365).default(30)

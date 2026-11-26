@@ -37,7 +37,7 @@ describe('persistencia de preferencias (proceso principal)', () => {
       ...defaultSettings,
       theme: 'light' as const,
       sidebarCollapsed: false,
-      impresion: { ...defaultSettings.impresion, formato: 'TICKET80' as const }
+      impresion: { ...defaultSettings.impresion, formato: 'TICKET_80' as const }
     }
     saveSettings(esperado)
     const raw = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf-8'))

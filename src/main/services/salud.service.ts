@@ -63,8 +63,8 @@ export function createSaludService(db: Db) {
     })
 
     const ultimoRespaldo = db.prepare(`
-      SELECT fecha FROM backups_historial ORDER BY fecha DESC LIMIT 1
-    `).get() as Fila | undefined
+      SELECT fecha FROM backups_historial WHERE empresa_id = ? ORDER BY fecha DESC LIMIT 1
+    `).get(ctx.empresaId) as Fila | undefined
     const diasRespaldo = ultimoRespaldo
       ? Math.floor((Date.now() - new Date(`${String(ultimoRespaldo.fecha).replace(' ', 'T')}Z`).getTime()) / 86_400_000)
       : null
@@ -119,8 +119,8 @@ export function createSaludService(db: Db) {
       actividad: {
         usuariosActivos: conteo('SELECT COUNT(*) AS total FROM usuarios WHERE activo = 1'),
         sesionesActivas,
-        auditoria24h: conteo("SELECT COUNT(*) AS total FROM auditoria WHERE fecha >= datetime('now','-1 day')"),
-        respaldos: conteo('SELECT COUNT(*) AS total FROM backups_historial'),
+        auditoria24h: conteo("SELECT COUNT(*) AS total FROM auditoria WHERE empresa_id = ? AND fecha >= datetime('now','-1 day')", ctx.empresaId),
+        respaldos: conteo('SELECT COUNT(*) AS total FROM backups_historial WHERE empresa_id = ?', ctx.empresaId),
         ultimoRespaldo: ultimoRespaldo ? String(ultimoRespaldo.fecha) : ''
       },
       proceso: {

@@ -46,6 +46,7 @@ que instala el ERP y para el mantenedor que quiere reconstruirlo o publicarlo en
 1. Abrir **ENTERPRISE PRO ERP** desde el acceso directo.
 2. Usuario inicial: `admin` · Contraseña: `Admin1234!`.
 3. El sistema exige **cambiar la contraseña** antes de habilitar cualquier otro módulo.
+   Desde esta versión se acepta una clave de **4 dígitos o más** (por ejemplo `4821`).
 4. En **Configuración** registrar empresa, RNC/cédula, ITBIS, NCF y preferencias.
 
 > Nota: al iniciar se emite una sonda interna `auth.me` sin token. La interfaz la interpreta como
@@ -86,10 +87,17 @@ Los datos **no** están dentro de la carpeta del programa: reinstalar o actualiz
   comprueba permisos antes de generarlo.
 
 ### Actualizaciones
-En **Acerca de → Actualizaciones**:
-1. **Buscar** consulta el feed (`ERP_UPDATE_URL` o `build.publish.url`).
-2. **Descargar** obtiene el instalador sin instalar automáticamente.
-3. **Instalar y reiniciar** aplica la actualización y reinicia la app.
+Pulsar el botón **Actualizaciones** de la barra superior (o **Acerca de → Actualizaciones**):
+1. **Buscar** consulta el feed (URL pública incluida en el código o `ERP_UPDATE_URL`).
+2. **Descargar instalador** valida el SHA-512 y la firma fijada, y guarda el `.exe` en
+   `Descargas` (o en `ERP_DOWNLOADS_DIR`).
+3. **Abrir carpeta** muestra el archivo. Ejecútelo manualmente para instalar; la app no lo
+   lanza ni se reinicia. Si SmartScreen avisa, elija «Más información» → «Ejecutar de todos modos».
+
+En la app instalada, el feed también se consulta automáticamente al arrancar: el botón muestra
+un punto verde cuando hay una versión disponible o ya descargada. Los datos locales se
+conservan porque viven en `%APPDATA%`, fuera de la carpeta del programa. Detalle en
+[docs/24-actualizacion-descarga-manual.md](24-actualizacion-descarga-manual.md).
 
 La actualización manual sigue disponible: ejecutar el instalador nuevo sobre la instalación
 existente; los datos se conservan y el desinstalador no pregunta por ellos en ese caso.
@@ -119,9 +127,10 @@ npm.cmd run release:serve
 | Script | Qué hace |
 |---|---|
 | `npm.cmd run typecheck` | TypeScript estricto (`tsc --noEmit`). |
-| `npm.cmd test` | 200 pruebas unitarias y de integración sobre SQLite real. |
-| `npm.cmd run test:e2e` | 4 pruebas E2E con Playwright conectado por CDP a Electron. |
-| `npm.cmd run test:updater` | Levanta un feed efímero y verifica que `electron-updater` detecte el parche siguiente a la versión instalada (`0.3.1`). |
+| `npm.cmd test` | 314 pruebas unitarias y de integración sobre SQLite real. |
+| `npm.cmd run test:e2e` | 25 pruebas E2E con Playwright conectado por CDP a Electron. |
+| `npm.cmd run test:updater` | Levanta un feed efímero, verifica el parche siguiente y que el instalador se guarde sin ejecutarse. |
+| `npm.cmd run test:instancias` | Abre dos procesos con la misma BD y comprueba dos sesiones simultáneas. |
 | `npm.cmd run dist:win` | Compila y genera el NSIS x64. Usa `scripts/dist-win.mjs` + `compat-execfile.cjs`. |
 | `npm.cmd run release:feed` | Copia el instalador a `release\`, calcula SHA-512 y escribe `latest.yml`. |
 | `npm.cmd run release:serve` | Sirve `release\` en `http://127.0.0.1:8080/` solo para pruebas. |
@@ -173,11 +182,12 @@ gh repo create enterprise-pro-erp --public --source=. --remote=origin --push
 Para publicar el instalador como *Release* (el binario no se versiona en Git):
 
 ```powershell
-gh release create v0.3.0 `
-  dist\EnterpriseProERP-Setup-0.3.0.exe `
+gh release create v0.5.10 `
+  dist\EnterpriseProERP-Setup-0.5.10.exe `
+  dist\EnterpriseProERP-Setup-0.5.10.exe.blockmap `
   release\latest.yml `
-  --title "ENTERPRISE PRO ERP 0.3.0" `
-  --notes-file docs\09-novedades-0.3.0.md
+  --title "ENTERPRISE PRO ERP 0.5.10" `
+  --notes-file docs\28-novedades-0.5.10.md
 ```
 
 > Antes de publicar una versión nueva, actualiza el hash en `README.md`, `docs/05` y `docs/06`,
@@ -192,7 +202,9 @@ gh release create v0.3.0 `
 | SmartScreen al instalar | Firma autofirmada. Se requiere certificado de CA pública para eliminarlo. |
 | “No hay actualizaciones” | El feed por defecto es local. Publicar `latest.yml` en HTTPS y definir `ERP_UPDATE_URL`. |
 | `spawn UNKNOWN` al compilar | Usar `npm.cmd run dist:win` (aplica el shim de compatibilidad). |
-| La app no inicia | Verificar que `better-sqlite3` quedó desempaquetado (`asarUnpack`) y que no haya otra instancia abierta. |
+| La app no inicia | Verificar que `better-sqlite3` quedó desempaquetado (`asarUnpack`) y revisar la consola por `database is locked`. |
+| Pantalla negra al entrar | La ventana se recarga sola hasta 3 veces; si persiste, use **Recargar interfaz** y vuelva a iniciar sesión. Vea [docs/25](25-instancias-y-pantalla-negra.md). |
+| Varias ventanas a la vez | Se permiten con la misma BD; antes de restaurar un respaldo, cierre todas menos una. |
 | Olvidé la contraseña | No hay recuperación automática: usar un respaldo de la BD o reiniciar con el usuario semilla en un perfil nuevo. |
 | Error de permisos | Cada módulo verifica permisos en backend; revisar roles en *Usuarios*. |
 

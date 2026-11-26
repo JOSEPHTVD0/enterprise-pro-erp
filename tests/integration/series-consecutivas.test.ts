@@ -38,6 +38,19 @@ describe('v0.4.0 — series consecutivas sin saltos', () => {
     db.close()
   })
 
+  it('con varias series activas elige siempre la primera creada', () => {
+    const { db } = setup()
+    const original = db.prepare(`SELECT * FROM series_documento WHERE empresa_id = 1 AND tipo_doc = 'COTIZACION'`).get() as Fila
+    db.prepare(`INSERT INTO series_documento
+      (empresa_id, tipo_doc, serie, prefijo, siguiente, longitud, activa)
+      VALUES (1, 'COTIZACION', 'B', 'COTB-', 1, 4, 1)`).run()
+    expect(vistaPreviaSerie(db, 1, 'COTIZACION').numero).toBe('COT-00000001')
+    expect(vistaPreviaSerie(db, 1, 'COTIZACION').prefijo).toBe(String(original.prefijo))
+    expect(numerarConsecutivo(db, 1, 'COTIZACION').numero).toBe('COT-00000001')
+    expect(db.prepare(`SELECT siguiente FROM series_documento WHERE id = ?`).get(original.id)).toEqual({ siguiente: 2 })
+    db.close()
+  })
+
   it('un rollback no deja hueco en la secuencia', () => {
     const { db } = setup()
     expect(() => db.transaction(() => {

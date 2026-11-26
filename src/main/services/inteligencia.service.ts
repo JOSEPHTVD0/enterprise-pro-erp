@@ -224,19 +224,40 @@ export function createInteligenciaService(db: Db, ajustes: ReturnType<typeof cre
       cxpVencido: n(diag, 'cxpVencido'),
       seriesInactivas: n(diag, 'seriesInactivas')
     }
-    const alertas: { nivel: string; texto: string }[] = []
+    const cxcPorVencer = n(uno(`SELECT COUNT(*) AS total FROM cxc_documentos
+      WHERE empresa_id = ? AND estado = 'PENDIENTE' AND saldo_cent > 0
+        AND date(COALESCE(NULLIF(vencimiento,''), fecha)) BETWEEN date('now') AND date('now', '+' || ? || ' days')`,
+      empresaId, config.alertas.cxcDiasVencimiento), 'total')
+    const seriesPorAgotarse = n(uno(`SELECT COUNT(*) AS total FROM series_documento
+      WHERE empresa_id = ? AND activa = 1 AND alerta_min <= ?`, empresaId, config.alertas.seriesRestantes), 'total')
+
+    const jerarquia: Record<string, number> = { Medio: 1, Alto: 2 }
+    const minimo: Record<string, number> = { INFO: 0, MEDIO: 1, ALTO: 2 }
+    const senales: { nivel: string; texto: string }[] = []
     if (diagnostico.stockBajo >= config.alertas.stockBajoUmbral) {
-      alertas.push({ nivel: 'Medio', texto: `${diagnostico.stockBajo} producto(s) con stock bajo (umbral ${config.alertas.stockBajoUmbral}).` })
+      senales.push({ nivel: 'Medio', texto: `${diagnostico.stockBajo} producto(s) con stock bajo (umbral ${config.alertas.stockBajoUmbral}).` })
     }
     if (diagnostico.sinStock > 0) {
-      alertas.push({ nivel: 'Alto', texto: `${diagnostico.sinStock} producto(s) sin existencias.` })
+      senales.push({ nivel: 'Alto', texto: `${diagnostico.sinStock} producto(s) sin existencias.` })
+    }
+    if (cxcPorVencer > 0) {
+      senales.push({ nivel: 'Medio', texto: `${cxcPorVencer} documento(s) de CxC por vencer en ${config.alertas.cxcDiasVencimiento} días.` })
     }
     if (diagnostico.cxcVencido > 0) {
-      alertas.push({ nivel: 'Alto', texto: `${diagnostico.cxcVencido} documento(s) de CxC vencidos.` })
+      senales.push({ nivel: 'Alto', texto: `${diagnostico.cxcVencido} documento(s) de CxC vencidos.` })
     }
     if (diagnostico.cxpVencido > 0) {
-      alertas.push({ nivel: 'Medio', texto: `${diagnostico.cxpVencido} documento(s) de CxP vencidos.` })
+      senales.push({ nivel: 'Medio', texto: `${diagnostico.cxpVencido} documento(s) de CxP vencidos.` })
     }
+    if (seriesPorAgotarse > 0 || diagnostico.seriesInactivas > 0) {
+      senales.push({
+        nivel: 'Medio',
+        texto: `${seriesPorAgotarse} serie(s) con alerta baja y ${diagnostico.seriesInactivas} serie(s) inactivas.`
+      })
+    }
+    const alertas = config.alertas.destinos.includes('PANEL')
+      ? senales.filter((s) => (jerarquia[s.nivel] ?? 0) >= (minimo[config.alertas.nivelMinimo] ?? 0))
+      : []
 
     return {
       periodo: { desde, hasta, tipo: filtro.periodo ?? 'ANIO' },
@@ -250,7 +271,11 @@ export function createInteligenciaService(db: Db, ajustes: ReturnType<typeof cre
       modulos: { crm, servicios, activos },
       diagnostico,
       alertas,
-      umbrales: { stockBajo: config.alertas.stockBajoUmbral, cxcDias: config.alertas.cxcDiasVencimiento }
+      umbrales: {
+        stockBajo: config.alertas.stockBajoUmbral,
+        cxcDias: config.alertas.cxcDiasVencimiento,
+        seriesRestantes: config.alertas.seriesRestantes
+      }
     }
   }
 

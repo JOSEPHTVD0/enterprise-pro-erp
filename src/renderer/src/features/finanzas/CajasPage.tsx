@@ -10,7 +10,8 @@ import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
-import { money } from '@/lib/format'
+import { confirmarAccion, money, titleSi, usePreferenciasInterfaz } from '@/lib/format'
+import { formatoPreferido, opcionesImpresion } from '@/lib/formato-impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { AreaImpresionFinanzas } from './AreaImpresionFinanzas'
 import {
@@ -40,7 +41,8 @@ export function CajasPage(): React.JSX.Element {
   const [filtro, setFiltro] = useState(filtroVacio)
   const [aplicado, setAplicado] = useState(filtroVacio)
   const [cargando, setCargando] = useState(true)
-  const [formato, setFormato] = useState('CARTA')
+  const [formato, setFormato] = useState<string>(formatoPreferido)
+  const [cierreAutomatico, setCierreAutomatico] = useState(false)
   const [aperturaOpen, setAperturaOpen] = useState(false)
   const [formApertura, setFormApertura] = useState<FormularioApertura>(() => aperturaVacia([]))
   const [cierreOpen, setCierreOpen] = useState(false)
@@ -51,6 +53,17 @@ export function CajasPage(): React.JSX.Element {
   const [detalleTitulo, setDetalleTitulo] = useState('Caja')
   const [impresion, setImpresion] = useState<DatosImpresionFinanzas | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const preferencias = usePreferenciasInterfaz()
+  const title = (texto: string): string | undefined => titleSi(preferencias.tooltips, texto)
+
+  // Canal dedicado: si no existe o no hay permiso, se mantiene la confirmación manual.
+  useEffect(() => {
+    let activo = true
+    void window.api.invoke<boolean>('cajas.cierreAutomatico')
+      .then((valor) => { if (activo) setCierreAutomatico(Boolean(valor)) })
+      .catch(() => { if (activo) setCierreAutomatico(false) })
+    return () => { activo = false }
+  }, [])
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -112,15 +125,15 @@ export function CajasPage(): React.JSX.Element {
     }
   }
 
-  async function guardarCierre(): Promise<void> {
-    if (!formCierre.sesionId) { toast.warning('Seleccione una sesión abierta.'); return }
+  async function guardarCierre(form: FormularioCierre = formCierre): Promise<void> {
+    if (!form.sesionId) { toast.warning('Seleccione una sesión abierta.'); return }
     setGuardando(true)
     try {
       await window.api.invoke('cajas.cerrar', {
-        sesionId: formCierre.sesionId,
-        arqueoEfectivoCent: centavos(formCierre.arqueoEfectivo),
-        arqueoOtrosCent: centavos(formCierre.arqueoOtros),
-        observaciones: textoOp(formCierre.observaciones)
+        sesionId: form.sesionId,
+        arqueoEfectivoCent: centavos(form.arqueoEfectivo),
+        arqueoOtrosCent: centavos(form.arqueoOtros),
+        observaciones: textoOp(form.observaciones)
       })
       toast.success('Sesión de caja cerrada con su arqueo.')
       setCierreOpen(false)
@@ -130,6 +143,18 @@ export function CajasPage(): React.JSX.Element {
     } finally {
       setGuardando(false)
     }
+  }
+
+  /** El cierre automático solo omite la confirmación; el permiso se valida en backend. */
+  function iniciarCierre(id: number, referencia: string): void {
+    const form = cierreVacio(id, referencia)
+    setFormCierre(form)
+    if (cierreAutomatico) {
+      void guardarCierre(form)
+      return
+    }
+    if (!confirmarAccion(`¿Cerrar la sesión ${referencia}? Se registrará el arqueo indicado.`)) return
+    setCierreOpen(true)
   }
 
   async function guardarMovimiento(): Promise<void> {
@@ -157,6 +182,8 @@ export function CajasPage(): React.JSX.Element {
   }
 
   async function imprimir(id: number): Promise<void> {
+    if (!opcionesImpresion().impresionAutomatica
+      && !confirmarAccion('¿Enviar este comprobante a la impresora configurada?')) return
     try {
       setImpresion(await window.api.invoke<DatosImpresionFinanzas>('cajas.imprimir.datos', { id, formato }))
       window.setTimeout(() => window.print(), 80)
@@ -219,7 +246,7 @@ export function CajasPage(): React.JSX.Element {
             {can('cajas.imprimir') && <SelectorFormato value={formato} onChange={setFormato} formatos={formatosDe(catalogos)} />}
             {can('cajas.abrir_caja') && (
               <Button onClick={() => { setFormApertura(aperturaVacia(catalogos.cajas)); setAperturaOpen(true) }}
-                title="Abrir sesión de caja" aria-label="Abrir sesión de caja">
+                title={title('Abrir sesión de caja')} aria-label="Abrir sesión de caja">
                 <UnlockKeyhole size={14} /> Abrir caja
               </Button>
             )}
@@ -227,16 +254,15 @@ export function CajasPage(): React.JSX.Element {
               <Button variant="secondary"
                 onClick={() => {
                   const sesion = abiertas[0]
-                  setFormCierre(cierreVacio(num(sesion.id), txt(sesion.numero) || `#${num(sesion.id)}`))
-                  setCierreOpen(true)
+                  iniciarCierre(num(sesion.id), txt(sesion.numero) || `#${num(sesion.id)}`)
                 }}
-                title="Cerrar sesión de caja" aria-label="Cerrar sesión de caja">
+                title={title('Cerrar sesión de caja')} aria-label="Cerrar sesión de caja">
                 <LockKeyhole size={14} /> Cerrar caja
               </Button>
             )}
             {can('cajas.crear') && sesionId && (
               <Button onClick={() => { setFormMovimiento(movimientoCajaVacio(abiertas, sesionId)); setMovimientoOpen(true) }}
-                title="Registrar movimiento manual de caja" aria-label="Registrar movimiento manual de caja">
+                title={title('Registrar movimiento manual de caja')} aria-label="Registrar movimiento manual de caja">
                 <FilePlus2 size={14} /> Movimiento
               </Button>
             )}
@@ -281,16 +307,15 @@ export function CajasPage(): React.JSX.Element {
                       <>
                         <Accion icono={<Printer size={15} />} etiqueta="Imprimir cierre de caja" tono="info"
                           onClick={() => void imprimir(id)} />
-                        <Accion icono={<FileDown size={15} />} etiqueta="Guardar PDF" tono="info"
-                          onClick={() => void guardarPdfCaja(id)} />
+                        {preferencias.formatosPermitidos.includes('PDF') && (
+                          <Accion icono={<FileDown size={15} />} etiqueta="Guardar PDF" tono="info"
+                            onClick={() => void guardarPdfCaja(id)} />
+                        )}
                       </>
                     )}
                     {can('cajas.cerrar_caja') && (txt(fila.estado) === 'ABIERTA' || !txt(fila.estado)) && (
                       <Accion icono={<LockKeyhole size={15} />} etiqueta="Cerrar esta sesión" tono="danger"
-                        onClick={() => {
-                          setFormCierre(cierreVacio(id, txt(fila.numero) || `#${id}`))
-                          setCierreOpen(true)
-                        }} />
+                        onClick={() => iniciarCierre(id, txt(fila.numero) || `#${id}`)} />
                     )}
                   </div>
                 )
@@ -303,7 +328,7 @@ export function CajasPage(): React.JSX.Element {
             subtitle={`${movimientosSesion.length} movimiento(s)`}
             actions={
               <select className={`${inputClass} w-56`} value={sesionId}
-                onChange={(e) => setSesionId(e.target.value)} title="Sesión de caja" aria-label="Sesión de caja">
+                onChange={(e) => setSesionId(e.target.value)} title={title('Sesión de caja')} aria-label="Sesión de caja">
                 {sesiones.map((sesion) => (
                   <option key={num(sesion.id)} value={num(sesion.id)}>
                     {txt(sesion.numero) || `#${num(sesion.id)}`} · {txt(sesion.estado) || 'ABIERTA'}
@@ -329,8 +354,8 @@ export function CajasPage(): React.JSX.Element {
         onClose={() => setAperturaOpen(false)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setAperturaOpen(false)} title="Cancelar" aria-label="Cancelar">Cancelar</Button>
-            <Button onClick={() => void guardarApertura()} disabled={guardando} title="Abrir caja" aria-label="Abrir caja">Abrir caja</Button>
+            <Button variant="secondary" onClick={() => setAperturaOpen(false)} title={title('Cancelar')} aria-label="Cancelar">Cancelar</Button>
+            <Button onClick={() => void guardarApertura()} disabled={guardando} title={title('Abrir caja')} aria-label="Abrir caja">Abrir caja</Button>
           </>
         }
       >
@@ -356,8 +381,8 @@ export function CajasPage(): React.JSX.Element {
         onClose={() => setCierreOpen(false)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setCierreOpen(false)} title="Cancelar" aria-label="Cancelar">Cancelar</Button>
-            <Button onClick={() => void guardarCierre()} disabled={guardando} title="Cerrar caja" aria-label="Cerrar caja">Cerrar caja</Button>
+            <Button variant="secondary" onClick={() => setCierreOpen(false)} title={title('Cancelar')} aria-label="Cancelar">Cancelar</Button>
+            <Button onClick={() => void guardarCierre()} disabled={guardando} title={title('Cerrar caja')} aria-label="Cerrar caja">Cerrar caja</Button>
           </>
         }
       >
@@ -387,8 +412,8 @@ export function CajasPage(): React.JSX.Element {
         onClose={() => setMovimientoOpen(false)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setMovimientoOpen(false)} title="Cancelar" aria-label="Cancelar">Cancelar</Button>
-            <Button onClick={() => void guardarMovimiento()} disabled={guardando} title="Registrar movimiento" aria-label="Registrar movimiento">Registrar movimiento</Button>
+            <Button variant="secondary" onClick={() => setMovimientoOpen(false)} title={title('Cancelar')} aria-label="Cancelar">Cancelar</Button>
+            <Button onClick={() => void guardarMovimiento()} disabled={guardando} title={title('Registrar movimiento')} aria-label="Registrar movimiento">Registrar movimiento</Button>
           </>
         }
       >

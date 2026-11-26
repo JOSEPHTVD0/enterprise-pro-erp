@@ -6,6 +6,8 @@ import { createMaestrosService } from '../../src/main/services/maestros.service'
 import { createInventarioService } from '../../src/main/services/inventario.service'
 import { createVentasService } from '../../src/main/services/ventas.service'
 import { createPosService } from '../../src/main/services/pos.service'
+import { createAjustesService } from '../../src/main/services/ajustes.service'
+import { defaultAjustes } from '@shared/schemas/ajustes'
 import { DomainError } from '@shared/errors'
 import type { SessionContext } from '@shared/session'
 
@@ -18,7 +20,8 @@ function setup() {
   const ctx = login.context as SessionContext
   const maestros = createMaestrosService(db)
   const inventario = createInventarioService(db)
-  const ventas = createVentasService(db, inventario)
+  const ajustes = createAjustesService(db)
+  const ventas = createVentasService(db, inventario, ajustes)
   const pos = createPosService(db, ventas)
 
   const clienteId = Number(db.prepare(`
@@ -45,12 +48,20 @@ function setup() {
       id: number; numero: string; totalCent: number; esNcf: boolean
     }
 
-  return { db, ctx, maestros, inventario, ventas, pos, clienteId, productoId, linea, existencia, factura }
+  return { db, ctx, maestros, inventario, ajustes, ventas, pos, clienteId, productoId, linea, existencia, factura }
 }
 
 const sinPermiso = (ctx: SessionContext, clave: string): SessionContext => ({
   ...ctx, permisos: ctx.permisos.filter((p) => p !== clave)
 })
+
+function guardarFlujos(
+  ajustes: ReturnType<typeof createAjustesService>,
+  ctx: SessionContext,
+  cambios: Partial<typeof defaultAjustes.flujos>
+): void {
+  ajustes.save(ctx, { grupo: 'flujos', datos: { ...defaultAjustes.flujos, ...cambios } })
+}
 
 describe('Fase 6 — ventas, POS y documentos', () => {
   it('la migración 004 crea los libros de ventas, caja y CxC', () => {
@@ -79,9 +90,10 @@ describe('Fase 6 — ventas, POS y documentos', () => {
     expect(mov).toMatchObject({ tipo: 'VENTA', cantidad: -2, costo_unit_cent: 10000, producto_id: productoId })
     expect(mov.doc_linea_id).toBeTruthy()
 
-    const pagos = db.prepare('SELECT * FROM documento_pagos WHERE doc_id = ?').all(doc.id) as Fila[]
-    expect(pagos).toHaveLength(1)
-    expect(pagos[0]).toMatchObject({ metodo: 'EFECTIVO', monto_cent: 47200 })
+    // Ventas documenta; el cobro vive en Cobros. La factura queda como cargo CxC.
+    expect(db.prepare('SELECT * FROM documento_pagos WHERE doc_id = ?').all(doc.id)).toHaveLength(0)
+    const cxc = db.prepare('SELECT * FROM cxc_documentos WHERE doc_venta_id = ?').get(doc.id) as Fila
+    expect(cxc).toMatchObject({ monto_cent: 47200, saldo_cent: 47200, estado: 'PENDIENTE' })
 
     const audit = db.prepare("SELECT operacion FROM auditoria WHERE entidad = 'documentos_venta' AND entidad_id = ?").all(String(doc.id)) as Fila[]
     expect(audit.map((a) => a.operacion)).toEqual(['CREAR'])
@@ -120,43 +132,35 @@ describe('Fase 6 — ventas, POS y documentos', () => {
     db.close()
   })
 
-  it('POS exige caja abierta y liga pagos combinados a esa sesión', () => {
+  it('POS exige caja abierta pero nunca cobra: genera cargo CxC pendiente', () => {
     const { db, ctx, pos, clienteId, linea } = setup()
-    expect(() => pos.vender(ctx, {
-      clienteId, lineas: [linea()], pagos: [{ metodo: 'EFECTIVO', montoCent: 47200, referencia: '' }]
-    })).toThrowError(DomainError)
+    expect(() => pos.vender(ctx, { clienteId, lineas: [linea()] })).toThrowError(DomainError)
 
     const { id: sesionId } = pos.abrirCaja(ctx, { montoCent: 5000, observaciones: 'Apertura prueba' }) as { id: number }
-    const venta = pos.vender(ctx, {
-      clienteId, lineas: [linea()], pagos: [
-        { metodo: 'EFECTIVO', montoCent: 40000, referencia: '' },
-        { metodo: 'TARJETA', montoCent: 7200, referencia: '****4242' }
-      ]
-    }) as { id: number; totalCent: number; cajaSesionId: number }
+    const venta = pos.vender(ctx, { clienteId, lineas: [linea()] }) as { id: number; totalCent: number; cajaSesionId: number }
     expect(venta.totalCent).toBe(47200)
     expect(venta.cajaSesionId).toBe(sesionId)
 
     const doc = db.prepare('SELECT * FROM documentos_venta WHERE id = ?').get(venta.id) as Fila
     expect(doc.tipo).toBe('POS')
-    const pagos = db.prepare('SELECT * FROM documento_pagos WHERE doc_id = ? ORDER BY id').all(venta.id) as Fila[]
-    expect(pagos.map((p) => p.metodo)).toEqual(['EFECTIVO', 'TARJETA'])
-    expect(pagos.every((p) => Number(p.caja_sesion_id) === sesionId)).toBe(true)
-    const caja = db.prepare("SELECT * FROM caja_movimientos WHERE doc_tipo = 'POS' AND doc_id = ?").all(venta.id) as Fila[]
-    expect(caja).toHaveLength(1)
-    expect(caja[0]).toMatchObject({ monto_cent: 40000, tipo: 'INGRESO' })
+    expect(db.prepare('SELECT * FROM documento_pagos WHERE doc_id = ?').all(venta.id)).toHaveLength(0)
+    expect(db.prepare("SELECT * FROM caja_movimientos WHERE doc_tipo = 'POS' AND doc_id = ?").all(venta.id)).toHaveLength(0)
+    const cxc = db.prepare('SELECT * FROM cxc_documentos WHERE doc_venta_id = ?').get(venta.id) as Fila
+    expect(cxc).toMatchObject({ monto_cent: 47200, saldo_cent: 47200, estado: 'PENDIENTE' })
 
-    const cierre = pos.cerrarCaja(ctx, { sesionId, montoCent: 45000, observaciones: 'Arqueo' }) as { teoricoCent: number; diferenciaCent: number }
-    expect(cierre.teoricoCent).toBe(45000)
+    const cierre = pos.cerrarCaja(ctx, { sesionId, montoCent: 5000, observaciones: 'Arqueo' }) as { teoricoCent: number; diferenciaCent: number }
+    expect(cierre.teoricoCent).toBe(5000)
     expect(cierre.diferenciaCent).toBe(0)
     db.close()
   })
 
-  it('los pagos deben cuadrar exactamente con el total', () => {
-    const { db, pos, ctx, clienteId, linea } = setup()
-    pos.abrirCaja(ctx, { montoCent: 0, observaciones: '' })
-    expect(() => pos.vender(ctx, {
-      clienteId, lineas: [linea()], pagos: [{ metodo: 'EFECTIVO', montoCent: 40000, referencia: '' }]
-    })).toThrow(/pagos|centavos/i)
+  it('Ventas no acepta pagos: el importe íntegro queda pendiente de cobro', () => {
+    const { db, ventas, ctx, clienteId, linea } = setup()
+    ventas.factura(ctx, { tipo: 'FACTURA_CONTADO', clienteId, lineas: [linea()] })
+    const cxc = db.prepare('SELECT saldo_cent FROM cxc_documentos').all() as Fila[]
+    expect(cxc).toHaveLength(1)
+    expect(cxc[0].saldo_cent).toBe(47200)
+    expect(db.prepare('SELECT * FROM documento_pagos').all()).toHaveLength(0)
     db.close()
   })
 
@@ -219,9 +223,7 @@ describe('Fase 6 — ventas, POS y documentos', () => {
 
     const sinPos = sinPermiso(ctx, 'pos.crear')
     pos.abrirCaja(ctx, { montoCent: 0, observaciones: '' })
-    expect(() => pos.vender(sinPos, {
-      clienteId, lineas: [linea()], pagos: [{ metodo: 'EFECTIVO', montoCent: 47200, referencia: '' }]
-    })).toThrow()
+    expect(() => pos.vender(sinPos, { clienteId, lineas: [linea()] })).toThrow()
     void factura
     db.close()
   })
@@ -316,6 +318,87 @@ describe('Fase 6 — ventas, POS y documentos', () => {
     expect(() => ventas.convertir(soloVentas, { id: otra.id, tipoDestino: 'PEDIDO' })).toThrow()
     const factura = ventas.convertir(soloVentas, { id: otra.id, tipoDestino: 'FACTURA_CONTADO' }) as { id: number }
     expect((db.prepare('SELECT tipo FROM documentos_venta WHERE id = ?').get(factura.id) as Fila).tipo).toBe('FACTURA_CONTADO')
+    db.close()
+  })
+})
+
+describe('Ajustes administrativos — flujos de ventas', () => {
+  it('exige ventas.aprobar en documentos finales sin umbral y lo audita', () => {
+    const { db, ctx, ajustes, ventas, clienteId, linea } = setup()
+    guardarFlujos(ajustes, ctx, { ventasRequierenAprobacion: true })
+    const sinAprobar = sinPermiso(ctx, 'ventas.aprobar')
+
+    expect(() => ventas.factura(sinAprobar, {
+      tipo: 'FACTURA_CONTADO', clienteId, lineas: [linea()]
+    })).toThrow(/permiso/i)
+    expect(db.prepare("SELECT COUNT(*) AS n FROM documentos_venta WHERE tipo = 'FACTURA_CONTADO'").get()).toMatchObject({ n: 0 })
+    expect(db.prepare("SELECT COUNT(*) AS n FROM auditoria WHERE entidad = 'flujos_aprobacion'").get()).toMatchObject({ n: 0 })
+
+    const doc = ventas.factura(ctx, { tipo: 'FACTURA_CONTADO', clienteId, lineas: [linea()] }) as { id: number; totalCent: number }
+    expect(doc.totalCent).toBe(47200)
+    expect((db.prepare('SELECT estado FROM documentos_venta WHERE id = ?').get(doc.id) as Fila).estado).toBe('ACTIVO')
+    expect((db.prepare('SELECT saldo_cent FROM cxc_documentos WHERE doc_venta_id = ?').get(doc.id) as Fila).saldo_cent).toBe(47200)
+    const autorizacion = db.prepare("SELECT * FROM auditoria WHERE entidad = 'flujos_aprobacion'").get() as Fila
+    expect(autorizacion.entidad_id).toBe(String(doc.id))
+    expect(JSON.parse(String(autorizacion.valores_despues))).toMatchObject({
+      tipo: 'FACTURA_CONTADO', totalCent: 47200, umbralCent: 0, via: 'PERMISO', permiso: 'ventas.aprobar'
+    })
+    db.close()
+  })
+
+  it('autoaprueba por umbral en centavos y vuelve a exigir permiso por encima de él', () => {
+    const { db, ctx, ajustes, ventas, clienteId, linea } = setup()
+    guardarFlujos(ajustes, ctx, { ventasRequierenAprobacion: true, autoAprobarHastaCent: 50000 })
+    const sinAprobar = sinPermiso(ctx, 'ventas.aprobar')
+
+    const doc = ventas.factura(sinAprobar, {
+      tipo: 'FACTURA_CREDITO', clienteId, lineas: [linea()]
+    }) as { id: number; totalCent: number }
+    expect(doc.totalCent).toBe(47200)
+    expect(db.prepare('SELECT COUNT(*) AS n FROM cxc_documentos WHERE doc_venta_id = ?').get(doc.id)).toMatchObject({ n: 1 })
+    expect(() => ventas.factura(sinAprobar, {
+      tipo: 'FACTURA_CREDITO', clienteId, lineas: [linea(3)]
+    })).toThrow(/permiso/i)
+    expect(db.prepare("SELECT COUNT(*) AS n FROM documentos_venta WHERE tipo = 'FACTURA_CREDITO'").get()).toMatchObject({ n: 1 })
+
+    const autorizaciones = db.prepare("SELECT valores_despues FROM auditoria WHERE entidad = 'flujos_aprobacion'").all() as Fila[]
+    expect(autorizaciones).toHaveLength(1)
+    expect(JSON.parse(String(autorizaciones[0].valores_despues))).toMatchObject({
+      via: 'UMBRAL', totalCent: 47200, umbralCent: 50000, permiso: null
+    })
+    db.close()
+  })
+
+  it('POS también exige aprobación, pero cotizaciones y pedidos no', () => {
+    const { db, ctx, ajustes, ventas, pos, clienteId, linea } = setup()
+    guardarFlujos(ajustes, ctx, { ventasRequierenAprobacion: true })
+    const sinAprobar = sinPermiso(ctx, 'ventas.aprobar')
+
+    const cotizacion = ventas.cotizacion(sinAprobar, { clienteId, lineas: [linea()] }) as { id: number }
+    const pedido = ventas.pedido(sinAprobar, { clienteId, lineas: [linea()] }) as { id: number }
+    expect(cotizacion.id).toBeTruthy()
+    expect(pedido.id).toBeTruthy()
+
+    pos.abrirCaja(ctx, { montoCent: 0, observaciones: '' })
+    expect(() => pos.vender(sinAprobar, { clienteId, lineas: [linea()] })).toThrow(/permiso/i)
+    expect(db.prepare("SELECT COUNT(*) AS n FROM auditoria WHERE entidad = 'flujos_aprobacion'").get()).toMatchObject({ n: 0 })
+    pos.vender(ctx, { clienteId, lineas: [linea()] })
+    expect(db.prepare("SELECT COUNT(*) AS n FROM auditoria WHERE entidad = 'flujos_aprobacion'").get()).toMatchObject({ n: 1 })
+    db.close()
+  })
+
+  it('anulación exige motivo de al menos 3 caracteres solo cuando el ajuste está activo', () => {
+    const { db, ctx, ajustes, ventas, factura } = setup()
+    const doc = factura()
+
+    expect(() => ventas.anular(ctx, { id: doc.id, motivo: 'ab' })).toThrow(/3 caracteres/i)
+    expect(() => ventas.anular(ctx, { id: doc.id, motivo: '' })).toThrow(/motivo/i)
+    expect((db.prepare('SELECT estado FROM documentos_venta WHERE id = ?').get(doc.id) as Fila).estado).toBe('ACTIVO')
+
+    guardarFlujos(ajustes, ctx, { anulacionRequiereMotivo: false })
+    expect(ventas.anular(ctx, { id: doc.id, motivo: '' })).toMatchObject({ id: doc.id })
+    const audit = db.prepare("SELECT valores_despues FROM auditoria WHERE operacion = 'ANULAR' AND entidad = 'documentos_venta' AND entidad_id = ?").get(String(doc.id)) as Fila
+    expect(JSON.parse(String(audit.valores_despues)).motivo).toBe('Anulación solicitada')
     db.close()
   })
 })

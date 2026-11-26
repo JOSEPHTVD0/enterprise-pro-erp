@@ -72,9 +72,22 @@ export function cambioPago(totalCent: number, pagos: { monto: string }[]): numbe
   return calcularCambio(totalCent, pagado)
 }
 
+/**
+ * Una línea en blanco no es un error de teclado: es una fila que el usuario
+ * todavía no completó. Se detecta antes de invocar IPC para mostrar un mensaje
+ * útil en vez de un error técnico de Zod.
+ */
+export function primeraLineaIncompleta(lineas: LineaCarrito[]): boolean {
+  return lineas.some((linea) =>
+    num(linea.productoId) <= 0 || Number(linea.cantidad) <= 0 || centavos(linea.precioCent) <= 0
+  )
+}
+
 /** Convierte el formulario al payload que valida el router. */
 export function payloadLineas(lineas: LineaCarrito[]) {
-  return lineas.map((linea) => ({
+  return lineas
+    .filter((linea) => num(linea.productoId) > 0 && Number(linea.cantidad) > 0 && centavos(linea.precioCent) > 0)
+    .map((linea) => ({
     productoId: num(linea.productoId),
     cantidad: Number(linea.cantidad),
     precioCent: centavos(linea.precioCent),

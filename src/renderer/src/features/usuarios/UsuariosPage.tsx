@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Pencil, LockKeyhole, Ban, RotateCcw, UserPlus, Check, X, Power } from 'lucide-react'
+import { Pencil, LockKeyhole, Ban, RotateCcw, UserPlus, Check, X, Power, Building2 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Card } from '@/components/ui/Card'
 import { Button } from '@/components/ui/Button'
@@ -8,7 +8,7 @@ import { Modal } from '@/components/ui/Modal'
 import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Field, TextInput, inputClass } from '@/components/ui/Field'
 import { toast } from '@/components/ui/Toast'
-import { errorInfo, useSessionStore } from '@/app/session'
+import { can, errorInfo, useSessionStore } from '@/app/session'
 import type { UserRow, RoleRow, DepartmentRow } from './types'
 
 interface FormState {
@@ -32,6 +32,8 @@ export function UsuariosPage(): React.JSX.Element {
   const [resetFor, setResetFor] = useState<UserRow | null>(null)
   const [tempPassword, setTempPassword] = useState('')
   const [statusFor, setStatusFor] = useState<{ user: UserRow; field: 'activo' | 'bloqueado'; value: boolean } | null>(null)
+  const [nuevoDepartamento, setNuevoDepartamento] = useState('')
+  const [modalDepartamento, setModalDepartamento] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const load = useCallback(async () => {
@@ -80,6 +82,18 @@ export function UsuariosPage(): React.JSX.Element {
     } catch (e) { toast.error(errorInfo(e).message) } finally { setLoading(false) }
   }
 
+  async function crearDepartamento(): Promise<void> {
+    const nombre = nuevoDepartamento.trim()
+    if (nombre.length < 2) { toast.warning('Escriba un nombre de al menos 2 caracteres.'); return }
+    try {
+      await window.api.invoke('seguridad.departments.create', nombre)
+      toast.success('Departamento creado.')
+      setNuevoDepartamento('')
+      setModalDepartamento(false)
+      await load()
+    } catch (e) { toast.error(errorInfo(e).message) }
+  }
+
   async function changeStatus(): Promise<void> {
     if (!statusFor) return
     try {
@@ -124,7 +138,10 @@ export function UsuariosPage(): React.JSX.Element {
       <PageHeader
         title="Usuarios"
         subtitle="Administración de cuentas, estados y restablecimiento de contraseñas."
-        actions={<Button onClick={openNew}><UserPlus size={15} /> Nuevo usuario</Button>}
+        actions={<div className="flex gap-2">
+          {can('seguridad.crear') && <Button variant="secondary" onClick={() => { setNuevoDepartamento(''); setModalDepartamento(true) }}><Building2 size={15} /> Nuevo departamento</Button>}
+          <Button onClick={openNew}><UserPlus size={15} /> Nuevo usuario</Button>
+        </div>}
       />
       <Card>
         <DataTable
@@ -198,6 +215,20 @@ export function UsuariosPage(): React.JSX.Element {
             </label>
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={modalDepartamento}
+        title="Nuevo departamento"
+        onClose={() => setModalDepartamento(false)}
+        footer={<>
+          <Button variant="secondary" onClick={() => setModalDepartamento(false)}>Cancelar</Button>
+          <Button onClick={() => void crearDepartamento()}>Crear</Button>
+        </>}
+      >
+        <Field label="Nombre" hint="Quedará disponible para los usuarios de la empresa activa.">
+          <TextInput value={nuevoDepartamento} onChange={(e) => setNuevoDepartamento(e.target.value)} placeholder="Ej. Contabilidad" />
+        </Field>
       </Modal>
 
       <Modal

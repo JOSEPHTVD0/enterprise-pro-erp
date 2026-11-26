@@ -55,6 +55,40 @@ export function createAuthService(db: Db) {
       return buildContext(db, token)
     },
 
+    /** Empresas autorizadas para el usuario de una sesión ya autenticada. */
+    userCompanies(userId: number): { id: number; nombre: string }[] {
+      return repo.userCompanies(db, userId)
+    },
+
+    /**
+     * Cambio rápido de empresa sin volver a pedir contraseña. Cierra la sesión
+     * anterior y abre una nueva con token distinto; ambas operaciones quedan
+     * auditadas y se comprueba de nuevo la pertenencia del usuario.
+     */
+    switchCompany(ctx: SessionContext, empresaId: number, equipo: string): LoginResult {
+      const companies = repo.userCompanies(db, ctx.userId)
+      if (!companies.some((c) => c.id === empresaId)) throw errors.forbidden()
+      if (empresaId === ctx.empresaId) return {
+        token: undefined, context: ctx, debeCambiarClave: ctx.debeCambiarClave, empresas: companies
+      }
+      const token = db.transaction(() => {
+        writeAudit(db, {
+          empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
+        }, 'LOGOUT', 'sesiones', ctx.sesionId)
+        repo.closeSession(db, ctx.sesionId)
+        const nuevoToken = randomBytes(32).toString('base64url')
+        const sesionId = repo.insertSession(db, hashToken(nuevoToken), ctx.userId, empresaId, equipo)
+        writeAudit(db, { empresaId, userId: ctx.userId, sesionId }, 'LOGIN', 'usuarios', ctx.userId)
+        return nuevoToken
+      })()
+      return {
+        token,
+        context: buildContext(db, token),
+        debeCambiarClave: ctx.debeCambiarClave,
+        empresas: companies
+      }
+    },
+
     logout(ctx: SessionContext): void {
       db.transaction(() => {
         writeAudit(db, { empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId }, 'LOGOUT', 'sesiones', ctx.sesionId)
@@ -79,8 +113,7 @@ export function createAuthService(db: Db) {
 
     resetPassword(ctx: SessionContext, userId: number): string {
       if (!ctx.permisos.includes('seguridad.usuario.restablecer')) throw errors.forbidden()
-      const target = repo.findUserById(db, userId)
-      if (!target) throw errors.notFound('Usuario')
+      if (!repo.userBelongsToCompany(db, userId, ctx.empresaId)) throw errors.notFound('Usuario')
       const temporary = temporaryPassword()
       const { hash, salt } = hashPassword(temporary)
       db.transaction(() => {

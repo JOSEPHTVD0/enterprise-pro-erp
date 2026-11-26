@@ -11,11 +11,12 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
 import { guardarPdf } from '@/lib/pdf'
+import { formatoGuardado } from '@/lib/formato-impresion'
 import { descargarArchivo } from '@/features/inventario/descargar'
 import { AreaImpresion } from './AreaImpresion'
 import { DocumentoDetalle } from './DocumentoDetalle'
 import { DocumentoForm } from './DocumentoForm'
-import { nuevaLinea, payloadCabecera, totalesCarrito } from './carrito'
+import { nuevaLinea, payloadCabecera, primeraLineaIncompleta, totalesCarrito } from './carrito'
 import { formularioVacio, num, txt, type DatosImpresion, type DetalleDocumento, type Fila } from './types'
 import { useVentasCatalogos } from './useVentasCatalogos'
 
@@ -71,6 +72,7 @@ export function CotizacionesPage(): React.JSX.Element {
   async function guardar(tipoGuardado: 'COTIZACION' | 'PEDIDO'): Promise<void> {
     if (!form.clienteId) { toast.warning('Seleccione el cliente.'); return }
     if (!form.lineas.length) { toast.warning('Agregue al menos una línea.'); return }
+    if (primeraLineaIncompleta(form.lineas)) { toast.warning('Complete o elimine las líneas vacías.'); return }
     setGuardando(true)
     try {
       const canal = tipoGuardado === 'COTIZACION' ? 'cotizaciones.crear' : 'cotizaciones.pedido.crear'
@@ -128,14 +130,16 @@ export function CotizacionesPage(): React.JSX.Element {
 
   async function imprimir(id: number): Promise<void> {
     try {
-      setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id, formato: 'CARTA' }))
+      const formato = await formatoGuardado(tipo)
+      setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id, formato }))
       window.setTimeout(() => window.print(), 80)
     } catch (error) { toast.error(errorInfo(error).message) }
   }
 
   async function guardarPdfCotizacion(id: number): Promise<void> {
     try {
-      await guardarPdf({ origen: 'venta', id, formato: 'CARTA' })
+      const formato = await formatoGuardado(tipo)
+      await guardarPdf({ origen: 'venta', id, formato })
       toast.success('PDF generado y descargado.')
     } catch (error) { toast.error(errorInfo(error).message) }
   }

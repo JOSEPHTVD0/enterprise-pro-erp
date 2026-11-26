@@ -1,76 +1,88 @@
 import { useEffect, useState } from 'react'
-import { Sun, Moon, Monitor, Info, UserRound, LogOut, KeyRound, ShieldCheck, RefreshCw, Download, Power } from 'lucide-react'
+import { Sun, Moon, Monitor, Info, UserRound, LogOut, KeyRound, ShieldCheck, Download, Building2, Check } from 'lucide-react'
 import { useAppStore } from '@/app/store'
+import { useAjustesStore } from '@/app/ajustes-store'
+import { moduleGroups } from '@/app/modules'
 import { useSessionStore, errorInfo } from '@/app/session'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { toast } from '@/components/ui/Toast'
 import { Modal } from '@/components/ui/Modal'
+import { UpdateControls } from '@/features/actualizaciones/UpdateControls'
 import type { AppInfo } from '@shared/app-info'
 import type { EstadoActualizacion } from '@shared/actualizaciones'
+import { estadoActualizaciones, suscribirEstadoActualizacion } from '@/lib/actualizaciones'
 import {
-  estadoActualizaciones, verificarActualizaciones, descargarActualizacion, instalarActualizacion
-} from '@/lib/actualizaciones'
+  aplicarPreferenciasGlobal, instalarObservadorPreferencias, preferenciasActuales,
+  recargarPreferencias, titleSi, usePreferenciasInterfaz
+} from '@/lib/format'
 
 const themeCycle = { light: 'dark', dark: 'system', system: 'light' } as const
 const themeIcon = { light: Sun, dark: Moon, system: Monitor } as const
 const themeLabel = { light: 'Tema claro', dark: 'Tema oscuro', system: 'Tema del sistema' } as const
+const faseActual = Math.max(...moduleGroups.flatMap((g) => g.modules.map((m) => m.phase)))
 
 export function Topbar({ onChangePassword }: { onChangePassword: () => void }): React.JSX.Element {
   const { theme, setTheme } = useAppStore()
-  const { ctx, logout } = useSessionStore()
+  const { ctx, companies, logout, switchCompany } = useSessionStore()
   const [aboutOpen, setAboutOpen] = useState(false)
+  const [updatesOpen, setUpdatesOpen] = useState(false)
   const [userMenu, setUserMenu] = useState(false)
   const [info, setInfo] = useState<AppInfo | null>(null)
+  const ocultarElementos = useAjustesStore((s) => s.ajustes.interfaz?.ocultarElementos) ?? []
+  const ocultos = new Set(ocultarElementos)
   const [update, setUpdate] = useState<EstadoActualizacion | null>(null)
-  const [buscando, setBuscando] = useState(false)
-  const [descargando, setDescargando] = useState(false)
   const ThemeIcon = themeIcon[theme]
+  const preferencias = usePreferenciasInterfaz()
+
+  // Se aplica en un microtask para que prevalezca sobre el efecto del tema avanzado.
+  useEffect(() => {
+    queueMicrotask(() => aplicarPreferenciasGlobal(preferenciasActuales()))
+  }, [
+    preferencias.acento, preferencias.tamanoFuente, preferencias.densidad,
+    preferencias.reducirMovimiento, preferencias.tooltips, preferencias.confirmarAcciones,
+    preferencias.modoBajoConsumo
+  ])
+
+  useEffect(() => instalarObservadorPreferencias(), [])
 
   useEffect(() => {
-    if (!aboutOpen) return
-    if (!info) {
-      window.api.app
-        .getInfo()
-        .then(setInfo)
-        .catch(() => setInfo(null))
-    }
-    if (!update) {
+    const onActualizar = (): void => { void recargarPreferencias() }
+    window.addEventListener('erp:preferencias-actualizadas', onActualizar)
+    return () => window.removeEventListener('erp:preferencias-actualizadas', onActualizar)
+  }, [])
+
+  // El proceso principal ya consulta el feed al iniciar cuando la app está instalada;
+  // aquí solo leemos el estado para mostrar el distintivo sin lanzar red extra.
+  useEffect(() => {
+    const leer = (): void => {
       void estadoActualizaciones().then(setUpdate).catch(() => setUpdate(null))
     }
-  }, [aboutOpen, info, update])
-
-  async function verificar(): Promise<void> {
-    setBuscando(true)
-    try {
-      const resultado = await verificarActualizaciones()
-      setUpdate(resultado)
-      if (resultado.error) toast.error(resultado.error)
-      else if (!resultado.disponible) toast.info('No hay actualizaciones disponibles.')
-    } catch (error) {
-      toast.error(errorInfo(error).message)
-    } finally {
-      setBuscando(false)
+    leer()
+    const cancelar = suscribirEstadoActualizacion(setUpdate)
+    const temporizador = window.setInterval(leer, 60_000)
+    return () => {
+      window.clearInterval(temporizador)
+      cancelar()
     }
-  }
+  }, [])
 
-  async function descargar(): Promise<void> {
-    setDescargando(true)
-    try {
-      const resultado = await descargarActualizacion()
-      setUpdate(resultado)
-      if (resultado.error) toast.error(resultado.error)
-      else toast.success('Actualización descargada. Ya puede instalarla.')
-    } catch (error) {
-      toast.error(errorInfo(error).message)
-    } finally {
-      setDescargando(false)
-    }
-  }
+  useEffect(() => {
+    if (!aboutOpen || info) return
+    window.api.app
+      .getInfo()
+      .then(setInfo)
+      .catch(() => setInfo(null))
+  }, [aboutOpen, info])
 
-  function instalar(): void {
+  async function cambiarEmpresa(empresaId: number): Promise<void> {
+    setUserMenu(false)
+    if (empresaId === ctx?.empresaId) return
     try {
-      instalarActualizacion()
+      await switchCompany(empresaId)
+      await useAjustesStore.getState().cargar()
+      useAppStore.getState().setActiveView('dashboard')
+      toast.success('Empresa activa cambiada.')
     } catch (error) {
       toast.error(errorInfo(error).message)
     }
@@ -86,7 +98,7 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <Badge tone="accent">Fase 10 · Auditoría y respaldos</Badge>
+        {!ocultos.has('distintivoFase') && <Badge tone="accent">Módulos hasta la fase {faseActual}</Badge>}
 
         <div className="relative">
           <button
@@ -94,9 +106,11 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
             className="flex items-center gap-2 rounded-lg px-2 py-1 text-left text-xs hover:bg-slate-100 dark:hover:bg-slate-800"
             aria-expanded={userMenu}
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
-              <UserRound size={15} />
-            </span>
+            {!ocultos.has('avatarUsuario') && (
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300">
+                <UserRound size={15} />
+              </span>
+            )}
             <span className="hidden leading-tight sm:block">
               <span className="block font-medium">{ctx?.nombre || ctx?.username}</span>
               <span className="block text-slate-400">@{ctx?.username}</span>
@@ -108,6 +122,23 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
                 <p className="flex items-center gap-1.5 font-medium"><ShieldCheck size={13} className="text-indigo-500" /> Sesión activa</p>
                 <p className="mt-1 text-slate-400">{ctx?.permisos.length ?? 0} permisos efectivos</p>
               </div>
+              {companies.length > 1 && (
+                <div className="border-b border-slate-100 py-1 dark:border-slate-800">
+                  <p className="px-2 py-1 text-[11px] uppercase text-slate-400">Cambiar empresa</p>
+                  {companies.map((empresa) => (
+                    <button
+                      key={empresa.id}
+                      onClick={() => void cambiarEmpresa(empresa.id)}
+                      disabled={empresa.id === ctx?.empresaId}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-100 disabled:bg-indigo-50 disabled:text-indigo-700 dark:hover:bg-slate-800 dark:disabled:bg-indigo-950/30 dark:disabled:text-indigo-300"
+                    >
+                      <Building2 size={14} className="shrink-0" />
+                      <span className="min-w-0 flex-1 truncate">{empresa.nombre}</span>
+                      {empresa.id === ctx?.empresaId && <Check size={14} />}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => { setUserMenu(false); onChangePassword() }}
                 className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -124,23 +155,52 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
           )}
         </div>
 
-        <button
-          onClick={() => setTheme(themeCycle[theme])}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-          title={`${themeLabel[theme]} — clic para cambiar`}
-          aria-label={themeLabel[theme]}
-        >
-          <ThemeIcon size={17} />
-        </button>
-        <button
-          onClick={() => setAboutOpen(true)}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-          title="Acerca de"
-          aria-label="Acerca de"
-        >
-          <Info size={17} />
-        </button>
+        {!ocultos.has('botonTema') && (
+          <button
+            onClick={() => setTheme(themeCycle[theme])}
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            title={titleSi(preferencias.tooltips, `${themeLabel[theme]} — clic para cambiar`)}
+            aria-label={themeLabel[theme]}
+          >
+            <ThemeIcon size={17} />
+          </button>
+        )}
+        {!ocultos.has('botonActualizaciones') && (
+          <button
+            onClick={() => { setUserMenu(false); setUpdatesOpen(true) }}
+            className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            title={titleSi(preferencias.tooltips, 'Actualizaciones')}
+            aria-label="Actualizaciones"
+          >
+            <Download size={17} />
+            {(update?.disponible || update?.descargada) && (
+              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+            )}
+          </button>
+        )}
+        {!ocultos.has('botonAcerca') && (
+          <button
+            onClick={() => setAboutOpen(true)}
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            title={titleSi(preferencias.tooltips, 'Acerca de')}
+            aria-label="Acerca de"
+          >
+            <Info size={17} />
+          </button>
+        )}
       </div>
+
+      <Modal
+        open={updatesOpen}
+        title="Actualizaciones de ENTERPRISE PRO ERP"
+        onClose={() => setUpdatesOpen(false)}
+        footer={<Button onClick={() => setUpdatesOpen(false)}>Cerrar</Button>}
+      >
+        <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+          Busque y descargue el instalador en Descargas. La instalación se realiza manualmente y los datos locales se conservan.
+        </p>
+        <UpdateControls update={update} onUpdate={setUpdate} />
+      </Modal>
 
       <Modal
         open={aboutOpen}
@@ -170,35 +230,8 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
           <p className="text-sm text-slate-500">Cargando información…</p>
         )}
 
-        <div className="mt-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium">Actualizaciones</p>
-              <p className="text-xs text-slate-400">
-                {update?.habilitada
-                  ? `Feed configurado · versión actual ${update.versionActual}`
-                  : 'Fuente no configurada (ERP_UPDATE_URL)'}
-              </p>
-            </div>
-            <Button size="sm" variant="secondary" onClick={() => void verificar()} disabled={buscando || !update?.habilitada}>
-              <RefreshCw size={14} className={buscando ? 'animate-spin' : ''} /> Buscar
-            </Button>
-          </div>
-          {update?.disponible && !update.descargada && (
-            <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-              <p className="text-xs">Versión <strong>{update.version}</strong> disponible.</p>
-              <Button size="sm" onClick={() => void descargar()} disabled={descargando}>
-                <Download size={14} /> {descargando ? 'Descargando…' : 'Descargar'}
-              </Button>
-            </div>
-          )}
-          {update?.descargada && (
-            <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
-              <p className="text-xs text-emerald-600 dark:text-emerald-400">Lista para instalar ({update.archivos ?? 1} archivo(s)).</p>
-              <Button size="sm" onClick={instalar}><Power size={14} /> Instalar y reiniciar</Button>
-            </div>
-          )}
-          {update?.error && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{update.error}</p>}
+        <div className="mt-4">
+          <UpdateControls update={update} onUpdate={setUpdate} />
         </div>
 
         <p className="mt-4 text-xs leading-relaxed text-slate-400">

@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { testDb } from '../helpers/db'
 import { createAuthService } from '../../src/main/services/auth.service'
-import { createConfiguracionService } from '../../src/main/services/configuracion.service'
+import { createConfiguracionService, libroHabilitado } from '../../src/main/services/configuracion.service'
+import { createAjustesService } from '../../src/main/services/ajustes.service'
+import { defaultAjustes } from '@shared/schemas/ajustes'
 import { createSeguridadService } from '../../src/main/services/seguridad.service'
 import { FIRST_RUN_USER, FIRST_RUN_PASSWORD } from '../../src/main/db/seed'
 import { nextSerieNumber } from '../../src/main/repositories/configuracion.repo'
@@ -92,6 +94,61 @@ describe('configuración y numeración', () => {
     const { seguridad, ctx, db } = admin(testDb())
     expect(seguridad.listSessions(ctx).length).toBeGreaterThan(0)
     expect(Array.isArray(seguridad.listAudit(ctx, {}))).toBe(true)
+    db.close()
+  })
+})
+
+describe('ajustes fiscales e integraciones aplicados en backend', () => {
+  it('sincroniza itbis, moneda y aviso de NCF con las tablas operativas', () => {
+    const { ctx, db } = admin(testDb())
+    createAjustesService(db).save(ctx, {
+      grupo: 'fiscal',
+      datos: {
+        ...defaultAjustes.fiscal,
+        itbisPorDefecto: 'EXENTO', monedaBase: 'USD', ncfAvisoDias: 30
+      }
+    })
+    expect(db.prepare(`
+      SELECT valor FROM parametros WHERE empresa_id = 1 AND clave = 'itbis_por_defecto'
+    `).get()).toEqual({ valor: 'EXENTO' })
+    expect(db.prepare('SELECT moneda_base FROM empresas WHERE id = 1').get())
+      .toEqual({ moneda_base: 'USD' })
+    expect((db.prepare(`
+      SELECT alerta_min FROM series_documento WHERE empresa_id = 1 ORDER BY id LIMIT 1
+    `).get() as { alerta_min: number }).alerta_min).toBe(30)
+    expect(db.prepare(`
+      SELECT COUNT(*) AS n FROM auditoria WHERE operacion = 'SINCRONIZAR_FISCAL'
+    `).get()).toMatchObject({ n: 1 })
+    db.close()
+  })
+
+  it('libro606 y libro607 gobiernan su generación', () => {
+    const { ctx, db } = admin(testDb())
+    const ajustes = createAjustesService(db)
+    ajustes.save(ctx, {
+      grupo: 'fiscal',
+      datos: { ...defaultAjustes.fiscal, libro606: false, libro607: true }
+    })
+    expect(libroHabilitado(db, 1, 'LIBRO606')).toBe(false)
+    expect(libroHabilitado(db, 1, 'LIBRO607')).toBe(true)
+    ajustes.save(ctx, {
+      grupo: 'fiscal',
+      datos: { ...defaultAjustes.fiscal, libro606: true, libro607: false }
+    })
+    expect(libroHabilitado(db, 1, 'LIBRO606')).toBe(true)
+    expect(libroHabilitado(db, 1, 'LIBRO607')).toBe(false)
+    db.close()
+  })
+
+  it('solo ofrece formatos que el backend produce y habilita la estación', () => {
+    const { config, ctx, db } = admin(testDb())
+    createAjustesService(db).save(ctx, {
+      grupo: 'integraciones',
+      datos: { ...defaultAjustes.integraciones, formatos: ['CSV'], impresoraTicket: 'POS-TICKET' }
+    })
+    const cfg = config.getConfig(ctx)
+    expect(cfg.formatosExportacion).toEqual(['CSV'])
+    expect(cfg.impresoraTicketEfectiva).toBe('POS-TICKET')
     db.close()
   })
 })

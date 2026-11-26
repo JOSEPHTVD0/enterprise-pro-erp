@@ -11,18 +11,18 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
 import { guardarPdf } from '@/lib/pdf'
+import { formatoGuardado } from '@/lib/formato-impresion'
 import { AreaImpresion } from './AreaImpresion'
 import { DocumentoForm } from './DocumentoForm'
-import { PagosEditor } from './PagosEditor'
-import { nuevaLinea, payloadCabecera, payloadPagos, totalesCarrito } from './carrito'
+import { nuevaLinea, payloadCabecera, primeraLineaIncompleta, totalesCarrito } from './carrito'
 import { clave, formularioVacio, num, txt, type DatosImpresion, type Fila, type FormularioVenta, type LineaCarrito } from './types'
 import { useVentasCatalogos } from './useVentasCatalogos'
 
-interface SesionPOS { sesion: Fila | null; caja: Fila | undefined; movimientos: Fila[] }
+interface SesionPOS { sesion: Fila | null; caja: Fila | undefined; movimientos: Fila[]; teoricoCent: number }
 
 export function PosPage(): React.JSX.Element {
   const catalogos = useVentasCatalogos('pos.catalogos')
-  const [sesion, setSesion] = useState<SesionPOS>({ sesion: null, caja: undefined, movimientos: [] })
+  const [sesion, setSesion] = useState<SesionPOS>({ sesion: null, caja: undefined, movimientos: [], teoricoCent: 0 })
   const [suspendidas, setSuspendidas] = useState<Fila[]>([])
   const [form, setForm] = useState(formularioVacio(catalogos))
   const [abrirOpen, setAbrirOpen] = useState(false)
@@ -60,15 +60,12 @@ export function PosPage(): React.JSX.Element {
     }
   }, [catalogos.almacenes, form.almacenId])
 
-  const teoricoCent = sesion.movimientos.reduce(
-    (suma, mov) => suma + (txt(mov.tipo) === 'INGRESO' ? num(mov.montoCent) : -num(mov.montoCent)), 0
-  )
+  const teoricoCent = num(sesion.teoricoCent)
   const totalCent = totalesCarrito(catalogos, form.lineas).totalCent
 
   function resetCarrito(): void {
     const base = formularioVacio(catalogos)
     base.lineas = [nuevaLinea(catalogos)]
-    base.pagos = [{ key: clave(), metodo: 'EFECTIVO', monto: '', referencia: '' }]
     setForm(base)
   }
 
@@ -107,12 +104,11 @@ export function PosPage(): React.JSX.Element {
     if (!sesion.sesion) { toast.warning('Abra la caja antes de vender.'); return }
     if (!form.clienteId) { toast.warning('Seleccione el cliente.'); return }
     if (!form.lineas.length) { toast.warning('Agregue productos al carrito.'); return }
-    const pagado = payloadPagos(form.pagos).reduce((s, p) => s + p.montoCent, 0)
-    if (pagado !== totalCent) { toast.warning(`Los pagos deben sumar ${money(totalCent)}.`); return }
+    if (primeraLineaIncompleta(form.lineas)) { toast.warning('Complete o elimine las líneas vacías.'); return }
     setGuardando(true)
     try {
       const res = await window.api.invoke<{ id: number; numero: string }>('pos.vender', {
-        ...payloadCabecera(form), pagos: payloadPagos(form.pagos)
+        ...payloadCabecera(form)
       })
       toast.success(`Venta ${res.numero} registrada.`)
       setUltima({ id: res.id, numero: res.numero })
@@ -127,6 +123,7 @@ export function PosPage(): React.JSX.Element {
 
   async function suspender(): Promise<void> {
     if (!nombreSuspension.trim()) { toast.warning('Indique un nombre para la venta suspendida.'); return }
+    if (primeraLineaIncompleta(form.lineas)) { toast.warning('Complete o elimine las líneas vacías.'); return }
     try {
       await window.api.invoke('pos.suspender', {
         nombre: nombreSuspension.trim(),
@@ -165,8 +162,7 @@ export function PosPage(): React.JSX.Element {
         vendedorId: carrito.vendedorId ? String(carrito.vendedorId) : '',
         fecha: String(carrito.fecha ?? new Date().toISOString().slice(0, 10)),
         comentarios: String(carrito.comentarios ?? ''),
-        lineas: recuperadas,
-        pagos: [{ key: clave(), metodo: 'EFECTIVO', monto: '', referencia: '' }]
+        lineas: recuperadas
       }
       setForm(siguiente)
       toast.success('Carrito recuperado.')
@@ -179,7 +175,8 @@ export function PosPage(): React.JSX.Element {
   async function imprimirUltima(): Promise<void> {
     if (!ultima) return
     try {
-      setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id: ultima.id, formato: 'TICKET_80' }))
+      const formato = await formatoGuardado('POS', 'TICKET_80')
+      setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id: ultima.id, formato }))
       window.setTimeout(() => window.print(), 80)
     } catch (error) {
       toast.error(errorInfo(error).message)
@@ -189,7 +186,8 @@ export function PosPage(): React.JSX.Element {
   async function guardarPdfTicket(): Promise<void> {
     if (!ultima) return
     try {
-      await guardarPdf({ origen: 'venta', id: num(ultima.id), formato: 'TICKET_80' })
+      const formato = await formatoGuardado('POS', 'TICKET_80')
+      await guardarPdf({ origen: 'venta', id: num(ultima.id), formato })
       toast.success('PDF del ticket descargado.')
     } catch (error) {
       toast.error(errorInfo(error).message)
@@ -212,7 +210,7 @@ export function PosPage(): React.JSX.Element {
     <>
       <PageHeader
         title="Punto de Venta"
-        subtitle="Venta rápida con pagos combinados, cambio y control de caja."
+        subtitle="Venta rápida con control de sesión; el cobro se registra en Cobros."
         actions={
           <>
             <Button variant="secondary" onClick={() => { void cargarSesion(); void cargarSuspendidas() }}>
@@ -251,7 +249,9 @@ export function PosPage(): React.JSX.Element {
             permitirDescuento={can('pos.descuento')}
             permitirPrecio={can('pos.precio')}
           >
-            <PagosEditor totalCent={totalCent} pagos={form.pagos} onChange={(pagos) => setForm({ ...form, pagos })} />
+            <p className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300">
+              Esta venta generará un cargo cobrable. Para recibir el dinero, registre un recibo en el módulo <strong>Cobros</strong>.
+            </p>
             <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
               {can('pos.crear') && (
                 <Button variant="secondary" onClick={() => setSuspenderOpen(true)} disabled={!sesion.sesion}>
@@ -260,7 +260,7 @@ export function PosPage(): React.JSX.Element {
               )}
               {can('pos.crear') && (
                 <Button onClick={() => void vender()} disabled={guardando || !sesion.sesion}>
-                  {guardando ? 'Procesando…' : `Cobrar ${money(totalCent)}`}
+                  {guardando ? 'Procesando…' : `Registrar venta ${money(totalCent)}`}
                 </Button>
               )}
             </div>

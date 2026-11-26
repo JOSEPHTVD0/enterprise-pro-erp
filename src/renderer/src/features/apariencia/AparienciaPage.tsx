@@ -25,6 +25,10 @@ export function AparienciaPage(): React.JSX.Element {
   const [saving, setSaving] = useState(false)
   const Preview = themePreview[theme].icon
 
+  const notificar = (): void => {
+    window.dispatchEvent(new Event('erp:preferencias-actualizadas'))
+  }
+
   /** Guardado explícito con confirmación real contra el proceso principal. */
   async function verifyPersistence(): Promise<void> {
     setSaving(true)
@@ -33,6 +37,7 @@ export function AparienciaPage(): React.JSX.Element {
       const saved = await window.api.settings.set(expected)
       const stored = await window.api.settings.get()
       if (stored.theme === saved.theme && stored.sidebarCollapsed === saved.sidebarCollapsed) {
+        notificar()
         toast.success('Preferencias guardadas. Se conservarán al reiniciar la aplicación.')
       } else {
         toast.error('La verificación de guardado falló. Revisa el directorio de datos.')
@@ -62,7 +67,7 @@ export function AparienciaPage(): React.JSX.Element {
               label="Tema de la aplicación"
               options={themeOptions}
               value={theme}
-              onChange={(e) => setTheme(e.target.value as Settings['theme'])}
+              onChange={(e) => { setTheme(e.target.value as Settings['theme']); notificar() }}
             />
             <div className="flex items-start gap-3 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/60">
               <Preview size={20} className="mt-0.5 shrink-0 text-indigo-500" />
@@ -89,7 +94,7 @@ export function AparienciaPage(): React.JSX.Element {
               <Button
                 variant={sidebarCollapsed ? 'primary' : 'secondary'}
                 size="sm"
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                onClick={() => { setSidebarCollapsed(!sidebarCollapsed); notificar() }}
                 aria-pressed={sidebarCollapsed}
               >
                 {sidebarCollapsed ? 'Contraído' : 'Expandido'}

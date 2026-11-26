@@ -5,6 +5,8 @@ import { createAuthService } from '../../src/main/services/auth.service'
 import { createMaestrosService } from '../../src/main/services/maestros.service'
 import { createInventarioService } from '../../src/main/services/inventario.service'
 import { createComprasService } from '../../src/main/services/compras.service'
+import { createAjustesService } from '../../src/main/services/ajustes.service'
+import { defaultAjustes } from '@shared/schemas/ajustes'
 import type { SessionContext } from '@shared/session'
 
 type Fila = Record<string, unknown>
@@ -16,7 +18,8 @@ function setup() {
   const ctx = login.context as SessionContext
   const maestros = createMaestrosService(db)
   const inventario = createInventarioService(db)
-  const compras = createComprasService(db, inventario)
+  const ajustes = createAjustesService(db)
+  const compras = createComprasService(db, inventario, ajustes)
 
   const proveedorId = Number(db.prepare(`
     INSERT INTO proveedores (empresa_id, codigo, nombre_comercial, razon_social, rnc, condicion_pago_dias)
@@ -50,7 +53,7 @@ function setup() {
   `).get(productoId) as Fila
 
   return {
-    db, ctx, maestros, inventario, compras, proveedorId, productoId,
+    db, ctx, maestros, inventario, ajustes, compras, proveedorId, productoId,
     linea, facturaDirecta, existencia, producto, balance, comprasKardex
   }
 }
@@ -58,6 +61,14 @@ function setup() {
 const sinPermiso = (ctx: SessionContext, clave: string): SessionContext => ({
   ...ctx, permisos: ctx.permisos.filter((p) => p !== clave)
 })
+
+function guardarFlujos(
+  ajustes: ReturnType<typeof createAjustesService>,
+  ctx: SessionContext,
+  cambios: Partial<typeof defaultAjustes.flujos>
+): void {
+  ajustes.save(ctx, { grupo: 'flujos', datos: { ...defaultAjustes.flujos, ...cambios } })
+}
 
 describe('Fase 7 — compras, recepciones, CxP y devoluciones', () => {
   it('la migración 005 crea los libros de compras y las series internas', () => {
@@ -226,6 +237,91 @@ describe('Fase 7 — compras, recepciones, CxP y devoluciones', () => {
     expect(existencia()).toMatchObject({ cantidad: 2, valor_cent: 21000 })
     expect(producto()).toMatchObject({ costo_promedio_cent: 10500, costo_ultima_compra_cent: 10500 })
     expect((db.prepare('SELECT saldo_cent FROM cxp_documentos WHERE doc_compra_id = ?').get(doc.id) as Fila).saldo_cent).toBe(24600)
+    db.close()
+  })
+})
+
+describe('Ajustes administrativos — flujos de compras', () => {
+  it('exige compras.aprobar en la factura sin umbral y lo audita sin cambiar estado ni stock', () => {
+    const { db, ctx, ajustes, compras, proveedorId, linea, existencia } = setup()
+    guardarFlujos(ajustes, ctx, { comprasRequierenAprobacion: true })
+    const sinAprobar = sinPermiso(ctx, 'compras.aprobar')
+
+    expect(() => compras.factura(sinAprobar, {
+      tipo: 'FACTURA_COMPRA', proveedorId, lineas: [linea(2)]
+    })).toThrow(/permiso/i)
+    expect(db.prepare("SELECT COUNT(*) AS n FROM documentos_compra WHERE tipo = 'FACTURA_COMPRA'").get()).toMatchObject({ n: 0 })
+    expect(existencia() ?? { cantidad: 0, valor_cent: 0 }).toMatchObject({ cantidad: 0, valor_cent: 0 })
+
+    const doc = compras.factura(ctx, {
+      tipo: 'FACTURA_COMPRA', proveedorId, lineas: [linea(2)]
+    }) as { id: number; totalCent: number }
+    expect(doc.totalCent).toBe(23600)
+    expect((db.prepare('SELECT estado FROM documentos_compra WHERE id = ?').get(doc.id) as Fila).estado).toBe('CONTABILIZADO')
+    expect(existencia()).toMatchObject({ cantidad: 2, valor_cent: 20000 })
+    expect(db.prepare('SELECT COUNT(*) AS n FROM pagos_compra WHERE doc_id = ?').get(doc.id)).toMatchObject({ n: 1 })
+
+    const autorizacion = db.prepare("SELECT * FROM auditoria WHERE entidad = 'flujos_aprobacion'").get() as Fila
+    expect(autorizacion.entidad_id).toBe(String(doc.id))
+    expect(JSON.parse(String(autorizacion.valores_despues))).toMatchObject({
+      tipo: 'FACTURA_COMPRA', totalCent: 23600, umbralCent: 0, via: 'PERMISO', permiso: 'compras.aprobar'
+    })
+    db.close()
+  })
+
+  it('autoaprueba por umbral en centavos y exige permiso por encima del umbral', () => {
+    const { db, ctx, ajustes, compras, proveedorId, linea } = setup()
+    guardarFlujos(ajustes, ctx, { comprasRequierenAprobacion: true, autoAprobarHastaCent: 25000 })
+    const sinAprobar = sinPermiso(ctx, 'compras.aprobar')
+
+    const doc = compras.factura(sinAprobar, {
+      tipo: 'FACTURA_COMPRA', proveedorId, lineas: [linea(2)], credito: true
+    }) as { id: number; totalCent: number }
+    expect(doc.totalCent).toBe(23600)
+    expect(db.prepare('SELECT saldo_cent FROM cxp_documentos WHERE doc_compra_id = ?').get(doc.id)).toMatchObject({ saldo_cent: 23600 })
+    expect(() => compras.factura(sinAprobar, {
+      tipo: 'FACTURA_COMPRA', proveedorId, lineas: [linea(3)], credito: true
+    })).toThrow(/permiso/i)
+    expect(db.prepare("SELECT COUNT(*) AS n FROM documentos_compra WHERE tipo = 'FACTURA_COMPRA'").get()).toMatchObject({ n: 1 })
+
+    const autorizaciones = db.prepare("SELECT valores_despues FROM auditoria WHERE entidad = 'flujos_aprobacion'").all() as Fila[]
+    expect(autorizaciones).toHaveLength(1)
+    expect(JSON.parse(String(autorizaciones[0].valores_despues))).toMatchObject({
+      via: 'UMBRAL', totalCent: 23600, umbralCent: 25000, permiso: null
+    })
+    db.close()
+  })
+
+  it('solicitud, orden y recepción siguen sin requerir aprobación', () => {
+    const { db, ctx, ajustes, compras, proveedorId, linea } = setup()
+    guardarFlujos(ajustes, ctx, { comprasRequierenAprobacion: true })
+    const sinAprobar = sinPermiso(ctx, 'compras.aprobar')
+
+    const solicitud = compras.solicitud(sinAprobar, {
+      tipo: 'SOLICITUD_COMPRA', proveedorId, lineas: [linea(10)]
+    }) as { id: number }
+    const orden = compras.convertir(sinAprobar, { id: solicitud.id, tipoDestino: 'ORDEN_COMPRA' }) as { id: number }
+    const ordenLinea = db.prepare('SELECT id FROM documento_compra_lineas WHERE doc_id = ?').get(orden.id) as Fila
+    compras.registrarRecepcion(sinAprobar, {
+      ordenId: orden.id, lineas: [{ docLineaId: Number(ordenLinea.id), cantidad: 4 }]
+    })
+    expect(db.prepare("SELECT COUNT(*) AS n FROM auditoria WHERE entidad = 'flujos_aprobacion'").get()).toMatchObject({ n: 0 })
+    db.close()
+  })
+
+  it('anulación exige motivo de al menos 3 caracteres solo cuando el ajuste está activo', () => {
+    const { db, ctx, ajustes, compras, facturaDirecta } = setup()
+    const doc = facturaDirecta(true)
+
+    guardarFlujos(ajustes, ctx, { comprasRequierenAprobacion: false, anulacionRequiereMotivo: true })
+    expect(() => compras.anular(ctx, { id: doc.id, motivo: 'ab' })).toThrow(/3 caracteres/i)
+    expect(() => compras.anular(ctx, { id: doc.id, motivo: '' })).toThrow(/motivo/i)
+    expect((db.prepare('SELECT estado FROM documentos_compra WHERE id = ?').get(doc.id) as Fila).estado).toBe('CONTABILIZADO')
+
+    guardarFlujos(ajustes, ctx, { anulacionRequiereMotivo: false })
+    expect(compras.anular(ctx, { id: doc.id, motivo: '' })).toMatchObject({ id: doc.id })
+    const audit = db.prepare("SELECT valores_despues FROM auditoria WHERE operacion = 'ANULAR' AND entidad = 'documentos_compra' AND entidad_id = ?").get(String(doc.id)) as Fila
+    expect(JSON.parse(String(audit.valores_despues)).motivo).toBe('Anulación solicitada')
     db.close()
   })
 })

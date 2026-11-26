@@ -655,33 +655,36 @@ export function ligarMovimientoBanco(db: Db, empresaId: number, movimientoId: nu
 }
 
 /** Catálogos de solo lectura para los formularios de Finanzas. */
-export function catalogosFin(db: Db, empresaId: number): Record<string, Fila[]> {
+export function catalogosFin(
+  db: Db, empresaId: number, permitidos: (clave: string) => boolean = () => true
+): Record<string, Fila[]> {
   const rows = (sql: string) => lista(db, sql, [empresaId])
+  const vacio: Fila[] = []
   return {
-    clientes: rows(`
+    clientes: permitidos('cxc.consultar') || permitidos('cobros.consultar') ? rows(`
       SELECT id, codigo, nombre, rnc_cedula, balance_cent, limite_credito_cent
       FROM clientes WHERE empresa_id = ? AND activo = 1 ORDER BY nombre
-    `),
-    proveedores: rows(`
+    `) : vacio,
+    proveedores: permitidos('cxp.consultar') ? rows(`
       SELECT id, codigo, nombre_comercial, rnc, balance_cent
       FROM proveedores WHERE empresa_id = ? AND activo = 1 ORDER BY nombre_comercial
-    `),
-    vendedores: rows(`
+    `) : vacio,
+    vendedores: permitidos('cxc.consultar') || permitidos('ventas.consultar') ? rows(`
       SELECT id, codigo, nombre, comision_pct_bp FROM vendedores
       WHERE empresa_id = ? AND activo = 1 ORDER BY nombre
-    `),
-    cajas: rows(`SELECT id, codigo, nombre FROM cajas WHERE empresa_id = ? AND activa = 1 ORDER BY id`),
-    bancosCuentas: rows(`
+    `) : vacio,
+    cajas: permitidos('cajas.consultar') ? rows(`SELECT id, codigo, nombre FROM cajas WHERE empresa_id = ? AND activa = 1 ORDER BY id`) : vacio,
+    bancosCuentas: permitidos('bancos.consultar') ? rows(`
       SELECT id, codigo, nombre, banco, numero_cuenta, tipo, saldo_cent
       FROM bancos_cuentas WHERE empresa_id = ? AND activa = 1 ORDER BY id
-    `),
-    gastoCategorias: rows(`
+    `) : vacio,
+    gastoCategorias: permitidos('gastos.consultar') ? rows(`
       SELECT id, codigo, nombre FROM gastos_categorias
       WHERE empresa_id = ? AND activa = 1 ORDER BY nombre
-    `),
-    documentosVenta: rows(`
+    `) : vacio,
+    documentosVenta: permitidos('cxc.consultar') || permitidos('cobros.consultar') ? rows(`
       SELECT id, numero, tipo, total_cent, cliente_id, cliente_nombre, estado
       FROM documentos_venta WHERE empresa_id = ? AND estado = 'ACTIVO' ORDER BY id DESC LIMIT 300
-    `)
+    `) : vacio
   }
 }

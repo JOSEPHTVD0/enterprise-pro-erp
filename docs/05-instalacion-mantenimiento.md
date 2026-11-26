@@ -33,11 +33,17 @@ primera vez Windows SmartScreen **puede seguir mostrando una advertencia**: solo
 de código de una CA pública confiable permite eliminarla. Esto no afecta la operación local.
 Detalles en [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md).
 
+Versión publicada actual: `0.5.10` — `EnterpriseProERP-Setup-0.5.10.exe` (145.527.128 bytes),
+SHA-256 `D16E382BFE03649EDC9F8750456D9CBE7BC8927EB71D3002BF76C0E0648B738E`,
+SHA-512 `IM15UeO3B3i0rjqD5OXy7J+WbGyGxHF/d6mv80pZgy68VPKh+zl7BszfB+gaTNAN46PBAt+r14bwFmkMSTJ0gA==`.
+Novedades: [docs/28](28-novedades-0.5.10.md).
+
 ## 2. Primer arranque
 
 1. Abrir `ENTERPRISE PRO ERP` desde el acceso directo.
 2. Usuario inicial: `admin`, contraseña: `Admin1234!`.
 3. La aplicación exige cambiar la contraseña antes de habilitar cualquier otro módulo.
+   La clave puede tener **4 o más caracteres**; se aceptan PIN numéricos (`1234`).
 4. Configurar empresa, RNC/cédula, ITBIS, NCF y preferencias desde **Configuración**.
 
 La moneda operativa es DOP/RD$. Los libros 606/607 y el aviso DGII están preparados como
@@ -74,12 +80,21 @@ caso, de modo que la base de datos, los respaldos y las preferencias se conserva
 Si se instaló en una carpeta distinta, usar el mismo `/D=ruta` para mantener los accesos
 directos donde estaban.
 
-Además de esa actualización manual, **Acerca de → Actualizaciones** permite **Buscar**,
-**Descargar** e **Instalar y reiniciar** usando `electron-updater`. La fuente es
-`ERP_UPDATE_URL` o, si no se define, el `build.publish.url` incluido en el paquete. El feed
-incluido en esta entrega es local y sirve solo para pruebas; en producción debe publicarse en
-HTTPS. Después de actualizar, iniciar sesión y pulsar **Acerca de** para confirmar versión y
-directorio de datos.
+Además de esa actualización manual, el botón **Actualizaciones** de la barra superior abre un
+panel con **Buscar**, **Descargar instalador** y **Abrir carpeta** (el mismo panel está
+disponible en **Acerca de**). El instalador se guarda en la carpeta `Descargas` del usuario;
+la aplicación nunca lo ejecuta ni se reinicia sola. Desde el Explorador, ejecute el `.exe`
+para instalar. Como no se pasa el parámetro `--updated`, el instalador NSIS puede preguntar
+si desea eliminar también los datos locales: responda **No** para conservar base de datos,
+respaldos y preferencias.
+
+En la aplicación instalada, el proceso principal consulta el feed una vez al iniciar y muestra
+un distintivo cuando hay una versión nueva o ya hay un instalador guardado. La fuente es la URL
+pública de GitHub Releases incluida en el código (electron-builder elimina el campo `build`
+del `package.json` empaquetado); `ERP_UPDATE_URL` la sustituye si se define y
+`ERP_DOWNLOADS_DIR` permite cambiar la carpeta destino. Después de actualizar, iniciar sesión y
+pulsar **Acerca de** para confirmar versión y directorio de datos. Vea
+[docs/24-actualizacion-descarga-manual.md](24-actualizacion-descarga-manual.md).
 
 ## 5. Desinstalación
 

@@ -47,7 +47,7 @@ describe('Fase 5 — inventario', () => {
     ]) expect(tablas).toContain(t)
 
     const migraciones = (db.prepare('SELECT version FROM _migraciones ORDER BY version').all() as { version: number }[]).map((m) => m.version)
-    expect(migraciones).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    expect(migraciones).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
 
     const id = producto('PRO-KARDEX')
     const { id: movimientoId } = inventario.movimiento(ctx, {

@@ -96,6 +96,12 @@ describe('Fase 11 — auditoría e impresión sobre datos reales', () => {
     const porUsuario = seguridad.listAudit(ctx, { usuarioId: ctx.userId }) as Fila[]
     expect(porUsuario.length).toBe(todos.length)
 
+    const porRegistro = seguridad.listAudit(ctx, { entidadId: String(clienteId) }) as Fila[]
+    expect(porRegistro.length).toBeGreaterThan(0)
+    expect(porRegistro.every((f) => String(f.entidad_id) === String(clienteId))).toBe(true)
+    const porTexto = seguridad.listAudit(ctx, { texto: String(clienteId) }) as Fila[]
+    expect(porTexto.some((f) => Number(f.entidad_id) === clienteId)).toBe(true)
+
     const futuro = seguridad.listAudit(ctx, { fechaDesde: '2999-01-01' }) as Fila[]
     expect(futuro).toEqual([])
     const pasado = seguridad.listAudit(ctx, { fechaHasta: '2000-01-01' }) as Fila[]

@@ -3,6 +3,8 @@ import { testDb } from '../helpers/db'
 import { FIRST_RUN_USER, FIRST_RUN_PASSWORD } from '../../src/main/db/seed'
 import { createAuthService } from '../../src/main/services/auth.service'
 import { createModulos2026Service } from '../../src/main/services/modulos2026.service'
+import { createAjustesService } from '../../src/main/services/ajustes.service'
+import { defaultAjustes } from '@shared/schemas/ajustes'
 import { createDashboardEjecutivoService } from '../../src/main/services/dashboard-ejecutivo.service'
 import { createSaludService } from '../../src/main/services/salud.service'
 import type { SessionContext } from '@shared/session'
@@ -15,7 +17,8 @@ function setup() {
   const auth = createAuthService(db)
   const login = auth.login({ username: FIRST_RUN_USER, password: FIRST_RUN_PASSWORD }, 'TEST-PC')
   const ctx = login.context as SessionContext
-  const modulos = createModulos2026Service(db)
+  const ajustes = createAjustesService(db)
+  const modulos = createModulos2026Service(db, ajustes)
   const ejecutivo = createDashboardEjecutivoService(db)
   const salud = createSaludService(db)
 
@@ -23,12 +26,20 @@ function setup() {
     INSERT INTO clientes (empresa_id, codigo, nombre) VALUES (1, 'CLI-MOD-2026', 'Cliente Módulos')
   `).run().lastInsertRowid)
 
-  return { db, ctx, modulos, ejecutivo, salud, clienteId }
+  return { db, ctx, ajustes, modulos, ejecutivo, salud, clienteId }
 }
 
 const sinPermiso = (ctx: SessionContext, clave: string): SessionContext => ({
   ...ctx, permisos: ctx.permisos.filter((p) => p !== clave)
 })
+
+function guardarFlujos(
+  ajustes: ReturnType<typeof createAjustesService>,
+  ctx: SessionContext,
+  cambios: Partial<typeof defaultAjustes.flujos>
+): void {
+  ajustes.save(ctx, { grupo: 'flujos', datos: { ...defaultAjustes.flujos, ...cambios } })
+}
 
 describe('v0.3.0 — módulos nuevos, panel ejecutivo y salud', () => {
   it('la migración 007 crea tablas, índices y series propias', () => {
@@ -167,6 +178,46 @@ describe('v0.3.0 — módulos nuevos, panel ejecutivo y salud', () => {
     expect(Number(datos.puntaje)).toBeGreaterThanOrEqual(0)
     expect(Number((datos.baseDatos as Fila).tablas)).toBeGreaterThan(20)
     expect(() => salud.resumen(sinPermiso(ctx, 'salud.consultar'))).toThrow(/permiso/i)
+    db.close()
+  })
+})
+
+describe('Ajustes administrativos — estados de orden de servicio', () => {
+  it('usa el primer estado configurado como inicial y valida cambios, con terminales legacy', () => {
+    const { db, ctx, ajustes, modulos, clienteId } = setup()
+    guardarFlujos(ajustes, ctx, { estadosOrden: ['EN_PROCESO'] })
+
+    const servicio = modulos.servicioCatalogoCrear(ctx, {
+      codigo: 'SRV-FLUJOS', nombre: 'Instalación', descripcion: '', precioCent: 10000, activo: true
+    }) as { id: number }
+    const orden = modulos.ordenServicioCrear(ctx, {
+      clienteId, prioridad: 'NORMAL', diagnostico: '', observaciones: '',
+      lineas: [{ servicioId: servicio.id, cantidad: 1 }]
+    }) as { id: number }
+    expect((db.prepare('SELECT estado FROM ordenes_servicio WHERE id = ?').get(orden.id) as Fila).estado).toBe('EN_PROCESO')
+    const alta = db.prepare("SELECT valores_despues FROM auditoria WHERE operacion = 'CREAR_ORDEN_SERVICIO' AND entidad_id = ?").get(String(orden.id)) as Fila
+    expect(JSON.parse(String(alta.valores_despues)).estado).toBe('EN_PROCESO')
+
+    expect(() => modulos.ordenServicioEstado(ctx, {
+      id: orden.id, estado: 'PENDIENTE_CLIENTE', motivo: 'Fuera de la lista'
+    })).toThrow(/no válido/i)
+
+    guardarFlujos(ajustes, ctx, { estadosOrden: ['RECIBIDA', 'PENDIENTE_CLIENTE'] })
+    modulos.ordenServicioEstado(ctx, { id: orden.id, estado: 'PENDIENTE_CLIENTE', motivo: 'Espera del cliente' })
+    expect((db.prepare('SELECT estado FROM ordenes_servicio WHERE id = ?').get(orden.id) as Fila).estado).toBe('PENDIENTE_CLIENTE')
+    const cambio = db.prepare("SELECT valores_despues FROM auditoria WHERE operacion = 'ORDEN_SERVICIO_PENDIENTE_CLIENTE' AND entidad_id = ?").get(String(orden.id)) as Fila
+    expect(JSON.parse(String(cambio.valores_despues))).toMatchObject({
+      estado: 'PENDIENTE_CLIENTE', estadosOrden: ['RECIBIDA', 'PENDIENTE_CLIENTE']
+    })
+
+    guardarFlujos(ajustes, ctx, { estadosOrden: ['EN_PROCESO'] })
+    expect(() => modulos.ordenServicioEstado(ctx, {
+      id: orden.id, estado: 'FINALIZADA', motivo: 'Fuera de la lista'
+    })).toThrow(/no válido/i)
+    modulos.ordenServicioEstado(ctx, { id: orden.id, estado: 'ENTREGADA', motivo: 'Entrega legacy' })
+    expect((db.prepare('SELECT estado FROM ordenes_servicio WHERE id = ?').get(orden.id) as Fila).estado).toBe('ENTREGADA')
+    modulos.ordenServicioEstado(ctx, { id: orden.id, estado: 'ANULADA', motivo: 'Anulación legacy' })
+    expect((db.prepare('SELECT estado FROM ordenes_servicio WHERE id = ?').get(orden.id) as Fila).estado).toBe('ANULADA')
     db.close()
   })
 })

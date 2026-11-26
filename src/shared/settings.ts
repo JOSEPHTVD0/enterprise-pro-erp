@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { conDefaultsDeObjetoVacio } from './schemas/defaults'
+import { formatosImpresion } from './schemas/ventas'
 
 /**
  * Preferencias persistidas en disco (proceso principal). Las políticas duras de
@@ -20,7 +21,10 @@ export const settingsSchema = z.object({
     paginaTamano: z.number().int().min(5).max(100).default(10)
   })),
   impresion: conDefaultsDeObjetoVacio(z.object({
-    formato: z.enum(['CARTA', 'MEDIA', 'TICKET80', 'TICKET58']).default('CARTA'),
+    formato: z.preprocess(
+      (valor) => valor === 'TICKET80' ? 'TICKET_80' : valor === 'TICKET58' ? 'TICKET_58' : valor,
+      z.enum(formatosImpresion).default('CARTA')
+    ),
     impresora: z.string().max(120).default(''),
     impresionAutomatica: z.boolean().default(false),
     incluirLogo: z.boolean().default(true),

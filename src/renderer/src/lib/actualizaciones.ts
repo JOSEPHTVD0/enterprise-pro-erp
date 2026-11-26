@@ -1,4 +1,4 @@
-import type { EstadoActualizacion } from '@shared/actualizaciones'
+import type { EstadoActualizacion, ProgresoDescarga } from '@shared/actualizaciones'
 
 /** Los canales `update.*` están protegidos por `isTrusted` en el proceso principal. */
 export function estadoActualizaciones(): Promise<EstadoActualizacion> {
@@ -13,6 +13,20 @@ export function descargarActualizacion(): Promise<EstadoActualizacion> {
   return window.api.invoke<EstadoActualizacion>('update.descargar')
 }
 
-export function instalarActualizacion(): void {
-  void window.api.invoke<void>('update.instalar')
+/** Abre el explorador en el instalador guardado; la instalación sigue siendo manual. */
+export function abrirCarpetaInstalador(): Promise<void> {
+  return window.api.invoke<void>('update.abrirCarpeta')
+}
+
+/** El proceso principal empuja el estado y el progreso; el sondeo queda como respaldo. */
+export function suscribirEstadoActualizacion(
+  callback: (estado: EstadoActualizacion) => void
+): () => void {
+  return window.api.onEstadoActualizacion(callback)
+}
+
+export function suscribirProgresoDescarga(
+  callback: (progreso: ProgresoDescarga) => void
+): () => void {
+  return window.api.onProgresoDescarga(callback)
 }

@@ -9,6 +9,7 @@ import { Field, NumberInput, TextInput, inputClass } from '@/components/ui/Field
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
+import { normalizarFormato } from '@/lib/formato-impresion'
 
 type GrupoObjeto = Exclude<keyof Settings, 'theme' | 'sidebarCollapsed'>
 
@@ -184,10 +185,10 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
         <TabPanel>
           <Card title="Impresión y PDF" subtitle="Formatos y comportamiento de documentos e informes.">
             <div className="grid gap-4 md:grid-cols-2">
-              <Opcion label="Formato por defecto" value={txt('impresion', 'formato')}
+              <Opcion label="Formato por defecto" value={normalizarFormato(txt('impresion', 'formato'))}
                 options={[
                   { value: 'CARTA', label: 'Carta' }, { value: 'MEDIA', label: 'Media página' },
-                  { value: 'TICKET80', label: 'Ticket 80 mm' }, { value: 'TICKET58', label: 'Ticket 58 mm' }
+                  { value: 'TICKET_80', label: 'Ticket 80 mm' }, { value: 'TICKET_58', label: 'Ticket 58 mm' }
                 ]}
                 onChange={(v) => cambiar('impresion', 'formato', v)} />
               <Field label="Impresora preferida" hint="Nombre lógico; si está vacía se usa la predeterminada del sistema.">
@@ -219,7 +220,7 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
                 onChange={(v) => cambiar('actualizaciones', 'buscarAlIniciar', v)} />
               <Interruptor label="Descarga automática" value={bool('actualizaciones', 'descargaAutomatica')}
                 onChange={(v) => cambiar('actualizaciones', 'descargaAutomatica', v)}
-                hint="Requiere revisión: la instalación siempre es manual desde Acerca de." />
+                hint="Guarda el instalador en Descargas automáticamente; nunca lo instala." />
               <Interruptor label="Notificar versiones nuevas" value={bool('actualizaciones', 'notificarVersiones')}
                 onChange={(v) => cambiar('actualizaciones', 'notificarVersiones', v)} />
             </div>

@@ -32,7 +32,9 @@ export interface AuditFilter {
   fechaHasta?: string
   usuarioId?: number
   entidad?: string
+  entidadId?: string
   operacion?: string
+  texto?: string
 }
 
 export function listAudit(db: Db, empresaId: number, filter: AuditFilter): Record<string, unknown>[] {
@@ -42,7 +44,17 @@ export function listAudit(db: Db, empresaId: number, filter: AuditFilter): Recor
   if (filter.fechaHasta) { where.push('a.fecha <= ?'); args.push(filter.fechaHasta) }
   if (filter.usuarioId) { where.push('a.usuario_id = ?'); args.push(filter.usuarioId) }
   if (filter.entidad) { where.push('a.entidad = ?'); args.push(filter.entidad) }
+  if (filter.entidadId) { where.push('a.entidad_id = ?'); args.push(filter.entidadId) }
   if (filter.operacion) { where.push('a.operacion LIKE ?'); args.push(`%${filter.operacion}%`) }
+  if (filter.texto) {
+    where.push(`(
+      a.entidad LIKE ? OR a.operacion LIKE ? OR COALESCE(a.entidad_id, '') LIKE ?
+      OR COALESCE(a.valores_antes, '') LIKE ? OR COALESCE(a.valores_despues, '') LIKE ?
+      OR COALESCE(u.username, '') LIKE ?
+    )`)
+    const patron = `%${filter.texto}%`
+    args.push(patron, patron, patron, patron, patron, patron)
+  }
   return db.prepare(`
     SELECT a.*, u.username FROM auditoria a LEFT JOIN usuarios u ON u.id = a.usuario_id
     WHERE ${where.join(' AND ')} ORDER BY a.id DESC LIMIT 500

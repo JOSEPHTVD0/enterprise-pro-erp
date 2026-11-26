@@ -9,10 +9,11 @@ import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Field, TextInput, inputClass } from '@/components/ui/Field'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { money, number } from '@/lib/format'
+import { money, number, usePreferenciasInterfaz } from '@/lib/format'
 import { useAjustesStore } from '@/app/ajustes-store'
 import { defaultAjustes, type WidgetId } from '@shared/schemas/ajustes'
 import { toast } from '@/components/ui/Toast'
+import { eventoDeTexto, nivelVisible } from '@/lib/format'
 
 interface Kpis {
   ventasCent: number
@@ -33,10 +34,23 @@ interface Kpis {
   productosStockBajo: number
 }
 
+interface PreferenciasPanel {
+  verUtilidad: boolean
+  verCostos: boolean
+  verSalud: boolean
+  seriesPorDefecto: 'DIA' | 'MES'
+  filasDashboard: number
+  filasPanel: number
+  intervaloActualizacionSeg: number
+}
+
 interface Datos {
   periodo: { desde: string; hasta: string; tipo: string }
   kpis: Kpis
   serieMensual: { clave: string; ventasCent: number; documentos: number }[]
+  serieDiaria?: { clave: string; ventasCent: number; documentos: number }[]
+  preferencias?: PreferenciasPanel
+  config?: { filas: number; stockBajoUmbral: number; cxcDiasVencimiento: number }
   porFormaPago: { clave: string; montoCent: number }[]
   topProductos: { producto: string; totalCent: number; cantidad: number }[]
   topClientes: { cliente: string; totalCent: number; documentos: number }[]
@@ -78,37 +92,81 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
   const [datos, setDatos] = useState<Datos | null>(null)
   const [cargando, setCargando] = useState(false)
   const configuracion = useAjustesStore((s) => s.ajustes.widgets ?? defaultAjustes.widgets)
+  const [preferencias, setPreferencias] = useState<PreferenciasPanel>(() => ({
+    verUtilidad: true, verCostos: true, verSalud: true,
+    seriesPorDefecto: 'MES', filasDashboard: 8, filasPanel: 8,
+    intervaloActualizacionSeg: configuracion.intervaloActualizacionSeg
+  }))
   const widget = useAjustesStore((s) => s.widget)
+  const preferenciasInterfaz = usePreferenciasInterfaz()
   const visible = (id: WidgetId): boolean => widget(id).visible
   const orden = (id: WidgetId): number => widget(id).orden
+  const ancho = (id: WidgetId): string => {
+    const valor = widget(id).ancho
+    if (valor === 'TERCIO') return 'sm:col-span-1 lg:col-span-2'
+    if (valor === 'COMPLETO') return 'sm:col-span-2 lg:col-span-6'
+    return 'sm:col-span-1 lg:col-span-3'
+  }
   const compacta = configuracion.densidad === 'compacta'
 
   const cargar = useCallback(async (): Promise<void> => {
     setCargando(true)
     try {
-      const resultado = await window.api.invoke<Datos>('dashboard.ejecutivo', {
-        periodo,
-        ...(periodo === 'PERSONALIZADO' && desde ? { fechaDesde: desde } : {}),
-        ...(periodo === 'PERSONALIZADO' && hasta ? { fechaHasta: hasta } : {})
-      })
+      const [resultado, prefEstacion] = await Promise.all([
+        window.api.invoke<Datos>('dashboard.ejecutivo', {
+          periodo,
+          ...(periodo === 'PERSONALIZADO' && desde ? { fechaDesde: desde } : {}),
+          ...(periodo === 'PERSONALIZADO' && hasta ? { fechaHasta: hasta } : {})
+        }),
+        // Si la estación no expone preferencias, se conservan los valores por defecto.
+        window.api.invoke<PreferenciasPanel>('panel.preferencias.get').catch(() => null)
+      ])
       setDatos(resultado)
+      setPreferencias({
+        verUtilidad: true, verCostos: true, verSalud: true,
+        seriesPorDefecto: 'MES', filasDashboard: 8, filasPanel: 8,
+        intervaloActualizacionSeg: configuracion.intervaloActualizacionSeg,
+        ...(prefEstacion ?? {}),
+        ...(resultado.preferencias ?? {})
+      })
     } catch {
       setDatos(null)
       toast.error('No se pudo cargar el panel ejecutivo.')
     } finally {
       setCargando(false)
     }
-  }, [periodo, desde, hasta])
+  }, [periodo, desde, hasta, configuracion.intervaloActualizacionSeg])
 
   useEffect(() => { void cargar() }, [cargar])
 
-  // Refresco automático configurado en el centro de control (mínimo 30 s en backend).
+  // Refresco automático: prevalece el intervalo de la estación, con el del centro de control como respaldo.
+  // Modo bajo consumo solo espacia el refresco local; no altera datos ni permisos.
+  const intervaloSeg = Math.max(1,
+    (preferencias.intervaloActualizacionSeg || configuracion.intervaloActualizacionSeg)
+    * (preferenciasInterfaz.modoBajoConsumo ? 2 : 1)
+  )
   useEffect(() => {
-    const id = window.setInterval(() => void cargar(), configuracion.intervaloActualizacionSeg * 1000)
+    const id = window.setInterval(() => void cargar(), intervaloSeg * 1000)
     return () => window.clearInterval(id)
-  }, [cargar, configuracion.intervaloActualizacionSeg])
+  }, [cargar, intervaloSeg])
+
+  // Solo avisos visuales: se filtran por nivel y tipo, con firma estable para no repetirlos.
+  useEffect(() => {
+    const alertas = datos?.alertas ?? []
+    for (const alerta of alertas) {
+      if (!nivelVisible(alerta.nivel, preferenciasInterfaz.alertas.nivelMinimo)) continue
+      const evento = eventoDeTexto(alerta.texto)
+      if (evento) toast.evento(evento, alerta.texto, `dashboard:${alerta.nivel}:${alerta.texto}`)
+    }
+  }, [datos, preferenciasInterfaz.alertas.nivelMinimo])
 
   const kpis = datos?.kpis
+  const usarSerieDiaria = preferencias.seriesPorDefecto === 'DIA'
+  const serieTendencia = usarSerieDiaria
+    ? (datos?.serieDiaria ?? datos?.serieMensual ?? [])
+    : (datos?.serieMensual ?? [])
+  const topClientes = (datos?.topClientes ?? []).slice(0, preferencias.filasPanel)
+  const topProductos = (datos?.topProductos ?? []).slice(0, preferencias.filasPanel)
   const tarjetas = kpis ? ([
     { id: 'kpi-ventas' as const, label: 'Ventas del período', valor: money(kpis.ventasCent), tono: 'accent' as const },
     { id: 'kpi-compras' as const, label: 'Compras', valor: money(kpis.comprasCent), tono: 'neutral' as const },
@@ -118,21 +176,24 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
     { id: 'kpi-pagos' as const, label: 'Pagos', valor: money(kpis.pagosCent), tono: 'neutral' as const },
     { id: 'kpi-cxc' as const, label: 'CxC saldo', valor: money(kpis.cxcSaldoCent), tono: 'warning' as const },
     { id: 'kpi-cxp' as const, label: 'CxP saldo', valor: money(kpis.cxpSaldoCent), tono: 'warning' as const }
-  ].filter((t) => visible(t.id)).sort((a, b) => orden(a.id) - orden(b.id))) : []
+  ].filter((t) => (t.id !== 'kpi-utilidad' || preferencias.verUtilidad) && visible(t.id))
+    .sort((a, b) => orden(a.id) - orden(b.id))) : []
 
   return (
     <div className="animate-fade-in">
       <PageHeader
-        title="Panel ejecutivo 2027"
+        title="Panel ejecutivo"
         subtitle="Indicadores, tendencias y alertas calculados sobre documentos reales de SQLite."
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" size="sm" onClick={() => void cargar()} disabled={cargando}>
               <RefreshCw size={14} className={cargando ? 'animate-spin' : ''} /> Actualizar
             </Button>
-            <Button variant="secondary" size="sm" disabled={!datos} onClick={() => datos && descargarCsv(datos)}>
-              <Download size={14} /> Exportar CSV
-            </Button>
+            {preferenciasInterfaz.formatosPermitidos.includes('CSV') && (
+              <Button variant="secondary" size="sm" disabled={!datos} onClick={() => datos && descargarCsv(datos)}>
+                <Download size={14} /> Exportar CSV
+              </Button>
+            )}
           </div>
         }
       />
@@ -158,6 +219,7 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
             </>
           )}
           {datos && <Badge tone="accent">{datos.periodo.desde} → {datos.periodo.hasta}</Badge>}
+          <Badge tone="info">Preferencias de estación aplicadas</Badge>
         </div>
       </Card>
 
@@ -171,7 +233,8 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
           { id: 'kpi-pagos' as const, label: 'Pagos' },
           { id: 'kpi-cxc' as const, label: 'CxC' },
           { id: 'kpi-cxp' as const, label: 'CxP' }
-        ] as const).filter((t) => visible(t.id)).sort((a, b) => orden(a.id) - orden(b.id)).map((t) => ({
+        ] as const).filter((t) => (t.id !== 'kpi-utilidad' || preferencias.verUtilidad) && visible(t.id))
+          .sort((a, b) => orden(a.id) - orden(b.id)).map((t) => ({
           ...t, valor: '—', tono: 'neutral' as const
         }))).map((t) => (
           <div key={t.label} className={`erp-card rounded-xl border border-slate-200 bg-white ${compacta ? 'p-2.5' : 'p-3.5'} dark:border-slate-800 dark:bg-slate-900`}>
@@ -184,12 +247,17 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
 
       {datos && (
         <>
-          <div className="mb-4 grid gap-4 lg:grid-cols-2">
-            {visible('tendencia') && <div style={{ order: orden('tendencia') }}>
-            <Card className={compacta ? 'p-2' : ''} title="Ventas mensuales" subtitle="Últimos 12 meses hasta el período seleccionado.">
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            {visible('tendencia') && <div className={ancho('tendencia')} style={{ order: orden('tendencia') }}>
+            <Card
+              className={compacta ? 'p-2' : ''}
+              title={usarSerieDiaria ? 'Tendencia diaria (30 días)' : 'Tendencia mensual (12 meses)'}
+              subtitle={usarSerieDiaria ? 'Ventas de los últimos 30 días.' : 'Últimos 12 meses hasta el período seleccionado.'}
+            >
               <div className="h-[260px]">
+                {serieTendencia.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={datos.serieMensual} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <AreaChart data={serieTendencia} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#94a3b833" />
                     <XAxis dataKey="clave" tick={{ fontSize: 10 }} />
                     <YAxis tick={{ fontSize: 10 }} width={80} />
@@ -198,11 +266,16 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                     <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.16} />
                   </AreaChart>
                 </ResponsiveContainer>
+                ) : (
+                  <p className="flex h-full items-center justify-center text-sm text-slate-400">
+                    Sin datos de tendencia para el período seleccionado.
+                  </p>
+                )}
               </div>
             </Card>
             </div>}
 
-            {visible('formas-pago') && <div style={{ order: orden('formas-pago') }}>
+            {visible('formas-pago') && <div className={ancho('formas-pago')} style={{ order: orden('formas-pago') }}>
             <Card className={compacta ? 'p-2' : ''} title="Formas de pago" subtitle="Distribución de los cobros del período.">
               <div className="h-[260px]">
                 {datos.porFormaPago.length > 0 ? (
@@ -223,12 +296,12 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
             </div>}
           </div>
 
-          <div className="mb-4 grid gap-4 lg:grid-cols-2">
-            {visible('top-clientes') && <div style={{ order: orden('top-clientes') }}>
-            <Card className={compacta ? 'p-2' : ''} title="Principales clientes" subtitle="Por importe facturado en el período.">
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            {visible('top-clientes') && <div className={ancho('top-clientes')} style={{ order: orden('top-clientes') }}>
+            <Card className={compacta ? 'p-2' : ''} title="Principales clientes" subtitle={`Por importe facturado (hasta ${preferencias.filasPanel}).`}>
               <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={datos.topClientes.slice(0, 8)} layout="vertical" margin={{ left: 10, right: 16 }}>
+                  <BarChart data={topClientes} layout="vertical" margin={{ left: 10, right: 16 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#94a3b833" />
                     <XAxis type="number" tick={{ fontSize: 10 }} />
                     <YAxis type="category" dataKey="cliente" width={120} tick={{ fontSize: 9 }} />
@@ -240,8 +313,12 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
             </Card>
             </div>}
 
-            {visible('alertas') && <div style={{ order: orden('alertas') }}>
-            <Card className={compacta ? 'p-2' : ''} title="Alertas y módulos 2026" subtitle="Señales tempranas con datos reales.">
+            {visible('alertas') && <div className={ancho('alertas')} style={{ order: orden('alertas') }}>
+            <Card
+              className={compacta ? 'p-2' : ''}
+              title="Alertas y módulos 2026"
+              subtitle={`Stock bajo ≤ ${preferenciasInterfaz.alertas.stockBajoUmbral} · CxC ≥ ${preferenciasInterfaz.alertas.cxcDiasVencimiento} días · nivel mínimo ${preferenciasInterfaz.alertas.nivelMinimo}`}
+            >
               <div className="space-y-2 text-sm">
                 {datos.alertas.length === 0 && <p className="text-slate-400">Sin alertas activas.</p>}
                 {datos.alertas.map((a, i) => (
@@ -267,31 +344,36 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                   <TrendingUp size={13} /> Clientes activos: {number(kpis?.clientesActivos ?? 0)} ·
                   Productos: {number(kpis?.productosActivos ?? 0)}
                 </p>
+                <p className="pt-1 text-xs text-slate-400">
+                  Aviso de presupuesto al {preferenciasInterfaz.alertas.presupuestoPct}%: no disponible en esta vista.
+                </p>
               </div>
             </Card>
             </div>}
           </div>
 
-          {visible('top-productos') && <div style={{ order: orden('top-productos') }}>
-          <Card className={compacta ? 'p-2' : ''} title="Productos más facturados" subtitle="Top 10 del período seleccionado.">
+          {visible('top-productos') && <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            <div className={ancho('top-productos')} style={{ order: orden('top-productos') }}>
+          <Card className={compacta ? 'p-2' : ''} title="Productos más facturados" subtitle={`Hasta ${preferencias.filasPanel} del período seleccionado.`}>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-xs uppercase text-slate-500">
                   <tr><th className="py-2">Producto</th><th className="py-2 text-right">Cantidad</th><th className="py-2 text-right">Importe</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {datos.topProductos.map((p) => (
+                  {topProductos.map((p) => (
                     <tr key={p.producto}>
                       <td className="py-2">{p.producto}</td>
                       <td className="py-2 text-right">{number(p.cantidad)}</td>
                       <td className="py-2 text-right font-medium">{money(p.totalCent)}</td>
                     </tr>
                   ))}
-                  {datos.topProductos.length === 0 && <tr><td colSpan={3} className="py-4 text-center text-slate-400">Sin datos.</td></tr>}
+                  {topProductos.length === 0 && <tr><td colSpan={3} className="py-4 text-center text-slate-400">Sin datos.</td></tr>}
                 </tbody>
               </table>
             </div>
           </Card>
+            </div>
           </div>}
         </>
       )}

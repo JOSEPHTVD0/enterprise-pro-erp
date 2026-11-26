@@ -35,6 +35,24 @@ describe('centro de control 0.5.0', () => {
     db.close()
   })
 
+  it('completa una fila heredada parcial sin exponer grupos operativos', () => {
+    const { db, ctx, ajustes } = setup()
+    db.prepare(`
+      INSERT INTO ajustes (empresa_id, grupo, datos_json)
+      VALUES (1, 'interfaz', ?)
+    `).run(JSON.stringify({ tituloApp: 'PRUEBA SUCIA' }))
+
+    const efectivos = ajustes.efectivos(ctx) as Record<string, Record<string, unknown>>
+    expect(efectivos.interfaz.tituloApp).toBe('PRUEBA SUCIA')
+    expect(efectivos.interfaz.ocultarElementos).toEqual(defaultAjustes.interfaz.ocultarElementos)
+    expect(efectivos.interfaz.ordenGrupos).toEqual(defaultAjustes.interfaz.ordenGrupos)
+    expect(efectivos.seguridad).toBeUndefined()
+    expect(efectivos.fiscal).toBeUndefined()
+    expect(efectivos.integraciones).toBeUndefined()
+    expect(efectivos.rendimiento).toBeUndefined()
+    db.close()
+  })
+
   it('restaura un grupo a los defaults auditados', () => {
     const { db, ctx, ajustes } = setup()
     ajustes.save(ctx, { grupo: 'tema', datos: { ...defaultAjustes.tema, escala: 1.25 } })
@@ -128,6 +146,40 @@ describe('centro de control 0.5.0', () => {
     db.close()
   })
 
+  it('filtra las alertas de inteligencia por destino y nivel administrados', () => {
+    const { db, ctx, ajustes } = setup()
+    const intel = createInteligenciaService(db, ajustes)
+    const clienteId = Number(db.prepare(`
+      INSERT INTO clientes (empresa_id, codigo, nombre) VALUES (1, 'CLI-ALERTA', 'Cliente Alerta')
+    `).run().lastInsertRowid)
+    const ventaId = Number(db.prepare(`
+      INSERT INTO documentos_venta (empresa_id, tipo, numero, cliente_id, cliente_nombre, fecha,
+        total_cent, estado)
+      VALUES (1, 'FACTURA_CREDITO', 'FAC-ALERTA', ?, 'Cliente Alerta', '2026-01-02', 10000, 'ACTIVO')
+    `).run(clienteId).lastInsertRowid)
+    db.prepare(`
+      INSERT INTO cxc_documentos (empresa_id, cliente_id, doc_venta_id, numero_documento, fecha, vencimiento,
+        monto_cent, saldo_cent, estado)
+      VALUES (1, ?, ?, 'FAC-ALERTA', '2026-01-02', '2026-01-03', 10000, 10000, 'PENDIENTE')
+    `).run(clienteId, ventaId)
+
+    ajustes.save(ctx, {
+      grupo: 'alertas',
+      datos: { ...defaultAjustes.alertas, nivelMinimo: 'ALTO', destinos: ['PANEL'] }
+    })
+    const filtradas = intel.resumen(ctx, { periodo: 'ANIO' }) as { alertas: { nivel: string; texto: string }[] }
+    expect(filtradas.alertas.length).toBeGreaterThan(0)
+    expect(filtradas.alertas.every((a) => a.nivel === 'Alto')).toBe(true)
+
+    ajustes.save(ctx, {
+      grupo: 'alertas',
+      datos: { ...defaultAjustes.alertas, nivelMinimo: 'INFO', destinos: ['TOAST'] }
+    })
+    const sinPanel = intel.resumen(ctx, { periodo: 'ANIO' }) as { alertas: unknown[] }
+    expect(sinPanel.alertas).toEqual([])
+    db.close()
+  })
+
   it('crea permisos personalizados con descripción, los asigna y los audita', () => {
     const { db, ctx, auth, seguridad } = setup()
     seguridad.saveCustomPermission(ctx, {
@@ -189,6 +241,61 @@ describe('centro de control 0.5.0', () => {
     expect(seguridad.permissionCatalog(ctx).some((p) => p.key === 'custom.reporte_gerencia')).toBe(false)
     const audit = db.prepare("SELECT COUNT(*) AS total FROM auditoria WHERE entidad = 'permisos'").get() as { total: number }
     expect(audit.total).toBe(3)
+    db.close()
+  })
+
+  it('resuelve capas visuales por rol y permiso sin exponer grupos operativos', () => {
+    const { db, ctx, ajustes, seguridad } = setup()
+    const creado = seguridad.createRole(ctx, {
+      nombre: 'Capa Visual', descripcion: 'Solo personalización visual', permisos: []
+    }) as { id: number }
+    db.prepare('INSERT INTO usuario_roles (usuario_id, rol_id, empresa_id) VALUES (?, ?, 1)')
+      .run(ctx.userId, creado.id)
+
+    ajustes.save(ctx, {
+      grupo: 'interfaz', datos: { ...defaultAjustes.interfaz, tituloApp: 'BASE EMPRESA' }
+    })
+    ajustes.savePersonalizado(ctx, {
+      ambito: 'ROL', objetivo: String(creado.id), grupo: 'interfaz', datos: { tituloApp: 'SOLO ESTE ROL' }
+    })
+    ajustes.savePersonalizado(ctx, {
+      ambito: 'PERMISO', objetivo: 'ventas.consultar', grupo: 'interfaz', datos: { anchoSidebar: 300 }
+    })
+
+    const efectivos = ajustes.efectivos(ctx)
+    expect(efectivos.interfaz?.tituloApp).toBe('SOLO ESTE ROL')
+    expect(efectivos.interfaz?.anchoSidebar).toBe(300)
+    expect(efectivos.seguridad).toBeUndefined()
+    expect(efectivos.fiscal).toBeUndefined()
+    expect(efectivos.alertas).toBeDefined()
+    expect(efectivos.notificaciones).toBeDefined()
+    expect(efectivos.panel2026).toBeDefined()
+
+    expect(() => ajustes.savePersonalizado(sin(ctx, 'configuracion.ajustes.modificar'), {
+      ambito: 'ROL', objetivo: String(creado.id), grupo: 'interfaz', datos: { tituloApp: 'OTRO' }
+    })).toThrow(/permiso/i)
+    expect(() => ajustes.savePersonalizado(ctx, {
+      ambito: 'PERMISO', objetivo: 'custom.inexistente', grupo: 'interfaz', datos: {}
+    })).toThrow(/no encontrad/i)
+
+    const audit = db.prepare("SELECT COUNT(*) AS total FROM auditoria WHERE entidad = 'ajustes_personalizados'").get() as { total: number }
+    expect(audit.total).toBe(2)
+    db.close()
+  })
+
+  it('crea y elimina roles personalizados pero protege los roles del sistema', () => {
+    const { db, ctx, seguridad } = setup()
+    const creado = seguridad.createRole(ctx, {
+      nombre: 'Cobrador Temporal', descripcion: 'Rol de prueba', permisos: ['cobros.consultar']
+    }) as { id: number }
+    expect(seguridad.getRole(ctx, creado.id)).toMatchObject({ nombre: 'Cobrador Temporal' })
+
+    const sistema = (db.prepare("SELECT id FROM roles WHERE empresa_id = 1 AND nombre = 'Vendedor'").get() as { id: number }).id
+    expect(() => seguridad.deleteRole(ctx, sistema)).toThrow(/sistema/i)
+    expect(seguridad.deleteRole(ctx, creado.id)).toMatchObject({ ok: true })
+    expect(db.prepare('SELECT 1 FROM roles WHERE id = ?').get(creado.id)).toBeUndefined()
+    const audit = db.prepare("SELECT COUNT(*) AS total FROM auditoria WHERE entidad = 'roles' AND operacion = 'ELIMINAR'").get() as { total: number }
+    expect(audit.total).toBe(1)
     db.close()
   })
 })

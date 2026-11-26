@@ -48,10 +48,14 @@ npm.cmd run test:e2e
 - Fuente: variable `ERP_UPDATE_URL` (prioridad) o `build.publish.url` de `package.json`.
   Valor por defecto para pruebas: `http://127.0.0.1:8080/`.
 - Servicio: `src/main/services/updater.service.ts`. `autoDownload = false`;
-  `autoInstallOnAppQuit = true`; `forceDevUpdateConfig = true` permite probar sin empaquetar.
+  `autoInstallOnAppQuit = false`; `forceDevUpdateConfig = true` permite probar sin empaquetar.
+  El instalador se copia a `Descargas` y la instalación es manual; vea
+  [docs/24-actualizacion-descarga-manual.md](24-actualizacion-descarga-manual.md).
 - Canales IPC básicos (mismo `isTrusted` que `settings:*`): `update.estado`,
-  `update.verificar`, `update.descargar`, `update.instalar`.
-- UI: botón **Buscar** en *Acerca de*, seguido de **Descargar** e **Instalar y reiniciar**.
+  `update.verificar`, `update.descargar`, `update.abrirCarpeta`. Ya no existe
+  `update.instalar`.
+- UI: botón **Buscar**, **Descargar instalador** y **Abrir carpeta**; no hay botón
+  **Instalar y reiniciar**.
 - Generar y servir el feed local:
 
 ```powershell
@@ -70,8 +74,9 @@ npm.cmd run test:updater
 ```
 
 El script calcula el parche siguiente de `package.json` (en 0.3.0 publica `0.3.1`), lanza
-Electron con `ERP_UPDATE_URL` y comprueba que `update.verificar` devuelve
-`disponible: true` y esa versión.
+Electron con `ERP_UPDATE_URL` y `ERP_DOWNLOADS_DIR`, comprueba que `update.verificar`
+devuelve `disponible: true` y esa versión, y que `update.descargar` guarda el instalador
+en esa carpeta sin ejecutarlo.
 
 **Producción:** publicar el instalador y `latest.yml` en un servidor HTTPS y reemplazar la URL.
 No usar el feed local en equipos de usuario final.

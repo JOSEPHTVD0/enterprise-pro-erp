@@ -23,13 +23,14 @@ export const customPermissionCreateSchema = z.object({
   module: moduloSchema,
   critico: z.boolean().default(false)
 })
+/**
+ * Claves de acceso: mínimo 4 caracteres. Se admiten PIN numéricos (por ejemplo `1234`),
+ * letras y símbolos. Las reglas de complejidad adicionales quedan a criterio del usuario.
+ */
 const passwordStrong = z
   .string()
-  .min(10, 'La contraseña debe tener al menos 10 caracteres')
-  .regex(/[A-Z]/, 'Debe incluir una letra mayúscula')
-  .regex(/[a-z]/, 'Debe incluir una letra minúscula')
-  .regex(/\d/, 'Debe incluir un número')
-  .regex(/[^A-Za-z0-9]/, 'Debe incluir un carácter especial')
+  .min(4, 'La contraseña debe tener al menos 4 caracteres')
+  .max(128, 'La contraseña no puede superar los 128 caracteres')
 
 export const loginSchema = z.object({
   username: z.string().trim().min(3).max(30),
@@ -63,6 +64,8 @@ export const createRoleSchema = z.object({
 
 export const updateRoleSchema = createRoleSchema.extend({ id })
 
+export const deleteRoleSchema = z.object({ id })
+
 /** Editor administrativo de permisos: claves estrictas y confirmación para permisos sensibles. */
 export const rolePermissionsReplaceSchema = z.object({
   rolId: id,
@@ -81,6 +84,7 @@ export const createDepartamentoSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>
 export type CreateUserInput = z.infer<typeof createUserSchema>
 export type UpdateUserInput = z.infer<typeof updateUserSchema>
+export type DeleteRoleInput = z.infer<typeof deleteRoleSchema>
 export type CreateRoleInput = z.infer<typeof createRoleSchema>
 export type RolePermissionsReplaceInput = z.infer<typeof rolePermissionsReplaceSchema>
 export type CustomPermissionInput = z.infer<typeof customPermissionCreateSchema>

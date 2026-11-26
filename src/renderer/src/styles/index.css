@@ -30,6 +30,11 @@ body { font-family: var(--erp-font); font-size: calc(14px * var(--erp-escala)); 
   border-color: var(--erp-acento);
 }
 
+/* Densidad de tablas configurable desde Ajustes avanzados → Interfaz y menú. */
+.erp-densidad-compacta table { font-size: 0.8125rem; }
+.erp-densidad-compacta table th,
+.erp-densidad-compacta table td { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+
 html,
 body,
 #root {

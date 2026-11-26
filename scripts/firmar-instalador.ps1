@@ -4,7 +4,8 @@
 #>
 param(
   [string]$Password = $env:ERP_CERT_PASSWORD,
-  [switch]$Regenerar
+  [switch]$Regenerar,
+  [switch]$SinTimestamp
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,12 +40,16 @@ if (-not $instalador) { throw 'No hay instalador en dist/. Ejecute npm run dist:
 
 $argumentos = @('sign', '/f', $pfx, '/p', $Password, '/fd', 'sha256', $instalador.FullName)
 
-# Timestamp opcional: si no hay Internet, la firma sigue siendo válida localmente.
-try {
-  & $signtool @argumentos /tr http://timestamp.digicert.com /td sha256 2>&1 | Write-Host
-} catch {
-  Write-Warning 'No se pudo añadir timestamp; se firma sin él.'
+# Timestamp opcional. Las releases fijadas por huella se firman con -SinTimestamp.
+if ($SinTimestamp) {
   & $signtool @argumentos 2>&1 | Write-Host
+} else {
+  try {
+    & $signtool @argumentos /tr http://timestamp.digicert.com /td sha256 2>&1 | Write-Host
+  } catch {
+    Write-Warning 'No se pudo añadir timestamp; se firma sin él.'
+    & $signtool @argumentos 2>&1 | Write-Host
+  }
 }
 
 if ($LASTEXITCODE -ne 0) { throw "signtool terminó con código $LASTEXITCODE" }

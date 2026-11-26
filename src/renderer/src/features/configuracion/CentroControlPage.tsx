@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, KeyRound, Pencil, RotateCcw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react'
+import { Check, KeyRound, Pencil, Plus, RotateCcw, Save, Search, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react'
 import {
   moduleLabels, modules, type ModuleKey, type PermissionDef
 } from '@shared/permissions'
 import {
-  ajustesGrupos, defaultAjustes, modulosProtegidos,
-  type Ajustes, type AjustesGrupo, type WidgetId
+  ajustesGrupos, ajustesGruposVisuales, defaultAjustes, modulosProtegidos,
+  vistasPersonalizables, type Ajustes, type AjustesGrupo, type WidgetId
 } from '@shared/schemas/ajustes'
+import type { AjustesAmbito } from '@shared/schemas/personalizacion'
+import { coincideTexto, normalizarTexto } from '@shared/texto'
 import { ajustesConDefaults, useAjustesStore } from '@/app/ajustes-store'
 import { aplicarTemaAvanzado } from '@/lib/tema-avanzado'
 import { can, errorInfo, useSessionStore } from '@/app/session'
@@ -35,6 +37,21 @@ interface PermisoPersonalizadoForm {
   module: ModuleKey
   critico: boolean
 }
+interface CapaAjuste {
+  ambito: AjustesAmbito
+  objetivo: string
+  grupo: AjustesGrupo
+  datos_json: string
+  actualizado_en: string
+  usuario_id: number | null
+}
+interface CapaForm {
+  ambito: AjustesAmbito
+  objetivo: string
+  grupo: (typeof ajustesGruposVisuales)[number]
+  datos: Record<string, unknown>
+  editando: boolean
+}
 
 type TipoCampo = 'bool' | 'num' | 'decimal' | 'text' | 'select' | 'multi'
 interface Campo {
@@ -55,17 +72,56 @@ const opcionesEventos = [
   'VENTA', 'COMPRA', 'STOCK_BAJO', 'CXC_VENCIDO', 'SERIE_ALERTA', 'BACKUP', 'ACTUALIZACION'
 ].map((v) => ({ value: v, label: v.replaceAll('_', ' ') }))
 
+/** Plantillas administrativas: aplican solo grupos visuales auditables. */
+const plantillasInterfaz: {
+  id: string
+  label: string
+  descripcion: string
+  cambios: Partial<Pick<Ajustes, 'tema' | 'widgets' | 'interfaz'>>
+}[] = [
+  {
+    id: 'clasico', label: 'Clásico', descripcion: 'Escala, paneles y menú con valores estándar.',
+    cambios: { tema: defaultAjustes.tema, widgets: defaultAjustes.widgets, interfaz: defaultAjustes.interfaz }
+  },
+  {
+    id: 'compacto', label: 'Compacto', descripcion: 'Más filas visibles, menú estrecho y sin radios.',
+    cambios: {
+      tema: { ...defaultAjustes.tema, escala: 0.92, radio: 'NINGUNO', reducirMovimiento: true },
+      widgets: { ...defaultAjustes.widgets, densidad: 'compacta', tamanoPagina: 20, filas: 6 },
+      interfaz: { ...defaultAjustes.interfaz, densidadTablas: 'compacta', anchoSidebar: 210 }
+    }
+  },
+  {
+    id: 'visibilidad', label: 'Alta visibilidad', descripcion: 'Contraste reforzado, texto mayor y movimiento reducido.',
+    cambios: {
+      tema: { ...defaultAjustes.tema, escala: 1.12, colorAcento: 'AZUL', altoContraste: true, reducirMovimiento: true },
+      widgets: { ...defaultAjustes.widgets, densidad: 'normal', tamanoPagina: 10 },
+      interfaz: { ...defaultAjustes.interfaz, densidadTablas: 'normal', anchoSidebar: 260, mostrarIconos: true }
+    }
+  },
+  {
+    id: 'presentacion', label: 'Presentación', descripcion: 'Pantalla despejada para proyectar indicadores.',
+    cambios: {
+      tema: { ...defaultAjustes.tema, escala: 1.2, reducirMovimiento: true },
+      widgets: { ...defaultAjustes.widgets, densidad: 'compacta', filas: 6 },
+      interfaz: { ...defaultAjustes.interfaz, ocultarElementos: ['distintivoFase'], piePersonalizado: '' }
+    }
+  }
+]
+
 const grupos: { id: AjustesGrupo; label: string; descripcion: string }[] = [
   { id: 'alertas', label: 'Alertas', descripcion: 'Umbrales y nivel mínimo de las señales tempranas.' },
   { id: 'flujos', label: 'Flujos', descripcion: 'Aprobaciones, motivos y estados de orden de servicio.' },
   { id: 'widgets', label: 'Paneles', descripcion: 'Visibilidad, orden y frecuencia de actualización.' },
+  { id: 'panel2026', label: 'Panel 2026', descripcion: 'Vistas, umbrales y proyección del panel operativo avanzado.' },
   { id: 'rendimiento', label: 'Rendimiento', descripcion: 'Límites, caché y modo de bajo consumo.' },
   { id: 'integraciones', label: 'Integraciones', descripcion: 'Exportación local e impresora de tickets.' },
   { id: 'tema', label: 'Tema avanzado', descripcion: 'Escala, radios, contraste y movimiento.' },
   { id: 'fiscal', label: 'Fiscal avanzado', descripcion: 'NCF, moneda base y redondeo bancario.' },
   { id: 'notificaciones', label: 'Notificaciones', descripcion: 'Sonido, duración y eventos avisados.' },
   { id: 'seguridad', label: 'Seguridad', descripcion: 'Refuerzos visuales; las políticas duras siguen en backend.' },
-  { id: 'featureFlags', label: 'Módulos', descripcion: 'Módulos opcionales visibles para todos los perfiles.' }
+  { id: 'featureFlags', label: 'Módulos', descripcion: 'Módulos opcionales visibles para todos los perfiles.' },
+  { id: 'interfaz', label: 'Interfaz y menú', descripcion: 'Título, ancho del menú, densidad y elementos ocultables.' }
 ]
 
 const campos: Record<AjustesGrupo, Campo[]> = {
@@ -95,6 +151,16 @@ const campos: Record<AjustesGrupo, Campo[]> = {
     { clave: 'columnasConfigurables', etiqueta: 'Permitir elegir columnas visibles', tipo: 'bool' },
     { clave: 'exportarCsv', etiqueta: 'Permitir exportar tablas a CSV', tipo: 'bool' },
     { clave: 'confirmarEliminacion', etiqueta: 'Confirmar eliminaciones', tipo: 'bool' }
+  ],
+  panel2026: [
+    { clave: 'vista', etiqueta: 'Vista', tipo: 'select', opciones: ['OPERATIVA', 'FINANCIERA', 'RIESGO'].map((v) => ({ value: v, label: v })) },
+    { clave: 'metricaPrincipal', etiqueta: 'Métrica principal', tipo: 'select', opciones: ['VENTAS', 'COBROS', 'CXC', 'STOCK'].map((v) => ({ value: v, label: v })) },
+    { clave: 'diasProyeccion', etiqueta: 'Días de proyección', tipo: 'num', min: 7, max: 90 },
+    { clave: 'umbralCxcDias', etiqueta: 'Umbral de CxC (días)', tipo: 'num', min: 1, max: 365 },
+    { clave: 'umbralStockBajo', etiqueta: 'Umbral de stock bajo', tipo: 'num', min: 0, max: 100000 },
+    { clave: 'filas', etiqueta: 'Filas del panel', tipo: 'num', min: 3, max: 50 },
+    { clave: 'compararPeriodo', etiqueta: 'Comparar período anterior', tipo: 'bool' },
+    { clave: 'mostrarAlertas', etiqueta: 'Mostrar alertas', tipo: 'bool' }
   ],
   rendimiento: [
     { clave: 'limiteFilas', etiqueta: 'Límite de filas', tipo: 'num', min: 10, max: 500 },
@@ -137,7 +203,23 @@ const campos: Record<AjustesGrupo, Campo[]> = {
     { clave: 'mascararRnc', etiqueta: 'Enmascarar RNC/cédula', tipo: 'bool' },
     { clave: 'avisoAntesDeBloqueoMin', etiqueta: 'Aviso antes de bloqueo (min)', tipo: 'num', min: 1, max: 30 }
   ],
-  featureFlags: []
+  featureFlags: [],
+  interfaz: [
+    { clave: 'tituloApp', etiqueta: 'Título de la aplicación', tipo: 'text' },
+    { clave: 'anchoSidebar', etiqueta: 'Ancho del menú (px)', tipo: 'num', min: 200, max: 360 },
+    { clave: 'densidadTablas', etiqueta: 'Densidad de tablas', tipo: 'select', opciones: [{ value: 'compacta', label: 'Compacta' }, { value: 'normal', label: 'Normal' }] },
+    { clave: 'mostrarIconos', etiqueta: 'Mostrar iconos en el menú', tipo: 'bool' },
+    { clave: 'ocultarElementos', etiqueta: 'Elementos ocultos', tipo: 'multi', opciones: [
+      { value: 'buscadorModulos', label: 'Buscador de módulos' },
+      { value: 'barraEstado', label: 'Barra de estado' },
+      { value: 'distintivoFase', label: 'Distintivo de fase' },
+      { value: 'avatarUsuario', label: 'Avatar del usuario' },
+      { value: 'botonTema', label: 'Botón de tema' },
+      { value: 'botonActualizaciones', label: 'Botón Actualizaciones' },
+      { value: 'botonAcerca', label: 'Botón Acerca de' }
+    ] },
+    { clave: 'piePersonalizado', etiqueta: 'Pie personalizado', tipo: 'text' }
+  ]
 }
 
 const etiquetasWidget: Record<WidgetId, string> = {
@@ -152,8 +234,7 @@ const protegidos = new Set<string>(modulosProtegidos)
 
 /** Genera una clave `custom.*` legible a partir de la etiqueta. */
 function claveDesdeLabel(label: string): string {
-  const base = label.trim().toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  const base = normalizarTexto(label)
     .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 32)
   return `custom.${base || 'permiso'}`
 }
@@ -161,7 +242,8 @@ function claveDesdeLabel(label: string): string {
 const permisosExtra: Partial<Record<AjustesGrupo, string>> = {
   seguridad: 'configuracion.ajustes.seguridad.modificar',
   integraciones: 'configuracion.ajustes.integraciones.modificar',
-  featureFlags: 'configuracion.ajustes.featureFlags.modificar'
+  featureFlags: 'configuracion.ajustes.featureFlags.modificar',
+  interfaz: 'configuracion.ajustes.interfaz.modificar'
 }
 
 /** Centro de control: permisos editables con descripción y ajustes operativos auditados. */
@@ -184,6 +266,9 @@ export function CentroControlPage(): React.JSX.Element {
   const [cambios, setCambios] = useState<Set<AjustesGrupo>>(new Set())
   const [grupo, setGrupo] = useState<AjustesGrupo>('alertas')
   const [guardandoAjustes, setGuardandoAjustes] = useState(false)
+  const [capas, setCapas] = useState<CapaAjuste[]>([])
+  const [capaForm, setCapaForm] = useState<CapaForm | null>(null)
+  const [guardandoCapa, setGuardandoCapa] = useState(false)
 
   const puedeVerPermisos = can('seguridad.consultar')
   const puedeEditarPermisos = can('seguridad.permiso.modificar')
@@ -224,13 +309,23 @@ export function CentroControlPage(): React.JSX.Element {
     setCambios(new Set())
   }, [])
 
-  useEffect(() => { void cargarPermisos(); void cargarAjustes() }, [cargarPermisos, cargarAjustes])
+  const cargarCapas = useCallback(async () => {
+    if (!can('configuracion.ajustes.consultar')) return
+    try {
+      setCapas(await window.api.invoke<CapaAjuste[]>('config.ajustes.personalizados.list', {}))
+    } catch (e) { toast.error(errorInfo(e).message) }
+  }, [])
+
+  useEffect(() => {
+    void cargarPermisos()
+    void cargarAjustes()
+    void cargarCapas()
+  }, [cargarPermisos, cargarAjustes, cargarCapas])
 
   const gruposPermisos = useMemo(() => {
-    const q = busqueda.trim().toLowerCase()
     const map = new Map<ModuleKey, PermissionDef[]>()
     for (const p of catalogo) {
-      if (q && !`${p.label} ${p.descripcion} ${p.key}`.toLowerCase().includes(q)) continue
+      if (!coincideTexto(`${p.label} ${p.descripcion} ${p.key}`, busqueda)) continue
       map.set(p.module, [...(map.get(p.module) ?? []), p])
     }
     return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]))
@@ -283,6 +378,60 @@ export function CentroControlPage(): React.JSX.Element {
     } catch (e) { toast.error(errorInfo(e).message) }
   }
 
+  function etiquetaObjetivo(ambito: AjustesAmbito, objetivo: string): string {
+    if (ambito === 'ROL') {
+      return roles.find((r) => String(r.id) === objetivo)?.nombre ?? `Rol ${objetivo}`
+    }
+    return catalogo.find((p) => p.key === objetivo)?.label ?? objetivo
+  }
+
+  function cambiarDatoCapa(clave: string, valor: unknown): void {
+    setCapaForm((prev) => prev ? { ...prev, datos: { ...prev.datos, [clave]: valor } } : prev)
+  }
+
+  function abrirCapa(capa?: CapaAjuste): void {
+    if (!capa) {
+      const grupo = 'interfaz' as const
+      setCapaForm({
+        ambito: 'ROL', objetivo: String(roles[0]?.id ?? ''), grupo, editando: false,
+        datos: { ...defaultAjustes[grupo] } as Record<string, unknown>
+      })
+      return
+    }
+    let datos: Record<string, unknown> = {}
+    try { datos = JSON.parse(capa.datos_json) as Record<string, unknown> } catch { datos = {} }
+    setCapaForm({
+      ambito: capa.ambito, objetivo: capa.objetivo,
+      grupo: capa.grupo as CapaForm['grupo'], datos, editando: true
+    })
+  }
+
+  async function guardarCapa(): Promise<void> {
+    if (!capaForm) return
+    setGuardandoCapa(true)
+    try {
+      await window.api.invoke('config.ajustes.personalizados.save', capaForm)
+      toast.success('Capa personalizada guardada, validada y auditada.')
+      setCapaForm(null)
+      await cargarCapas()
+      await useAjustesStore.getState().recargar()
+      await refrescarSesion()
+    } catch (e) { toast.error(errorInfo(e).message) } finally { setGuardandoCapa(false) }
+  }
+
+  async function eliminarCapa(capa: CapaAjuste): Promise<void> {
+    if (!window.confirm(`¿Eliminar la capa ${capa.ambito}:${etiquetaObjetivo(capa.ambito, capa.objetivo)}/${capa.grupo}?`)) return
+    try {
+      await window.api.invoke('config.ajustes.personalizados.delete', {
+        ambito: capa.ambito, objetivo: capa.objetivo, grupo: capa.grupo
+      })
+      toast.success('Capa eliminada y auditada.')
+      await cargarCapas()
+      await useAjustesStore.getState().recargar()
+      await refrescarSesion()
+    } catch (e) { toast.error(errorInfo(e).message) }
+  }
+
   function cambiar(g: AjustesGrupo, clave: string, valor: unknown): void {
     setAjustes((prev) => ({
       ...prev,
@@ -300,13 +449,50 @@ export function CentroControlPage(): React.JSX.Element {
     if (gruposCambiados.length === 0) { toast.info('No hay cambios pendientes.'); return }
     setGuardandoAjustes(true)
     try {
-      for (const g of gruposCambiados) {
-        await window.api.invoke('config.ajustes.save', { grupo: g, datos: ajustes[g] })
-      }
+      const resultados = await Promise.allSettled(
+        gruposCambiados.map((g) => window.api.invoke('config.ajustes.save', { grupo: g, datos: ajustes[g] }))
+      )
+      const fallidos = gruposCambiados.filter((_, i) => resultados[i].status === 'rejected')
+      const guardados = gruposCambiados.length - fallidos.length
       await cargarAjustes()
       aplicarTemaAvanzado(useAjustesStore.getState().ajustes.tema ?? defaultAjustes.tema)
-      toast.success(`${gruposCambiados.length} grupo(s) guardados y auditados.`)
-    } catch (e) { toast.error(errorInfo(e).message) } finally { setGuardandoAjustes(false) }
+      if (fallidos.length === 0) {
+        toast.success(`${guardados} grupo(s) guardados y auditados.`)
+      } else {
+        const razon = resultados[gruposCambiados.indexOf(fallidos[0])]
+        toast.error(
+          `Guardados ${guardados} de ${gruposCambiados.length}. Fallaron: ${fallidos.join(', ')}. ` +
+          (razon.status === 'rejected' ? errorInfo(razon.reason).message : '')
+        )
+      }
+    } finally { setGuardandoAjustes(false) }
+  }
+
+  async function aplicarPlantilla(plantilla: typeof plantillasInterfaz[number]): Promise<void> {
+    if (!puedeEditarAjustes) return
+    const tema = plantilla.cambios.tema ?? defaultAjustes.tema
+    const widgets = {
+      ...defaultAjustes.widgets, ...ajustes.widgets, ...plantilla.cambios.widgets,
+      widgets: ajustes.widgets.widgets
+    }
+    const interfaz = {
+      ...defaultAjustes.interfaz, ...ajustes.interfaz, ...plantilla.cambios.interfaz,
+      // El orden y las etiquetas del menú son decisiones del administrador: no se sobreescriben.
+      etiquetasModulo: ajustes.interfaz.etiquetasModulo,
+      ordenGrupos: ajustes.interfaz.ordenGrupos
+    }
+    try {
+      await Promise.all([
+        window.api.invoke('config.ajustes.save', { grupo: 'tema', datos: tema }),
+        window.api.invoke('config.ajustes.save', { grupo: 'widgets', datos: widgets }),
+        window.api.invoke('config.ajustes.save', { grupo: 'interfaz', datos: interfaz })
+      ])
+      await cargarAjustes()
+      aplicarTemaAvanzado(useAjustesStore.getState().ajustes.tema ?? defaultAjustes.tema)
+      setAjustes(ajustesConDefaults(useAjustesStore.getState().ajustes))
+      setCambios(new Set())
+      toast.success(`Plantilla «${plantilla.label}» aplicada y auditada.`)
+    } catch (e) { toast.error(errorInfo(e).message) }
   }
 
   async function restaurarGrupo(): Promise<void> {
@@ -318,16 +504,24 @@ export function CentroControlPage(): React.JSX.Element {
     } catch (e) { toast.error(errorInfo(e).message) }
   }
 
-  function controlCampo(g: AjustesGrupo, campo: Campo): React.JSX.Element {
-    const bloqueado = !puedeEditarAjustes || (permisosExtra[g] ? !can(permisosExtra[g]!) : false)
-    const valorActual = valor(g, campo.clave)
+  function controlCampo(
+    g: AjustesGrupo, campo: Campo,
+    opts?: {
+      valor: (clave: string) => unknown
+      cambiar: (clave: string, valor: unknown) => void
+      bloqueado?: boolean
+    }
+  ): React.JSX.Element {
+    const bloqueado = opts?.bloqueado ?? (!puedeEditarAjustes || (permisosExtra[g] ? !can(permisosExtra[g]!) : false))
+    const valorActual = opts ? opts.valor(campo.clave) : valor(g, campo.clave)
+    const setValor = (v: unknown): void => opts ? opts.cambiar(campo.clave, v) : cambiar(g, campo.clave, v)
     if (campo.tipo === 'bool') {
       return (
         <label key={campo.clave} className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm dark:border-slate-800">
           <input
             type="checkbox" className="mt-0.5 h-4 w-4 accent-indigo-600"
             checked={Boolean(valorActual)} disabled={bloqueado}
-            onChange={(e) => cambiar(g, campo.clave, e.target.checked)}
+            onChange={(e) => setValor(e.target.checked)}
           />
           <span><span className="block font-medium">{campo.etiqueta}</span>{campo.hint && <span className="block text-[11px] text-slate-400">{campo.hint}</span>}</span>
         </label>
@@ -337,7 +531,7 @@ export function CentroControlPage(): React.JSX.Element {
       return (
         <Field key={campo.clave} label={campo.etiqueta} hint={campo.hint}>
           <select className={inputClass} value={String(valorActual ?? '')} disabled={bloqueado}
-            onChange={(e) => cambiar(g, campo.clave, e.target.value)}>
+            onChange={(e) => setValor(e.target.value)}>
             {campo.opciones?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </Field>
@@ -351,7 +545,7 @@ export function CentroControlPage(): React.JSX.Element {
             {campo.opciones?.map((o) => (
               <label key={o.value} className={`cursor-pointer rounded-full border px-3 py-1 text-xs ${seleccionados.includes(o.value) ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50' : 'border-slate-200 text-slate-500 dark:border-slate-700'}`}>
                 <input type="checkbox" className="sr-only" checked={seleccionados.includes(o.value)} disabled={bloqueado}
-                  onChange={(e) => cambiar(g, campo.clave, e.target.checked
+                  onChange={(e) => setValor(e.target.checked
                     ? [...seleccionados, o.value]
                     : seleccionados.filter((v) => v !== o.value))} />
                 {o.label}
@@ -370,14 +564,14 @@ export function CentroControlPage(): React.JSX.Element {
             min={campo.min ?? 0} max={campo.max ?? Number.MAX_SAFE_INTEGER}
             decimal={campo.tipo === 'decimal'}
             disabled={bloqueado}
-            onChange={(v) => cambiar(g, campo.clave, v)}
+            onChange={(v) => setValor(v)}
           />
         ) : (
           <TextInput
             type="text"
             value={String(valorActual ?? '')}
             disabled={bloqueado}
-            onChange={(e) => cambiar(g, campo.clave, e.target.value)}
+            onChange={(e) => setValor(e.target.value)}
           />
         )}
       </Field>
@@ -425,6 +619,15 @@ export function CentroControlPage(): React.JSX.Element {
     )
   }
 
+  function alternarModulo(modulo: string, activo: boolean): void {
+    const actual = ajustes.featureFlags.modulos
+    const existe = actual.some((m) => m.modulo === modulo)
+    const siguiente = existe
+      ? actual.map((m) => m.modulo === modulo ? { ...m, activo } : m)
+      : [...actual, { modulo: modulo as typeof actual[number]['modulo'], activo }]
+    cambiar('featureFlags', 'modulos', siguiente)
+  }
+
   function editorModulos(): React.JSX.Element {
     return (
       <Card title="Módulos visibles" subtitle="Ocultar un módulo no elimina datos ni cambia permisos.">
@@ -436,7 +639,7 @@ export function CentroControlPage(): React.JSX.Element {
               <label key={modulo} className={`flex items-center gap-2 rounded-lg border p-3 text-sm ${protegido ? 'border-indigo-200 bg-indigo-50/40 dark:border-indigo-900 dark:bg-indigo-950/20' : 'border-slate-200 dark:border-slate-800'}`}>
                 <input type="checkbox" className="h-4 w-4 accent-indigo-600" checked={flag?.activo ?? true}
                   disabled={protegido || bloqueadoGrupo('featureFlags')}
-                  onChange={(e) => cambiar('featureFlags', 'modulos', ajustes.featureFlags.modulos.map((m) => m.modulo === modulo ? { ...m, activo: e.target.checked } : m))} />
+                  onChange={(e) => alternarModulo(modulo, e.target.checked)} />
                 <span className="flex-1">{moduleLabels[modulo]}</span>
                 {protegido && <Badge tone="accent">Protegido</Badge>}
               </label>
@@ -444,6 +647,63 @@ export function CentroControlPage(): React.JSX.Element {
           })}
         </div>
       </Card>
+    )
+  }
+
+  function moverGrupo(id: (typeof ajustes.interfaz.ordenGrupos)[number], paso: -1 | 1): void {
+    const orden = [...ajustes.interfaz.ordenGrupos]
+    const i = orden.indexOf(id)
+    const j = i + paso
+    if (i < 0 || j < 0 || j >= orden.length) return
+    ;[orden[i], orden[j]] = [orden[j], orden[i]]
+    cambiar('interfaz', 'ordenGrupos', orden)
+  }
+
+  function editorInterfaz(): React.JSX.Element {
+    const orden = ajustes.interfaz.ordenGrupos
+    const etiquetas = ajustes.interfaz.etiquetasModulo
+    const bloqueado = bloqueadoGrupo('interfaz')
+    return (
+      <>
+        <Card title="Orden de los grupos del menú" subtitle="Use las flechas para reorganizar la navegación sin tocar permisos ni rutas.">
+          <div className="space-y-1">
+            {orden.map((id, i) => (
+              <div key={id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-slate-800">
+                <span className="w-6 text-xs text-slate-400">{i + 1}</span>
+                <span className="flex-1">{moduleLabels[id as ModuleKey] ?? id}</span>
+                <button type="button" disabled={i === 0 || bloqueado} onClick={() => moverGrupo(id, -1)}
+                  className="rounded px-2 py-0.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30 dark:hover:bg-slate-800" aria-label={`Subir ${id}`}>↑</button>
+                <button type="button" disabled={i === orden.length - 1 || bloqueado} onClick={() => moverGrupo(id, 1)}
+                  className="rounded px-2 py-0.5 text-slate-500 hover:bg-slate-100 disabled:opacity-30 dark:hover:bg-slate-800" aria-label={`Bajar ${id}`}>↓</button>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card title="Renombrar módulos" subtitle="El cambio es solo visual: las claves de permiso y las rutas no se modifican.">
+          <details className="text-sm">
+            <summary className="cursor-pointer font-medium">
+              {Object.keys(etiquetas).length} módulo(s) renombrados · ver los {vistasPersonalizables.length} módulos
+            </summary>
+            <div className="mt-3 grid max-h-80 gap-2 overflow-y-auto pr-1 md:grid-cols-3">
+              {vistasPersonalizables.map((vista) => (
+                <Field key={vista} label={vista}>
+                  <TextInput
+                    value={etiquetas[vista] ?? ''}
+                    placeholder="Nombre por defecto"
+                    disabled={bloqueado}
+                    onChange={(e) => {
+                      const next = { ...etiquetas }
+                      if (e.target.value.trim()) next[vista] = e.target.value
+                      else delete next[vista]
+                      cambiar('interfaz', 'etiquetasModulo', next)
+                    }}
+                  />
+                </Field>
+              ))}
+            </div>
+          </details>
+        </Card>
+      </>
     )
   }
 
@@ -463,6 +723,7 @@ export function CentroControlPage(): React.JSX.Element {
         </Card>
         {grupo === 'widgets' && editorWidgets()}
         {grupo === 'featureFlags' && editorModulos()}
+        {grupo === 'interfaz' && editorInterfaz()}
       </div>
     )
   }
@@ -474,7 +735,7 @@ export function CentroControlPage(): React.JSX.Element {
         subtitle="Permisos con descripción, ajustes por empresa, paneles configurables y módulos. Cada cambio se valida y audita en backend."
         actions={
           <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={() => { void cargarPermisos(); void cargarAjustes() }}>
+            <Button variant="secondary" size="sm" onClick={() => { void cargarPermisos(); void cargarAjustes(); void cargarCapas() }}>
               <RotateCcw size={14} /> Recargar
             </Button>
             <Button size="sm" onClick={() => void guardarAjustes()} disabled={guardandoAjustes || cambios.size === 0}>
@@ -487,12 +748,17 @@ export function CentroControlPage(): React.JSX.Element {
       <Tabs
         tabs={[
           { id: 'permisos', label: 'Permisos' },
+          { id: 'interfaz', label: 'Interfaz' },
           { id: 'ajustes', label: 'Ajustes avanzados' },
+          { id: 'personalizacion', label: 'Por rol / permiso' },
           { id: 'paneles', label: 'Paneles' },
           { id: 'modulos', label: 'Módulos' }
         ]}
         active={tab}
-        onChange={setTab}
+        onChange={(id) => {
+          if (id === 'interfaz') setGrupo('interfaz')
+          setTab(id)
+        }}
       />
 
       {tab === 'permisos' && (
@@ -624,15 +890,81 @@ export function CentroControlPage(): React.JSX.Element {
         </TabPanel>
       )}
 
-      {tab === 'ajustes' && (
+      {tab === 'personalizacion' && (
         <TabPanel>
           {!puedeVerAjustes ? (
             <Card title="Acceso limitado"><p className="text-sm text-slate-500">Necesita `configuracion.ajustes.consultar`.</p></Card>
           ) : (
             <div className="space-y-4">
+              <Card
+                title="Personalización por rol o permiso"
+                subtitle="Solo se permiten los grupos visuales (tema, paneles, módulos e interfaz). Las capas se validan y auditan en backend; nunca habilitan rutas."
+                actions={puedeEditarAjustes && puedeVerPermisos ? (
+                  <Button size="sm" onClick={() => abrirCapa()}><Plus size={14} /> Nueva capa</Button>
+                ) : undefined}
+              >
+                <p className="text-xs text-slate-500">
+                  Prioridad: valores de empresa → capa de rol → capa de permiso. Si un usuario tiene varios roles, se aplican en orden de id.
+                </p>
+              </Card>
+              <Card title="Capas guardadas" subtitle="Se aplican automáticamente al iniciar sesión el usuario correspondiente.">
+                <DataTable<CapaAjuste>
+                  columns={[
+                    { key: 'ambito', header: 'Ámbito', render: (c) => <Badge tone={c.ambito === 'ROL' ? 'accent' : 'neutral'}>{c.ambito}</Badge> },
+                    { key: 'objetivo', header: 'Rol o permiso', value: (c) => etiquetaObjetivo(c.ambito, c.objetivo) },
+                    { key: 'grupo', header: 'Grupo', value: (c) => grupos.find((g) => g.id === c.grupo)?.label ?? c.grupo },
+                    { key: 'actualizado_en', header: 'Actualizado', value: (c) => c.actualizado_en },
+                    { key: 'clave', header: 'Clave', value: (c) => `${c.ambito}:${c.objetivo}:${c.grupo}` }
+                  ]}
+                  data={capas}
+                  rowKey={(c) => `${c.ambito}:${c.objetivo}:${c.grupo}`}
+                  storageKey="capas-personalizacion"
+                  pageSize={8}
+                  emptyText="Sin capas personalizadas. Use «Nueva capa»."
+                  actions={(c) => (
+                    <div className="flex justify-end gap-1">
+                      <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="Editar capa"
+                        onClick={() => abrirCapa(c)}><Pencil size={14} /></button>
+                      {can('configuracion.ajustes.restaurar') && (
+                        <button className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30" title="Eliminar capa"
+                          onClick={() => void eliminarCapa(c)}><Trash2 size={14} /></button>
+                      )}
+                    </div>
+                  )}
+                />
+              </Card>
+            </div>
+          )}
+        </TabPanel>
+      )}
+
+      {(tab === 'ajustes' || tab === 'interfaz') && (
+        <TabPanel>
+          {!puedeVerAjustes ? (
+            <Card title="Acceso limitado"><p className="text-sm text-slate-500">Necesita `configuracion.ajustes.consultar`.</p></Card>
+          ) : (
+            <div className="space-y-4">
+              {tab === 'interfaz' && (
+                <Card title="Plantillas rápidas" subtitle="Aplican tema, paneles y menú a la vez. Cada grupo se guarda y audita por separado; no tocan permisos ni políticas duras.">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    {plantillasInterfaz.map((plantilla) => (
+                      <button
+                        key={plantilla.id}
+                        onClick={() => void aplicarPlantilla(plantilla)}
+                        disabled={!puedeEditarAjustes}
+                        className="rounded-lg border border-slate-200 p-3 text-left transition hover:border-indigo-400 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:hover:border-indigo-500 dark:hover:bg-indigo-950/20"
+                      >
+                        <span className="block text-sm font-medium">{plantilla.label}</span>
+                        <span className="mt-1 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{plantilla.descripcion}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {!puedeEditarAjustes && <p className="mt-2 text-xs text-amber-600">Necesita `configuracion.ajustes.modificar`.</p>}
+                </Card>
+              )}
               <div className="flex flex-wrap gap-2">
                 {grupos.map((g) => (
-                  <Button key={g.id} size="sm" variant={grupo === g.id ? 'primary' : 'secondary'} onClick={() => setGrupo(g.id)}>
+                  <Button key={g.id} size="sm" variant={grupo === g.id ? 'primary' : 'secondary'} onClick={() => { setGrupo(g.id); setTab('ajustes') }}>
                     {g.label}{cambios.has(g.id) && <span className="ml-1 text-xs">•</span>}
                   </Button>
                 ))}
@@ -737,6 +1069,74 @@ export function CentroControlPage(): React.JSX.Element {
                 onChange={(e) => setPermisoForm({ ...permisoForm, critico: e.target.checked })} />
               Requiere confirmación explícita al concederlo
             </label>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!capaForm}
+        title={capaForm?.editando ? 'Editar capa de personalización' : 'Nueva capa de personalización'}
+        subtitle="Solo grupos visuales. La capa se valida con Zod y se audita antes de aplicarse."
+        width="max-w-3xl"
+        onClose={() => setCapaForm(null)}
+        footer={<>
+          <Button variant="secondary" onClick={() => setCapaForm(null)}>Cancelar</Button>
+          <Button onClick={() => void guardarCapa()} disabled={guardandoCapa || !puedeEditarAjustes || !capaForm?.objetivo}>
+            {guardandoCapa ? 'Guardando…' : 'Guardar capa'}
+          </Button>
+        </>}
+      >
+        {capaForm && (
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Ámbito">
+                <select className={inputClass} value={capaForm.ambito} disabled={capaForm.editando}
+                  onChange={(e) => {
+                    const ambito = e.target.value as AjustesAmbito
+                    setCapaForm({
+                      ...capaForm, ambito,
+                      objetivo: ambito === 'ROL' ? String(roles[0]?.id ?? '') : (catalogo[0]?.key ?? ''),
+                      datos: { ...defaultAjustes[capaForm.grupo] } as Record<string, unknown>
+                    })
+                  }}>
+                  <option value="ROL">Rol</option>
+                  <option value="PERMISO">Permiso</option>
+                </select>
+              </Field>
+              <Field label={capaForm.ambito === 'ROL' ? 'Rol' : 'Permiso'}>
+                <select className={inputClass} value={capaForm.objetivo} disabled={capaForm.editando}
+                  onChange={(e) => setCapaForm({ ...capaForm, objetivo: e.target.value })}>
+                  {capaForm.ambito === 'ROL'
+                    ? roles.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)
+                    : catalogo.map((p) => <option key={p.key} value={p.key}>{p.label} — {p.key}</option>)}
+                </select>
+              </Field>
+              <Field label="Grupo visual">
+                <select className={inputClass} value={capaForm.grupo} disabled={capaForm.editando}
+                  onChange={(e) => {
+                    const grupo = e.target.value as CapaForm['grupo']
+                    setCapaForm({
+                      ...capaForm, grupo,
+                      datos: { ...defaultAjustes[grupo] } as Record<string, unknown>
+                    })
+                  }}>
+                  {ajustesGruposVisuales.map((g) => (
+                    <option key={g} value={g}>{grupos.find((x) => x.id === g)?.label ?? g}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <p className="rounded-lg bg-indigo-50 p-3 text-xs text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
+              Esta capa se aplica solo a quienes tengan {capaForm.ambito === 'ROL' ? 'el rol' : 'el permiso'} seleccionado. No cambia permisos, rutas ni políticas duras.
+            </p>
+            <div className="grid max-h-[45vh] gap-4 overflow-y-auto pr-1 md:grid-cols-2">
+              {campos[capaForm.grupo].map((campo) => controlCampo(capaForm.grupo, campo, {
+                valor: (clave) => capaForm.datos[clave] ??
+                  (defaultAjustes[capaForm.grupo] as Record<string, unknown>)[clave],
+                cambiar: cambiarDatoCapa,
+                bloqueado: !puedeEditarAjustes
+              }))}
+            </div>
           </div>
         )}
       </Modal>

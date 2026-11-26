@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Ban, CheckCheck, Download, Eye, FileDown, FilePlus2, Filter, Printer, RefreshCw, PackageCheck, RotateCcw } from 'lucide-react'
+import { Ban, CheckCheck, Download, Eye, FileDown, FilePlus2, Filter, Pencil, Printer, RefreshCw, PackageCheck, RotateCcw } from 'lucide-react'
 import { can, errorInfo } from '@/app/session'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -12,10 +12,13 @@ import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
 import { guardarPdf } from '@/lib/pdf'
+import { formatoGuardado } from '@/lib/formato-impresion'
 import { descargarArchivo } from '@/features/inventario/descargar'
-import { nuevaLinea, payloadCabecera, totalesCarrito } from './carrito'
+import { nuevaLinea, payloadCabecera, primeraLineaIncompleta, totalesCarrito } from './carrito'
 import { CantidadesEditor, CompraForm, PagosEditor } from './ComprasForms'
 import { AreaImpresionCompra, DetalleCompra as DetalleCompraModal } from './ComprasDetalle'
+import { IngresoMercancia } from './IngresoMercancia'
+import { HistorialIngresos } from './HistorialIngresos'
 import { useComprasCatalogos } from './useComprasCatalogos'
 import {
   clave, etiquetasTipo, formularioVacio, num, txt,
@@ -58,6 +61,8 @@ export function ComprasPage(): React.JSX.Element {
   const [recepcion, setRecepcion] = useState<CantidadesState | null>(null)
   const [devolucion, setDevolucion] = useState<CantidadesState | null>(null)
   const [guardando, setGuardando] = useState(false)
+  const [vista, setVista] = useState('ingreso')
+  const [editarId, setEditarId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!form.almacenId && catalogos.almacenes.length) {
@@ -113,8 +118,8 @@ export function ComprasPage(): React.JSX.Element {
     if (!form.proveedorId) { toast.warning('Seleccione el proveedor.'); return }
     if (!origenFacturaValido()) { toast.warning('El documento de origen ya no está disponible.'); return }
     if (!form.docOrigenId) {
-      if (!form.lineas.some((linea) => linea.productoId && Number(linea.cantidad) > 0)) {
-        toast.warning('Agregue al menos una línea válida.'); return
+      if (!form.lineas.length || primeraLineaIncompleta(form.lineas)) {
+        toast.warning('Complete o elimine las líneas vacías.'); return
       }
       const totales = totalesCarrito(catalogos, form.lineas)
       if (totales.totalCent <= 0) { toast.warning('El total debe ser mayor que cero.'); return }
@@ -171,18 +176,26 @@ export function ComprasPage(): React.JSX.Element {
     }
   }
 
-  async function imprimir(id: number): Promise<void> {
+  function editarIngreso(doc: Fila): void {
+    if (!can('compras.modificar')) return
+    setEditarId(num(doc.id))
+    setVista('ingreso')
+  }
+
+  async function imprimir(id: number, tipoDoc?: string): Promise<void> {
     try {
-      setImpresion(await window.api.invoke<DatosImpresionCompra>('compras.imprimir.datos', { id, formato: 'CARTA' }))
+      const formato = await formatoGuardado(tipoDoc ?? 'FACTURA_COMPRA')
+      setImpresion(await window.api.invoke<DatosImpresionCompra>('compras.imprimir.datos', { id, formato }))
       window.setTimeout(() => window.print(), 80)
     } catch (error) {
       toast.error(errorInfo(error).message)
     }
   }
 
-  async function guardarPdfCompra(id: number): Promise<void> {
+  async function guardarPdfCompra(id: number, tipoDoc?: string): Promise<void> {
     try {
-      await guardarPdf({ origen: 'compra', id, formato: 'CARTA' })
+      const formato = await formatoGuardado(tipoDoc ?? 'FACTURA_COMPRA')
+      await guardarPdf({ origen: 'compra', id, formato })
       toast.success('PDF generado y descargado.')
     } catch (error) {
       toast.error(errorInfo(error).message)
@@ -345,6 +358,26 @@ export function ComprasPage(): React.JSX.Element {
 
   return (
     <>
+      <Tabs
+        tabs={[
+          { id: 'ingreso', label: 'Ingreso de mercancía' },
+          { id: 'documentos', label: 'Documentos' },
+          { id: 'historial', label: 'Historial' }
+        ]}
+        active={vista}
+        onChange={(id) => { setVista(id); if (id !== 'ingreso') setEditarId(null) }}
+      />
+      {vista === 'ingreso' ? (
+        <IngresoMercancia
+          catalogos={catalogos}
+          editarId={editarId}
+          onEditarTerminado={() => setEditarId(null)}
+          onGuardado={() => void cargar()}
+        />
+      ) : (
+        <>
+          {vista === 'historial' ? <HistorialIngresos /> : (
+            <>
       <PageHeader
         title="Compras"
         subtitle="Solicitudes, órdenes, recepciones, facturas y devoluciones con CxP e inventario reales."
@@ -425,11 +458,11 @@ export function ComprasPage(): React.JSX.Element {
                 {can('compras.imprimir') && (
                   <>
                     <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      onClick={() => void imprimir(num(fila.id))} title="Imprimir" aria-label="Imprimir">
+                      onClick={() => void imprimir(num(fila.id), txt(fila.tipo))} title="Imprimir" aria-label="Imprimir">
                       <Printer size={15} />
                     </button>
                     <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                      onClick={() => void guardarPdfCompra(num(fila.id))} title="Guardar PDF" aria-label="Guardar PDF">
+                      onClick={() => void guardarPdfCompra(num(fila.id), txt(fila.tipo))} title="Guardar PDF" aria-label="Guardar PDF">
                       <FileDown size={15} />
                     </button>
                   </>
@@ -477,6 +510,13 @@ export function ComprasPage(): React.JSX.Element {
                       <RotateCcw size={15} />
                     </button>
                   )}
+                {tab === 'facturas' && can('compras.modificar') &&
+                  !['ANULADO', 'CONVERTIDA'].includes(txt(fila.estado)) && !fila.docOrigenId && (
+                    <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      onClick={() => editarIngreso(fila)} title="Corregir ingreso" aria-label="Corregir ingreso">
+                      <Pencil size={15} />
+                    </button>
+                  )}
                 {can('compras.anular') && txt(fila.estado) !== 'ANULADO' && txt(fila.tipo) !== 'DEVOLUCION_COMPRA' && (
                   <button className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
                     onClick={() => { setAnular({ id: num(fila.id), numero: txt(fila.numero) }); setMotivoAnulacion('') }}
@@ -489,6 +529,10 @@ export function ComprasPage(): React.JSX.Element {
           />
         </Card>
       </TabPanel>
+            </>
+          )}
+        </>
+      )}
 
       <Modal
         open={nuevoOpen}
@@ -581,7 +625,7 @@ export function ComprasPage(): React.JSX.Element {
       <DetalleCompraModal
         detalle={detalle}
         onClose={() => setDetalle(null)}
-        onPrint={detalle ? () => void imprimir(num(detalle.cabecera.id)) : undefined}
+        onPrint={detalle ? () => void imprimir(num(detalle.cabecera.id), txt(detalle.cabecera.tipo)) : undefined}
         puedeImprimir={detalle ? can('compras.imprimir') : false}
       />
 

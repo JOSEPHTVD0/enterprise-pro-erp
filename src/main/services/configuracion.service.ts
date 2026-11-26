@@ -4,7 +4,52 @@ import { writeAudit } from '../repositories/auditoria.repo'
 import * as repo from '../repositories/configuracion.repo'
 import { alertasSeries, vistaPreviaSerie } from '../repositories/series.repo'
 import { requirePermission, type SessionContext } from './context'
+import { empresaConfigBackups } from './backups.service'
+import { createAjustesService } from './ajustes.service'
+import type { Ajustes } from '@shared/schemas/ajustes'
 import { errors } from '@shared/errors'
+
+/** Backend ofrece estos formatos; `ajustes.integraciones.formatos` es el filtro de la estación. */
+export const formatosBackendExportacion = ['CSV', 'XLSX', 'PDF'] as const
+
+function integracionesDe(db: Db, empresaId: number): Ajustes['integraciones'] {
+  return createAjustesService(db).leerGrupo(empresaId, 'integraciones')
+}
+
+/**
+ * `settings.impresion.impresora` o la impresora de la caja son específicas y
+ * prevalecen. Para tickets sin configuración específica se usa
+ * `ajustes.integraciones.impresoraTicket`; al final, la impresora predeterminada.
+ */
+export function resolverImpresoraTicket(
+  db: Db,
+  empresaId: number,
+  opciones: {
+    impresoraEspecifica?: string
+    formato?: string
+    integraciones?: Ajustes['integraciones']
+  } = {}
+): string {
+  const especifica = opciones.impresoraEspecifica?.trim()
+  if (especifica) return especifica
+  const integraciones = opciones.integraciones ?? integracionesDe(db, empresaId)
+  if ((!opciones.formato || opciones.formato.startsWith('TICKET')) && integraciones.impresoraTicket.trim()) {
+    return integraciones.impresoraTicket.trim()
+  }
+  const fila = db.prepare(`
+    SELECT nombre FROM impresoras WHERE empresa_id = ?
+    ORDER BY predeterminada DESC, id ASC LIMIT 1
+  `).get(empresaId) as { nombre: string } | undefined
+  return fila?.nombre?.trim() ?? ''
+}
+
+/** `ajustes.fiscal.libro606/libro607` gobiernan realmente la generación de esos libros. */
+export function libroHabilitado(
+  db: Db, empresaId: number, libro: 'LIBRO606' | 'LIBRO607'
+): boolean {
+  const fiscal = createAjustesService(db).leerGrupo(empresaId, 'fiscal')
+  return libro === 'LIBRO606' ? fiscal.libro606 : fiscal.libro607
+}
 
 const mappings = {
   impuestos: {
@@ -37,10 +82,21 @@ export function createConfiguracionService(db: Db) {
   return {
     getConfig(ctx: SessionContext) {
       requirePermission(ctx, 'configuracion.consultar')
+      // Los parámetros backup_ son globales: se leen siempre del propietario
+      // canonical para que todas las estaciones vean la misma configuración.
+      const parametros = Object.fromEntries(
+        Object.entries(repo.getParametros(db, ctx.empresaId)).filter(([clave]) => !clave.startsWith('backup_'))
+      )
+      const globales = Object.entries(repo.getParametros(db, empresaConfigBackups(db)))
+        .filter(([clave]) => clave.startsWith('backup_'))
+      const integraciones = integracionesDe(db, ctx.empresaId)
       return {
         empresas: repo.listEmpresas(db),
         empresa: repo.getEmpresa(db, ctx.empresaId),
-        parametros: repo.getParametros(db, ctx.empresaId),
+        parametros: { ...parametros, ...Object.fromEntries(globales) },
+        // Solo se ofrecen formatos que el backend sabe producir y que la estación habilitó.
+        formatosExportacion: formatosBackendExportacion.filter((formato) => integraciones.formatos.includes(formato)),
+        impresoraTicketEfectiva: resolverImpresoraTicket(db, ctx.empresaId, { integraciones }),
         impuestos: repo.listCatalog(db, 'impuestos', ctx.empresaId),
         monedas: repo.listCatalog(db, 'monedas', ctx.empresaId),
         tasas: db.prepare('SELECT * FROM tasas_cambio WHERE empresa_id = ? ORDER BY fecha DESC').all(ctx.empresaId),
@@ -78,9 +134,10 @@ export function createConfiguracionService(db: Db) {
       // si se llama al canal genérico config.parametro.set en lugar de config.backup.config.
       if (clave.startsWith('backup_')) requirePermission(ctx, 'configuracion.respaldo.crear')
       const textual = typeof valor === 'string' ? valor : JSON.stringify(valor)
+      const empresa = clave.startsWith('backup_') ? empresaConfigBackups(db) : ctx.empresaId
       db.transaction(() => {
-        const antes = repo.getParametros(db, ctx.empresaId)[clave]
-        repo.setParametro(db, ctx.empresaId, clave, textual)
+        const antes = repo.getParametros(db, empresa)[clave]
+        repo.setParametro(db, empresa, clave, textual)
         audit(ctx, 'MODIFICAR', 'parametros', null, { clave, valor: antes }, { clave, valor: textual })
       })()
       return { ok: true }

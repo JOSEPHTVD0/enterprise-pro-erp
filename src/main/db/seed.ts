@@ -108,6 +108,83 @@ export function seedRolesForCompany(db: Db, empresaId: number): void {
   }
 }
 
+/**
+ * Enlaces administrativos de `ajustes.fiscal` con los parámetros operativos reales.
+ * Se instalan como disparadores para que cualquier canal backend que escriba el
+ * grupo (guardado, restauración, importación) mantenga la misma verdad.
+ *
+ * `formatoComprobante = PREPARACION_E_CF` se conserva como valor inerte: el ERP
+ * administra NCF y libros auxiliares locales, no emite e-CF ni certifica ante DGII.
+ * `redondeo = BANCARIO` es política fija y no se persiste como variable libre.
+ */
+const ajustesFiscalSql = `
+CREATE TRIGGER IF NOT EXISTS ajustes_fiscal_sync_insert
+AFTER INSERT ON ajustes WHEN NEW.grupo = 'fiscal'
+BEGIN
+  UPDATE parametros SET valor = json_extract(NEW.datos_json, '$.itbisPorDefecto')
+   WHERE empresa_id = NEW.empresa_id AND clave = 'itbis_por_defecto';
+  UPDATE empresas SET moneda_base = json_extract(NEW.datos_json, '$.monedaBase')
+   WHERE id = NEW.empresa_id;
+  UPDATE series_documento SET alerta_min = CAST(json_extract(NEW.datos_json, '$.ncfAvisoDias') AS INTEGER)
+   WHERE empresa_id = NEW.empresa_id;
+  INSERT INTO auditoria (empresa_id, usuario_id, sesion_id, operacion, entidad, entidad_id, valores_antes, valores_despues)
+  VALUES (NEW.empresa_id, NEW.usuario_id, NULL, 'SINCRONIZAR_FISCAL', 'ajustes', 'fiscal', NULL, NEW.datos_json);
+END;
+
+CREATE TRIGGER IF NOT EXISTS ajustes_fiscal_sync_update
+AFTER UPDATE OF datos_json ON ajustes WHEN NEW.grupo = 'fiscal'
+BEGIN
+  UPDATE parametros SET valor = json_extract(NEW.datos_json, '$.itbisPorDefecto')
+   WHERE empresa_id = NEW.empresa_id AND clave = 'itbis_por_defecto';
+  UPDATE empresas SET moneda_base = json_extract(NEW.datos_json, '$.monedaBase')
+   WHERE id = NEW.empresa_id;
+  UPDATE series_documento SET alerta_min = CAST(json_extract(NEW.datos_json, '$.ncfAvisoDias') AS INTEGER)
+   WHERE empresa_id = NEW.empresa_id;
+  INSERT INTO auditoria (empresa_id, usuario_id, sesion_id, operacion, entidad, entidad_id, valores_antes, valores_despues)
+  VALUES (NEW.empresa_id, NEW.usuario_id, NULL, 'SINCRONIZAR_FISCAL', 'ajustes', 'fiscal', NULL, NEW.datos_json);
+END;
+
+CREATE TRIGGER IF NOT EXISTS ajustes_fiscal_sync_delete
+AFTER DELETE ON ajustes WHEN OLD.grupo = 'fiscal'
+BEGIN
+  UPDATE parametros SET valor = 'ITBIS18'
+   WHERE empresa_id = OLD.empresa_id AND clave = 'itbis_por_defecto';
+  UPDATE empresas SET moneda_base = 'DOP' WHERE id = OLD.empresa_id;
+  UPDATE series_documento SET alerta_min = 15 WHERE empresa_id = OLD.empresa_id;
+  INSERT INTO auditoria (empresa_id, usuario_id, sesion_id, operacion, entidad, entidad_id, valores_antes, valores_despues)
+  VALUES (OLD.empresa_id, OLD.usuario_id, NULL, 'SINCRONIZAR_FISCAL', 'ajustes', 'fiscal', OLD.datos_json, NULL);
+END;
+`
+
+/** Exportación automática: el disparador solo encola; el permiso se verifica después. */
+const exportacionesAutomaticasSql = `
+CREATE TABLE IF NOT EXISTS exportaciones_automaticas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  empresa_id INTEGER NOT NULL REFERENCES empresas(id),
+  usuario_id INTEGER REFERENCES usuarios(id),
+  origen TEXT NOT NULL CHECK (origen IN ('venta', 'compra')),
+  documento_id INTEGER NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'PENDIENTE'
+    CHECK (estado IN ('PENDIENTE', 'EXPORTADA', 'DENEGADA', 'OMITIDA', 'ERROR')),
+  creado_en TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_exportaciones_automaticas_estado
+  ON exportaciones_automaticas(estado, id);
+
+CREATE TRIGGER IF NOT EXISTS export_auto_venta AFTER INSERT ON documentos_venta
+BEGIN
+  INSERT INTO exportaciones_automaticas (empresa_id, usuario_id, origen, documento_id)
+  VALUES (NEW.empresa_id, NEW.usuario_id, 'venta', NEW.id);
+END;
+
+CREATE TRIGGER IF NOT EXISTS export_auto_compra AFTER INSERT ON documentos_compra
+BEGIN
+  INSERT INTO exportaciones_automaticas (empresa_id, usuario_id, origen, documento_id)
+  VALUES (NEW.empresa_id, NEW.usuario_id, 'compra', NEW.id);
+END;
+`
+
 /** Datos estructurales necesarios para operar. No son datos de demostración comercial. */
 export function seed(db: Db): void {
   db.transaction(() => {
@@ -117,6 +194,25 @@ export function seed(db: Db): void {
     `).run()
     seedCompany(db, 1)
     seedRolesForCompany(db, 1)
+    db.exec(ajustesFiscalSql)
+    db.exec(exportacionesAutomaticasSql)
+    // Bases ya existentes: aplica los ajustes fiscales guardados antes de este arranque.
+    const fiscales = db.prepare("SELECT empresa_id, datos_json FROM ajustes WHERE grupo = 'fiscal'").all() as {
+      empresa_id: number; datos_json: string
+    }[]
+    for (const fila of fiscales) {
+      try {
+        const datos = JSON.parse(fila.datos_json) as Record<string, unknown>
+        db.prepare("UPDATE parametros SET valor = ? WHERE empresa_id = ? AND clave = 'itbis_por_defecto'")
+          .run(String(datos.itbisPorDefecto ?? 'ITBIS18'), fila.empresa_id)
+        db.prepare('UPDATE empresas SET moneda_base = ? WHERE id = ?')
+          .run(String(datos.monedaBase ?? 'DOP'), fila.empresa_id)
+        db.prepare('UPDATE series_documento SET alerta_min = ? WHERE empresa_id = ?')
+          .run(Number(datos.ncfAvisoDias ?? 15), fila.empresa_id)
+      } catch {
+        // Un JSON corrupto no debe impedir el arranque; el servicio ya usa defaults.
+      }
+    }
 
     const adminExists = db.prepare('SELECT 1 FROM usuarios WHERE username = ?').get(FIRST_RUN_USER)
     if (!adminExists) {
@@ -129,5 +225,6 @@ export function seed(db: Db): void {
       const adminRol = (db.prepare('SELECT id FROM roles WHERE empresa_id = 1 AND nombre = ?').get('Administrador') as { id: number }).id
       db.prepare('INSERT INTO usuario_roles (usuario_id, rol_id, empresa_id) VALUES (?, ?, 1)').run(adminId, adminRol)
     }
-  })()
+    // IMMEDIATE evita carreras si dos instancias siembran la misma BD nueva.
+  }).immediate()
 }

@@ -26,9 +26,12 @@ describe('cálculo de impuestos y descuentos en centavos', () => {
     const linea = calcularLinea({
       cantidad: 2, precioCent: 20000, descuentoPctBp: 1000, tasaBp: 1800
     })
-    expect(linea).toEqual({
+    expect(linea).toMatchObject({
       subtotalCent: 40000,
       descuentoCent: 4000,
+      descuento1Cent: 4000,
+      descuento2Cent: 0,
+      descuento3Cent: 0,
       baseCent: 36000,
       impuestoCent: 6480,
       totalCent: 42480
