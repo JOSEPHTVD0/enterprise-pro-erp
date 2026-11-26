@@ -182,12 +182,12 @@ gh repo create enterprise-pro-erp --public --source=. --remote=origin --push
 Para publicar el instalador como *Release* (el binario no se versiona en Git):
 
 ```powershell
-gh release create v0.5.11 `
-  dist\EnterpriseProERP-Setup-0.5.11.exe `
-  dist\EnterpriseProERP-Setup-0.5.11.exe.blockmap `
+gh release create v0.5.12 `
+  dist\EnterpriseProERP-Setup-0.5.12.exe `
+  dist\EnterpriseProERP-Setup-0.5.12.exe.blockmap `
   release\latest.yml `
-  --title "ENTERPRISE PRO ERP 0.5.11" `
-  --notes-file docs\30-novedades-0.5.11.md
+  --title "ENTERPRISE PRO ERP 0.5.12" `
+  --notes-file docs\31-novedades-0.5.12.md
 ```
 
 > Antes de publicar una versión nueva, actualiza el hash en `README.md`, `docs/05` y `docs/06`,

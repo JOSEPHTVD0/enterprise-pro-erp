@@ -17,6 +17,7 @@ import { descargarArchivo } from '@/features/inventario/descargar'
 import { AreaImpresion } from './AreaImpresion'
 import { DocumentoDetalle } from './DocumentoDetalle'
 import { DocumentoForm } from './DocumentoForm'
+import { FacturacionEcfPanel } from './FacturacionEcfPanel'
 import { nuevaLinea, payloadCabecera, primeraLineaIncompleta, totalesCarrito } from './carrito'
 import { ConducesTab } from './ConducesTab'
 import { formularioVacio, num, txt, type DatosImpresion, type DetalleDocumento, type Fila } from './types'
@@ -30,14 +31,18 @@ const estados: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'in
 
 export function FacturacionPage(): React.JSX.Element {
   const catalogos = useVentasCatalogos('ventas.catalogos')
-  const [tab, setTab] = useState('documentos')
+  const [tab, setTab] = useState('ecf')
   const [documentos, setDocumentos] = useState<Fila[]>([])
   const [filtro, setFiltro] = useState({ tipo: '', estado: '', cliente: '', desde: '', hasta: '' })
   const [aplicado, setAplicado] = useState(filtro)
   const [cargando, setCargando] = useState(true)
   const [nuevoOpen, setNuevoOpen] = useState(false)
   const [tipoFactura, setTipoFactura] = useState<TipoFactura>('FACTURA_CONTADO')
-  const [form, setForm] = useState(formularioVacio(catalogos))
+  const [form, setForm] = useState(() => {
+    const base = formularioVacio(catalogos)
+    base.lineas = [nuevaLinea(catalogos)]
+    return base
+  })
   const [detalle, setDetalle] = useState<DetalleDocumento | null>(null)
   const [impresion, setImpresion] = useState<DatosImpresion | null>(null)
   const [anular, setAnular] = useState<{ id: number; numero: string } | null>(null)
@@ -237,12 +242,31 @@ export function FacturacionPage(): React.JSX.Element {
 
       <Tabs
         tabs={[
+          { id: 'ecf', label: 'Facturación ECF' },
           { id: 'documentos', label: 'Documentos' },
           { id: 'conduces', label: 'Conduces y entregas' }
         ]}
         active={tab}
         onChange={setTab}
       />
+
+      {tab === 'ecf' && (
+        <TabPanel>
+          <FacturacionEcfPanel
+            catalogos={catalogos}
+            form={form}
+            onChange={setForm}
+            onGuardar={() => void guardar()}
+            onSalir={() => setTab('documentos')}
+            guardando={guardando}
+            cargando={catalogos.cargando}
+            permitirPrecio={can('ventas.precio')}
+            permitirDescuento={can('ventas.descuento')}
+            tipoFactura={tipoFactura}
+            onTipoFactura={cambiarTipo}
+          />
+        </TabPanel>
+      )}
 
       {tab === 'documentos' && (
         <TabPanel>

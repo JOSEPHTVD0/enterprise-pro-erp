@@ -16,6 +16,7 @@
 
 .erp-card { border-radius: var(--erp-radio); }
 .erp-acento { color: var(--erp-acento); }
+.erp-ecf { color-scheme: dark; }
 body { font-family: var(--erp-font); font-size: calc(14px * var(--erp-escala)); }
 
 .erp-reducir-movimiento *,

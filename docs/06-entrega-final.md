@@ -31,12 +31,12 @@ e-CF.**
 
 | Campo | Valor |
 |---|---|
-| Instalador | `EnterpriseProERP-Setup-0.5.11.exe` |
-| Tamaño | 145.535.128 bytes |
-| SHA-256 | `0EE0122F07F4E5C1879D85473FF5BC4E5D7D04A590AF407893D8739C3C937BDC` |
-| SHA-512 (base64, `release/latest.yml`) | `nJqk85/NuSnJqTjIdxMHAUvbJdbFwrS9K8qaEVje7bPYlThwMQhBoiijg+WAycmQtI/aLQH0r3RvfGp9/gUk/w==` |
+| Instalador | `EnterpriseProERP-Setup-0.5.12.exe` |
+| Tamaño | 145.541.368 bytes |
+| SHA-256 | `D6379C79A33DAFE97D52BA6FCB25DF59BF4E0406219B801EAB34BE69E03101D3` |
+| SHA-512 (base64, `release/latest.yml`) | `1oxORKzA+/4/+VwNmkfKnLLrOKrwQH/pGyHrgNAizCDBWkW+5orRBseMwR58isQGihHBJ7PGVdW+PjbY4RfpFA==` |
 | Tipo | NSIS 3 Unicode, x64, per-usuario, carpeta configurable |
-| Producto | ENTERPRISE PRO ERP 0.5.11 |
+| Producto | ENTERPRISE PRO ERP 0.5.12 |
 | AppID | `com.enterprisepro.erp` |
 | Firma digital | **Autofirmada** (SHA-256, sin timestamp: no había acceso al servidor de tiempo) |
 | Huella SHA-1 del certificado | `60B08EC13A4D8B0B5039A1F9698994D55312CD0C` |
@@ -53,8 +53,8 @@ instalador publicado. Código fuente y documentación: `C:\Users\ferre\Downloads
 | Comando / comprobación | Resultado |
 |---|---|
 | `npm.cmd run typecheck` | Sin errores (`tsc --noEmit`). |
-| `npm.cmd test` | **200/200** pruebas, **30 archivos** (integración + unitarios). |
-| `npm.cmd run test:e2e` | **4/4** pruebas reales sobre Electron por CDP (login, IPC PDF, botón PDF, consola limpia). |
+| `npm.cmd test` | **337/337** pruebas, **47 archivos** (integración + unitarios). |
+| `npm.cmd run test:e2e` | **26/26** pruebas reales sobre Electron por CDP (login, IPC PDF, módulos 2026, espacio de trabajo, consola limpia). |
 | `npm.cmd run test:updater` | `electron-updater` detectó `0.3.1` desde un feed HTTP local. |
 | `npm.cmd run build` | main 494,40 kB · preload 1,52 kB · renderer 2,67 MB. |
 | `npm.cmd audit` / `npm.cmd audit --omit=dev` | **0 vulnerabilidades** en ambos modos. |
