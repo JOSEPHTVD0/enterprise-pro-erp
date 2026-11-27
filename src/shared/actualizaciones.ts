@@ -20,6 +20,8 @@ export interface EstadoActualizacion {
   verificando: boolean
   /** True cuando hubo una comprobación correcta, incluso si no hay versión nueva. */
   verificado: boolean
+  /** True tras verificar sin versiones nuevas para el canal: no hay nada que descargar. */
+  actualizado: boolean
   disponible: boolean
   version?: string
   notas?: string

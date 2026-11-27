@@ -8,6 +8,17 @@ import { seedPlanContable } from '../repositories/contabilidad.repo'
 export const FIRST_RUN_USER = 'admin'
 export const FIRST_RUN_PASSWORD = 'Admin1234!'
 
+/**
+ * Usuarios operativos semilla. Cada uno queda limitado a su rol; también deben cambiar
+ * la contraseña en el primer login. No se recrean ni se reestablecen en arranques
+ * posteriores: si ya existen, se conserva la contraseña y las asignaciones hechas por
+ * el administrador.
+ */
+export const seedUsers = [
+  { username: 'facturador', nombre: 'USUARIO FACTURADOR', password: 'Factura1234!', rol: 'Facturador' },
+  { username: 'cobrador', nombre: 'USUARIO COBRADOR', password: 'Cobros1234!', rol: 'Cobrador' }
+] as const
+
 const series: { tipo: string; prefijo: string }[] = [
   { tipo: 'FACTURA_CONTADO', prefijo: 'FAC-' },
   { tipo: 'FACTURA_CREDITO', prefijo: 'FCR-' },
@@ -224,6 +235,19 @@ export function seed(db: Db): void {
       const adminId = Number(result.lastInsertRowid)
       const adminRol = (db.prepare('SELECT id FROM roles WHERE empresa_id = 1 AND nombre = ?').get('Administrador') as { id: number }).id
       db.prepare('INSERT INTO usuario_roles (usuario_id, rol_id, empresa_id) VALUES (?, ?, 1)').run(adminId, adminRol)
+    }
+
+    const addUsuario = db.prepare(`
+      INSERT INTO usuarios (username, nombre, email, password_hash, salt, debe_cambiar_clave)
+      VALUES (?, ?, '', ?, ?, 1)
+    `)
+    const addUsuarioRol = db.prepare('INSERT INTO usuario_roles (usuario_id, rol_id, empresa_id) VALUES (?, ?, 1)')
+    for (const usuario of seedUsers) {
+      if (db.prepare('SELECT 1 FROM usuarios WHERE username = ?').get(usuario.username)) continue
+      const { hash, salt } = hashPassword(usuario.password)
+      const resultado = addUsuario.run(usuario.username, usuario.nombre, hash, salt)
+      const rol = (db.prepare('SELECT id FROM roles WHERE empresa_id = 1 AND nombre = ?').get(usuario.rol) as { id: number }).id
+      addUsuarioRol.run(Number(resultado.lastInsertRowid), rol)
     }
     // IMMEDIATE evita carreras si dos instancias siembran la misma BD nueva.
   }).immediate()

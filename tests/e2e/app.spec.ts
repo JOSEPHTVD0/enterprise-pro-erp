@@ -112,6 +112,21 @@ test.afterAll(async () => {
   if (perfil) rmSync(perfil, { recursive: true, force: true })
 })
 
+async function entrarComoUsuarioOperativo(usuario: string, claveInicial: string): Promise<void> {
+  await page.evaluate(async () => { await window.api.invoke('auth.logout') })
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Iniciar sesión' })).toBeVisible()
+  await page.getByLabel('Usuario').fill(usuario)
+  await page.getByLabel('Contraseña', { exact: true }).fill(claveInicial)
+  await page.getByRole('button', { name: 'Entrar al sistema' }).click()
+  await expect(page.getByLabel('Contraseña actual')).toBeVisible()
+  await page.getByLabel('Contraseña actual').fill(claveInicial)
+  await page.getByLabel('Nueva contraseña', { exact: true }).pressSequentially('4821')
+  await page.getByLabel('Confirmar nueva contraseña').pressSequentially('4821')
+  await page.getByRole('button', { name: 'Establecer contraseña' }).click()
+  await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
+}
+
 test('el ERP inicia, autentica y expone el menú real', async () => {
   await expect(page.getByRole('navigation', { name: 'Módulos' })).toBeVisible()
   await expect(page).toHaveTitle(/ENTERPRISE PRO ERP/)
@@ -131,6 +146,8 @@ test('las actualizaciones se gestionan desde un panel del programa', async () =>
   const modal = page.getByRole('dialog', { name: 'Actualizaciones de ENTERPRISE PRO ERP' })
   await expect(modal).toBeVisible()
   await expect(modal).toContainText('Busque y descargue el instalador en Descargas.')
+  await expect(modal).toContainText('Si está actualizado no habrá descargas disponibles')
+  await expect(modal).toContainText('la instalación será manual')
   await expect(modal.getByRole('button', { name: /Buscar/ })).toBeVisible()
   await expect(modal).not.toContainText('Instalar y reiniciar')
   await modal.getByRole('button', { name: 'Cerrar' }).last().click()
@@ -414,6 +431,26 @@ test('la configuración avanzada ofrece impresora y modo por documento', async (
   await expect(page.getByText('Configuración por documento')).toBeVisible()
   await expect(page.getByLabel('Impresora para Facturas y notas de venta')).toBeVisible()
   await expect(page.getByLabel('Modo para Punto de venta')).toBeVisible()
+})
+
+test('el facturador entra en su panel y no ve Cobros ni Panel comercial', async () => {
+  await entrarComoUsuarioOperativo('facturador', 'Factura1234!')
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await expect(page.getByRole('heading', { name: 'Facturación', exact: true })).toBeVisible()
+  await expect(menu.getByRole('button', { name: 'Facturación', exact: true }).last()).toBeVisible()
+  await expect(menu.getByRole('button', { name: 'Cobros', exact: true })).toHaveCount(0)
+  await expect(menu.getByRole('button', { name: 'Panel comercial', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Nueva factura' })).toBeVisible()
+})
+
+test('el cobrador entra en su panel y no ve Facturación ni Panel comercial', async () => {
+  await entrarComoUsuarioOperativo('cobrador', 'Cobros1234!')
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await expect(page.getByRole('heading', { name: 'Cobros' })).toBeVisible()
+  await expect(menu.getByRole('button', { name: 'Cobros', exact: true }).last()).toBeVisible()
+  await expect(menu.getByRole('button', { name: 'Facturación', exact: true })).toHaveCount(0)
+  await expect(menu.getByRole('button', { name: 'Panel comercial', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Registrar recibo de cliente' })).toBeVisible()
 })
 
 test('sin errores de consola inesperados', async () => {

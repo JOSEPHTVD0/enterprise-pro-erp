@@ -314,7 +314,7 @@ export function createSeguridadService(db: Db) {
       const role = repo.findRole(db, ctx.empresaId, roleId)
       if (!role) throw errors.notFound('Rol')
       const nombre = String(role.nombre)
-      if (['Administrador', 'Gerente', 'Vendedor'].includes(nombre)) {
+      if (['Administrador', 'Gerente', 'Vendedor', 'Facturador', 'Cobrador'].includes(nombre)) {
         throw errors.validation(`El rol ${nombre} es del sistema y no se puede eliminar.`)
       }
       const asignados = Number((db.prepare(`

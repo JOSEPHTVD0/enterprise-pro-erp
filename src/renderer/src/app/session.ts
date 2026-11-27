@@ -3,6 +3,17 @@ import type { PublicSessionContext, EmpresaOption } from '@shared/session'
 import type { SerializedError } from '@shared/api'
 import { useAppStore } from '@/app/store'
 
+/**
+ * Los usuarios operativos semilla entran directamente en su función. El permiso del
+ * módulo sigue verificándose en App.tsx; aquí solo se elige la vista inicial.
+ */
+function vistaInicial(ctx: PublicSessionContext | null): string {
+  const permisos = ctx?.permisos ?? []
+  if (ctx?.username === 'facturador' && permisos.includes('ventas.consultar')) return 'facturacion'
+  if (ctx?.username === 'cobrador' && permisos.includes('cobros.consultar')) return 'cobros'
+  return 'dashboard'
+}
+
 interface SessionState {
   status: 'loading' | 'guest' | 'authenticated'
   ctx: PublicSessionContext | null
@@ -25,6 +36,7 @@ export const useSessionStore = create<SessionState>((set) => ({
   hydrate: async () => {
     try {
       const ctx = await window.api.invoke<PublicSessionContext>('auth.me')
+      useAppStore.getState().setActiveView(vistaInicial(ctx))
       set({ status: 'authenticated', ctx, mustChangePassword: ctx.debeCambiarClave, companies: ctx.empresas ?? [] })
     } catch {
       window.api.auth.clearToken()
@@ -36,7 +48,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       token: string; context: PublicSessionContext; debeCambiarClave: boolean; empresas: EmpresaOption[]
     }>('auth.login', { username, password, empresaId })
     window.api.auth.setToken(res.token)
-    useAppStore.getState().setActiveView('dashboard')
+    useAppStore.getState().setActiveView(vistaInicial(res.context))
     set({
       status: 'authenticated', ctx: res.context,
       mustChangePassword: res.debeCambiarClave, companies: res.empresas ?? []
@@ -47,7 +59,7 @@ export const useSessionStore = create<SessionState>((set) => ({
       token?: string; context?: PublicSessionContext; empresas?: EmpresaOption[]
     }>('auth.switchCompany', empresaId)
     if (res.token) window.api.auth.setToken(res.token)
-    useAppStore.getState().setActiveView('dashboard')
+    useAppStore.getState().setActiveView(vistaInicial(res.context ?? null))
     set({
       status: res.context ? 'authenticated' : 'guest',
       ctx: res.context ?? null,

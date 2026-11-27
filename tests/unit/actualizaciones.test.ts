@@ -91,7 +91,7 @@ describe('actualizaciones con descarga local e instalación manual', () => {
 
     const detectado = await servicio.verificar()
     expect(detectado).toMatchObject({
-      verificado: true, disponible: true, version: '0.2.1', notas: 'Correcciones'
+      verificado: true, actualizado: false, disponible: true, version: '0.2.1', notas: 'Correcciones'
     })
 
     const descargado = await servicio.descargar()
@@ -107,18 +107,22 @@ describe('actualizaciones con descarga local e instalación manual', () => {
     expect(mostrarArchivo).toHaveBeenCalledWith(esperado)
   })
 
-  it('marca como verificada una instalación que ya está al día', async () => {
+  it('marca como verificada una instalación que ya está al día y prohíbe la descarga', async () => {
     const { almacenamiento } = await crearAlmacenamiento()
     const updater = actualizador('installer.exe', {
-      checkForUpdates: async () => ({ updateInfo: null })
+      checkForUpdates: async () => ({ updateInfo: null }),
+      downloadUpdate: vi.fn(async () => ['installer.exe'])
     })
     const servicio = crearServicioActualizaciones(
-      updater, 'http://127.0.0.1:8080/', '0.2.0', {}, {}, almacenamiento
+      updater, 'http://127.0.0.1:8080/', '0.2.0', {},
+      { canal: 'ESTABLE', descargaAutomatica: true }, almacenamiento
     )
     const estado = await servicio.verificar()
     expect(estado).toMatchObject({
-      verificado: true, disponible: false, versionActual: '0.2.0'
+      verificado: true, actualizado: true, disponible: false, descargada: false, versionActual: '0.2.0'
     })
+    await expect(servicio.descargar()).rejects.toThrow(/actualizada.*No hay nada que descargar/)
+    expect(updater.downloadUpdate).not.toHaveBeenCalled()
   })
 
   it('notifica el progreso normalizado y cierra la descarga al 100%', async () => {
@@ -182,7 +186,9 @@ describe('actualizaciones con descarga local e instalación manual', () => {
       updater, 'http://127.0.0.1:8080/', '0.2.0', {}, {}, almacenamiento
     )
     const estado = await servicio.verificar()
-    expect(estado).toMatchObject({ verificando: false, error: 'Feed caído', disponible: false })
+    expect(estado).toMatchObject({
+      verificando: false, actualizado: false, error: 'Feed caído', disponible: false
+    })
   })
 
   it('protege los canales IPC con isTrusted y nunca expone update.instalar', async () => {
@@ -226,7 +232,9 @@ describe('políticas de settings.actualizaciones', () => {
       opcionesDeSettings({ ...defaultSettings.actualizaciones, canal: 'ESTABLE' }), almacenamiento
     )
     const estado = await servicio.verificar()
-    expect(estado).toMatchObject({ verificado: true, disponible: false, version: undefined })
+    expect(estado).toMatchObject({
+      verificado: true, actualizado: false, disponible: false, version: undefined
+    })
     expect(updater.configuraciones).toEqual([{ provider: 'generic', url: URL_FEED_PUBLICADO }])
   })
 
@@ -254,7 +262,9 @@ describe('políticas de settings.actualizaciones', () => {
       updater, URL_FEED_PUBLICADO, '0.2.0', {},
       { canal: 'ESTABLE', descargaAutomatica: true }, almacenamiento
     ).verificar()
-    expect(estado).toMatchObject({ verificado: true, disponible: false, descargada: false })
+    expect(estado).toMatchObject({
+      verificado: true, actualizado: false, disponible: false, descargada: false
+    })
     expect(downloadUpdate).not.toHaveBeenCalled()
   })
 

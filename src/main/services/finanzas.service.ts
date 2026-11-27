@@ -514,8 +514,9 @@ export function createFinanzasService(
     cuadreOperativo,
 
     catalogos(ctx: SessionContext) {
+      // Cobros necesita los catálogos de clientes/documentos sin exponer el módulo CxC.
       exigir(
-        ctx, 'cxc.consultar', 'cxp.consultar', 'bancos.consultar',
+        ctx, 'cobros.consultar', 'cxc.consultar', 'cxp.consultar', 'bancos.consultar',
         'cajas.consultar', 'gastos.consultar'
       )
       const catalogos = fin.catalogosFin(db, ctx.empresaId, (clave) => ctx.permisos.includes(clave))

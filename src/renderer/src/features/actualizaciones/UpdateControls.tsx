@@ -37,8 +37,13 @@ export function UpdateControls({
       const resultado = await verificarActualizaciones()
       onUpdate(resultado)
       if (resultado.error) toast.error(resultado.error)
-      else if (resultado.disponible) toast.success(`Versión ${resultado.version} disponible.`)
-      else toast.success('Está utilizando la última versión.')
+      else if (resultado.disponible) {
+        toast.success(`Versión ${resultado.version} disponible. Descárguela para instalarla manualmente.`)
+      } else if (resultado.actualizado) {
+        toast.success(`Está actualizado en la versión ${resultado.versionActual}. No hay descargas disponibles.`)
+      } else {
+        toast.success('No hay actualizaciones para el canal configurado.')
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'No se pudo buscar actualizaciones.')
     } finally {
@@ -135,10 +140,15 @@ export function UpdateControls({
         </Button>
       </div>
 
-      {update?.verificado && !update.disponible && !update.error && (
-        <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300">
-          <CheckCircle2 size={16} className="shrink-0" />
-          Está utilizando la última versión ({update.versionActual}).
+      {update?.actualizado && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300" aria-live="polite">
+          <span className="flex items-center gap-2">
+            <CheckCircle2 size={16} className="shrink-0" />
+            Está actualizado en la versión {update.versionActual}. No hay descargas disponibles.
+          </span>
+          <Button size="sm" variant="secondary" disabled aria-label="Sin descargas disponibles">
+            <Download size={14} /> Sin descargas
+          </Button>
         </div>
       )}
 
@@ -146,9 +156,12 @@ export function UpdateControls({
         <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
           <p className="text-xs">
             Versión <strong>{update.version}</strong> disponible.
+            <span className="mt-1 block text-slate-400">
+              La descarga guarda el instalador en Descargas; el programa no lo instala. Ejecútelo manualmente.
+            </span>
             {update.notas && <span className="mt-1 block text-slate-400">{update.notas}</span>}
           </p>
-          <Button size="sm" onClick={() => void descargar()} disabled={descargando}>
+          <Button size="sm" onClick={() => void descargar()} disabled={descargando || !update.disponible}>
             <Download size={14} /> Descargar instalador
           </Button>
         </div>
@@ -166,7 +179,7 @@ export function UpdateControls({
               </p>
             )}
             <p className="mt-1 text-[11px] text-slate-400">
-              Ejecute el archivo para instalar. Si aparece SmartScreen, elija «Más información» y «Ejecutar de todos modos».
+              El programa no ejecutará el instalador: ejecute el archivo manualmente. Si aparece SmartScreen, elija «Más información» y «Ejecutar de todos modos».
             </p>
           </div>
           <Button size="sm" variant="secondary" onClick={() => void abrirCarpeta()}>

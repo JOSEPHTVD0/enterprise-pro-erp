@@ -22,7 +22,7 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 | 13 | Ampliaciones 2026 y correcciones de desarrollo | ✅ Completa y verificada |
 | 14 | Numeración consecutiva y contabilidad general | ✅ Completa y verificada |
 
-**Versión publicada: 0.5.16** (tag `v0.5.16`). [Novedades](docs/37-novedades-0.5.16.md) ·
+**Versión publicada: 0.5.17** (tag `v0.5.17`). [Novedades](docs/38-novedades-0.5.17.md) ·
 [Índice de documentación](docs/00-indice.md) ·
 [Corrección de la pantalla negra y ajustes](docs/22-correcciones-post-0.5.7.md) ·
 [Paneles y ajustes 2026](docs/20-paneles-y-ajustes-2026.md) ·
@@ -33,31 +33,33 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 [Espacio de trabajo](docs/29-espacio-trabajo-local.md) ·
 [Facturación ECF](docs/31-novedades-0.5.12.md) ·
 [Rediseño del panel ECF](docs/32-novedades-0.5.13.md) ·
-`EnterpriseProERP-Setup-0.5.16.exe` (145.563.768 bytes) · SHA-256
-`CCB0EE11CD5DA3B32DB37F5DD227F34473732A49DEE3D4284B671606A927A33F` · SHA-512
-`252828FE5E648B3D817105AE5663D061850871E48D3998DFC8C51595C6C0940A1814BDAC8338A669098FE90F3D4787B23CDB138AD9219DA4C4372C4631C32B5F` ·
+`EnterpriseProERP-Setup-0.5.17.exe` (145.564.248 bytes) · SHA-256
+`FB713E688D7CE49D6EC80761F191B031B79C459D8C8D559514FDCD77B9E98CE4` · SHA-512
+`92DAC6C185B74DFB215929CF30E64E52EA53DBBFA36D3EBAD3CB24554898D74791C88C92FA999AAC878A857312112B67ABE5AF27451DB2925B4668A3B81BF630` ·
 instalador **firmado de forma autofirmada** y sin timestamp (SmartScreen no desaparece
 sin CA confiable). El actualizador solo guarda el instalador en `Descargas`; la
 instalación es manual. Se pueden abrir varias instancias con la misma BD.
 
-La release publicada `v0.5.16` se verificó con **56 archivos / 386 pruebas** y **31/31
-pruebas E2E** en Electron por CDP. Incluye todo lo publicado en `v0.5.15`; sus novedades
-siguen en [docs/34-novedades-0.5.15.md](docs/34-novedades-0.5.15.md).
+La release publicada `v0.5.17` se verificó con **57 archivos / 390 pruebas** y **33/33
+pruebas E2E** en Electron por CDP. Incluye todo lo publicado en `v0.5.16`; sus novedades
+siguen en [docs/37-novedades-0.5.16.md](docs/37-novedades-0.5.16.md).
 
-Esta release reúne primitivos `Skeleton`/`EmptyState`/`LoadingState`/`StatCard`,
-`DataTable` con `loading`, acento único desde `--erp-acento`, escala de fuente real,
-i18n del shell, preferencias fiscales (moneda/decimales/fecha) conectadas, flags
-vigentes en capacidades y `vistasPersonalizables` completas. Añade además un
-**tablero horizontal avanzado** en Espacio de trabajo con cinco paneles operativos
-sobre SQLite (cobranza, inventario ABC, agenda, presupuestos y cuadre caja/banca),
-con permisos reales por sección, filtros, reordenación, colapso y exportación CSV.
-**DGI es solo rotulado visual**: no emite, exporta ni simula e-CF. Los borradores de
-facturación viven en `localStorage` y los comprobantes emitidos son inmutables.
+Esta release conserva lo publicado en `v0.5.16`: primitivos
+`Skeleton`/`EmptyState`/`LoadingState`/`StatCard`, `DataTable` con `loading`, acento
+único desde `--erp-acento`, escala de fuente real, i18n del shell, preferencias
+fiscales conectadas, flags vigentes y el **tablero horizontal avanzado** con cinco
+paneles SQLite y permisos por sección. Añade el estado **«Está actualizado… No hay
+descargas disponibles»** con bloqueo de `update.descargar` incluso por IPC, y los
+usuarios semilla `facturador` y `cobrador`, cada uno limitado a su panel real:
+Facturación o Cobros; `admin` conserva ambos. **DGI es solo rotulado visual**: no
+emite, exporta ni simula e-CF. Los borradores de facturación viven en `localStorage`
+y los comprobantes emitidos son inmutables.
 
 Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md).
 Detalle de consistencia y ajustes: [docs/35-consistencia-ui-ajustes.md](docs/35-consistencia-ui-ajustes.md).
 Detalle del tablero horizontal: [docs/36-panel-horizontal-avanzado.md](docs/36-panel-horizontal-avanzado.md).
-Detalle de la release: [docs/37-novedades-0.5.16.md](docs/37-novedades-0.5.16.md).
+Detalle de la release anterior: [docs/37-novedades-0.5.16.md](docs/37-novedades-0.5.16.md).
+Detalle de la release: [docs/38-novedades-0.5.17.md](docs/38-novedades-0.5.17.md).
 
 ## Ejecución
 
@@ -65,22 +67,25 @@ Detalle de la release: [docs/37-novedades-0.5.16.md](docs/37-novedades-0.5.16.md
 npm.cmd install
 npm.cmd run dev        # aplicación Electron en modo desarrollo
 npm.cmd run build      # compilar main + preload + renderer
-npm.cmd test           # 386 pruebas en 56 archivos en v0.5.16
-npm.cmd run test:e2e   # 31/31 pruebas reales en Electron por CDP
+npm.cmd test           # 390 pruebas en 57 archivos en v0.5.17
+npm.cmd run test:e2e   # 33/33 pruebas reales en Electron por CDP
 npm.cmd run test:updater # verifica el feed local de electron-updater
+npm.cmd run test:instancias # verifica dos instancias sobre la misma BD
 npm.cmd run typecheck  # TypeScript estricto
 ```
 
-En `v0.5.16` `typecheck` pasa y la suite es de **386 pruebas en 56 archivos**, con
-**31/31 E2E**. Las cifras de la release anterior `v0.5.15` son **353 pruebas en 51
+En `v0.5.17` `typecheck` pasa y la suite es de **390 pruebas en 57 archivos**, con
+**33/33 E2E**. Las cifras de la release anterior `v0.5.16` son **386 pruebas en 56
 archivos** y **31/31 E2E**.
 
 ### Primer arranque
 
-- Usuario: `admin`
-- Contraseña: `Admin1234!`
-- El sistema **exige cambiar la contraseña** antes de mostrar el escritorio.
-- Estas credenciales son de inicialización, no un usuario de demostración.
+- Usuario: `admin` · Contraseña: `Admin1234!` — acceso total.
+- Usuario: `facturador` · Contraseña: `Factura1234!` — solo **Facturación**.
+- Usuario: `cobrador` · Contraseña: `Cobros1234!` — solo **Cobros**.
+- Los tres **exigen cambiar la contraseña** antes de mostrar el escritorio.
+- Estas credenciales son de inicialización, no usuarios de demostración. Si los usuarios
+  operativos ya existen, un arranque posterior no reestablece su contraseña ni sus roles.
 
 Los datos se guardan en `%APPDATA%/enterprise-pro-erp/data/enterprise.db` (SQLite con WAL).
 Las sesiones se invalidan al cerrar la aplicación: el token vive solo en memoria del preload

@@ -257,6 +257,16 @@ export const permissionCatalog: PermissionDef[] = [
 export const permissionKeys: string[] = permissionCatalog.map((p) => p.key)
 
 /** Roles iniciales. Los permisos se materializan en la BD durante el seed. */
+/** Permisos mínimos para los perfiles operativos semilla. No incluyen Panel comercial. */
+const permisosFacturador = new Set([
+  'ventas.consultar', 'ventas.crear', 'ventas.imprimir', 'ventas.exportar',
+  'clientes.consultar', 'productos.consultar', 'inventario.consultar'
+])
+
+const permisosCobrador = new Set([
+  'cobros.consultar', 'cobros.crear', 'cobros.anular', 'cobros.imprimir', 'cobros.exportar'
+])
+
 export const seedRoles: { name: string; description: string; permissionFilter: (key: string) => boolean }[] = [
   {
     name: 'Administrador',
@@ -294,6 +304,18 @@ export const seedRoles: { name: string; description: string; permissionFilter: (
       key.startsWith('crm.modificar') ||
       (!key.includes('.costo') && !key.includes('.ganancia') &&
         ['cxc.consultar', 'reportes.consultar'].includes(key)))
+  },
+  {
+    name: 'Facturador',
+    description: 'Crea facturas y gestiona borradores locales; no cobra ni administra finanzas.',
+    // Sin `reportes.consultar`: el panel comercial unificado queda oculto para este perfil.
+    permissionFilter: (key) => permisosFacturador.has(key)
+  },
+  {
+    name: 'Cobrador',
+    description: 'Registra recibos, anticipos y anulaciones de cobro; no emite facturas.',
+    // Sin `reportes.consultar` ni `ventas.consultar`: solo ve el área de Cobros.
+    permissionFilter: (key) => permisosCobrador.has(key)
   }
 ]
 

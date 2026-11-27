@@ -175,7 +175,7 @@ export function crearServicioActualizaciones(
   let opciones: OpcionesActualizaciones = { canal: 'ESTABLE', notificarVersiones: true, ...opcionesIniciales }
   let estado: EstadoActualizacion = {
     habilitada, versionActual, verificando: false, verificado: false,
-    disponible: false, descargada: false
+    actualizado: false, disponible: false, descargada: false
   }
   let ultimoProgreso: ProgresoDescarga = { porcentaje: 0, transferido: 0, total: 0 }
   let ultimoTotal = 0
@@ -209,7 +209,11 @@ export function crearServicioActualizaciones(
   }
 
   async function descargar(): Promise<EstadoActualizacion> {
-    if (!estado.disponible) throw new Error('No hay una actualización disponible para descargar.')
+    if (!estado.disponible) {
+      throw new Error(estado.actualizado
+        ? `La aplicación está actualizada (${estado.versionActual}). No hay nada que descargar.`
+        : 'No hay una actualización disponible para descargar.')
+    }
     const totalPrevio = ultimoProgreso.total || ultimoTotal
     emitirProgreso({ porcentaje: 0, transferido: 0, total: totalPrevio })
     cambiar({
@@ -254,15 +258,18 @@ export function crearServicioActualizaciones(
       if (!habilitada) {
         return cambiar({ error: 'Fuente de actualizaciones no configurada.' })
       }
-      cambiar({ verificando: true, error: undefined })
+      cambiar({ verificando: true, actualizado: false, error: undefined })
       try {
         const resultado = await actualizador.checkForUpdates()
         const info = resultado?.updateInfo
         const version = info?.version
-        const delCanal = esVersionDelCanal(version, opciones.canal ?? 'ESTABLE')
+        const sinVersionNueva = !version ||
+          version.replace(/^v/i, '') === versionActual.replace(/^v/i, '')
+        const delCanal = !sinVersionNueva && esVersionDelCanal(version, opciones.canal ?? 'ESTABLE')
         const detectado = cambiar({
           verificando: false,
           verificado: true,
+          actualizado: sinVersionNueva,
           disponible: delCanal,
           version: delCanal ? version : undefined,
           notas: delCanal && typeof info?.releaseNotes === 'string' ? info.releaseNotes : undefined,
@@ -277,6 +284,7 @@ export function crearServicioActualizaciones(
         return cambiar({
           verificando: false,
           verificado: false,
+          actualizado: false,
           error: mensaje(error),
           disponible: false,
           descargada: false,

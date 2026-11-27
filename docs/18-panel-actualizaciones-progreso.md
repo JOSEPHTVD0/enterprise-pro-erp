@@ -4,6 +4,10 @@
 > comportamiento fue sustituido: consulte
 > [docs/24-actualizacion-descarga-manual.md](24-actualizacion-descarga-manual.md).
 > La sección «Artefactos publicados» al final corresponde a la release histórica `0.5.6`.
+>
+> **Publicado en `v0.5.17`:** el estado `actualizado`, el botón **Sin descargas** y el
+> rechazo del canal `update.descargar` cuando no hay versión nueva forman parte de la
+> release pública: [38-novedades-0.5.17.md](38-novedades-0.5.17.md).
 
 ## Comportamiento actual
 
@@ -19,17 +23,22 @@
   **Descarga automática** esté activa, el servicio solo guarda el archivo; la
   instalación siempre la decide el usuario.
 - Si la comprobación termina sin versión nueva, el panel muestra de forma persistente
-  «Está utilizando la última versión (X)» y el toast confirma lo mismo.
+  «Está actualizado en la versión X. No hay descargas disponibles», el toast confirma lo
+  mismo y el botón de descarga queda deshabilitado como **Sin descargas**. El proceso
+  principal también rechaza `update.descargar`, aunque se invoque directamente.
+- Si hay versión nueva, el panel ofrece **Descargar instalador** y aclara que el programa
+  solo guarda el archivo: la instalación la ejecuta manualmente el usuario.
 - Los errores de búsqueda o descarga se muestran en el panel sin borrar el instalador
   que ya hubiera guardado.
 
 ## Implementación
 
-- `src/shared/actualizaciones.ts`: `ProgresoDescarga`, `verificado`, `rutaInstalador`;
-  se eliminó el método `instalar` del contrato.
+- `src/shared/actualizaciones.ts`: `ProgresoDescarga`, `verificado`, `actualizado`,
+  `rutaInstalador`; se eliminó el método `instalar` del contrato.
 - `src/main/services/updater.service.ts`: escucha `download-progress`, sustituye la
-  verificación de firma, guarda el instalador en `Descargas` sin sobrescribir y notifica
-  estado/progreso mediante callbacks inyectados.
+  verificación de firma, guarda el instalador en `Descargas` sin sobrescribir, bloquea la
+  descarga si no hay versión nueva y notifica estado/progreso mediante callbacks
+  inyectados.
 - `src/main/services/firma-instalador.ts`: acepta solo la huella del certificado
   autofirmado propio, porque Windows rechaza su raíz no confiable.
 - `src/main/index.ts`: reenvía `update.estado` y `update.progreso`, define la carpeta

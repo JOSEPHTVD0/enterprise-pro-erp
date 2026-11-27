@@ -3,6 +3,10 @@
 Publicado en `0.5.9`:
 https://github.com/JOSEPHTVD0/enterprise-pro-erp/releases/tag/v0.5.9
 
+> **Publicado en `v0.5.17`:** cuando no hay versión nueva, el panel muestra «Está
+> actualizado… No hay descargas disponibles» y bloquea la descarga también por IPC.
+> Detalle: [38-novedades-0.5.17.md](38-novedades-0.5.17.md).
+
 ## Motivo
 
 El instalador publicado está firmado con un certificado autofirmado
@@ -15,6 +19,8 @@ guardar.
 ## Comportamiento actual
 
 - **Buscar** sigue consultando el feed y aplicando el filtro de canal `ESTABLE`/`BETA`.
+  Si no hay versión nueva, muestra el mensaje de actualizado y no ofrece descargas;
+  si hay una versión nueva, el mensaje indica expresamente que la instalación será manual.
 - **Descargar instalador** valida el SHA-512 de `latest.yml`, comprueba que el firmante
   sea exactamente nuestro certificado autofirmado y copia el `.exe` a la carpeta
   `Descargas` del usuario (o a `ERP_DOWNLOADS_DIR`, si se define en el proceso principal).

@@ -199,7 +199,7 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
         footer={<Button onClick={() => setUpdatesOpen(false)}>Cerrar</Button>}
       >
         <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-          Busque y descargue el instalador en Descargas. La instalación se realiza manualmente y los datos locales se conservan.
+          Busque y descargue el instalador en Descargas. Si está actualizado no habrá descargas disponibles; cuando haya una versión nueva, el programa solo guardará el instalador y la instalación será manual. Los datos locales se conservan.
         </p>
         <UpdateControls update={update} onUpdate={setUpdate} />
       </Modal>

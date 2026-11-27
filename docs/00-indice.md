@@ -5,15 +5,23 @@ por versión conservan sus cifras y artefactos históricos tal como se publicaro
 
 ## Estado de la documentación
 
-- **Release publicada: `v0.5.16`** (tag `v0.5.16`), con **56 archivos /
-  386 pruebas** y **31/31 pruebas E2E** en Electron por CDP. Detalle:
-  [37-novedades-0.5.16.md](37-novedades-0.5.16.md).
+- **Release publicada: `v0.5.17`** (tag `v0.5.17`), con **57 archivos /
+  390 pruebas** y **33/33 pruebas E2E** en Electron por CDP. Detalle:
+  [38-novedades-0.5.17.md](38-novedades-0.5.17.md).
 - La release incluye primitivos `Skeleton`/`EmptyState`/`LoadingState`/`StatCard`,
   `DataTable` con `loading`, acento único desde `--erp-acento`, escala de fuente real,
   i18n del shell, preferencias fiscales conectadas, flags vigentes, 41 vistas de
   `vistasPersonalizables` y el tablero horizontal avanzado con cinco paneles operativos
   reales y permisos por sección: [35-consistencia-ui-ajustes.md](35-consistencia-ui-ajustes.md)
   y [36-panel-horizontal-avanzado.md](36-panel-horizontal-avanzado.md).
+- **Publicado en `v0.5.17`:** el panel de actualizaciones muestra el mensaje «Está
+  actualizado… No hay descargas disponibles» y bloquea `update.descargar` cuando no hay
+  versión nueva; con versión nueva solo guarda el instalador para que la instalación sea
+  manual: [18-panel-actualizaciones-progreso.md](18-panel-actualizaciones-progreso.md)
+  y [24-actualizacion-descarga-manual.md](24-actualizacion-descarga-manual.md).
+- **Usuarios operativos semilla (publicado en `v0.5.17`):** `facturador` ve solo
+  Facturación, `cobrador` ve solo Cobros y `admin` conserva ambos paneles; la separación
+  usa los permisos reales de los módulos y se verifica también en el proceso principal.
 - Las publicaciones futuras requieren autorización explícita. Este índice y cualquier
   otro documento son descriptivos: no ejecutan publicación, tag ni push.
 
@@ -80,10 +88,11 @@ por versión conservan sus cifras y artefactos históricos tal como se publicaro
 - [31-novedades-0.5.12.md](31-novedades-0.5.12.md) — Panel **Facturación ECF** (rótulos locales).
 - [35-consistencia-ui-ajustes.md](35-consistencia-ui-ajustes.md) — Publicado en `v0.5.16`: primitivos visuales, accesibilidad y ajustes conectados.
 - [36-panel-horizontal-avanzado.md](36-panel-horizontal-avanzado.md) — Publicado en `v0.5.16`: tablero horizontal con cinco paneles operativos reales.
+- [38-novedades-0.5.17.md](38-novedades-0.5.17.md) — Actualizador con estado «actualizado» y usuarios operativos con paneles separados.
 
 ## Historial de releases publicadas
 
-Las cifras de cada nota corresponden **solo** a esa release; la publicada actual es `v0.5.16`.
+Las cifras de cada nota corresponden **solo** a esa release; la publicada actual es `v0.5.17`.
 
 - [09-novedades-0.3.0.md](09-novedades-0.3.0.md) — 0.3.0.
 - [10-novedades-0.4.0.md](10-novedades-0.4.0.md) — 0.4.0.
@@ -102,4 +111,5 @@ Las cifras de cada nota corresponden **solo** a esa release; la publicada actual
 - [32-novedades-0.5.13.md](32-novedades-0.5.13.md) — 0.5.13.
 - [33-novedades-0.5.14.md](33-novedades-0.5.14.md) — 0.5.14.
 - [34-novedades-0.5.15.md](34-novedades-0.5.15.md) — 0.5.15 (release anterior).
-- [37-novedades-0.5.16.md](37-novedades-0.5.16.md) — 0.5.16 (**release publicada actual**).
+- [37-novedades-0.5.16.md](37-novedades-0.5.16.md) — 0.5.16 (release anterior).
+- [38-novedades-0.5.17.md](38-novedades-0.5.17.md) — 0.5.17 (**release publicada actual**).
