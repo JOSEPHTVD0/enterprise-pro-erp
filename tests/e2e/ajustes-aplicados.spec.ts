@@ -134,3 +134,31 @@ test('los ajustes guardados cambian aviso, umbral y comparación en la interfaz'
   await expect(page.getByRole('heading', { name: 'Comparación con período anterior' })).toBeVisible()
   await expect(page.getByText(/Ventas|Cobros|no disponible en esta vista/).first()).toBeVisible()
 })
+
+test('el enlace DGI se configura como rotulado visual y no como emisión', async () => {
+  await page.evaluate(async () => {
+    const efectivos = await window.api.invoke<Record<string, Record<string, unknown>>>('config.ajustes.efectivos')
+    await window.api.invoke('config.ajustes.save', {
+      grupo: 'dgiEnlace',
+      datos: {
+        ...(efectivos.dgiEnlace ?? {}),
+        mostrarPanel: true,
+        estadoVisual: 'EN_PREPARACION',
+        ambienteVisual: 'PRUEBAS',
+        notaInformativa: 'Solo visual: sin envío a DGII ni emisión e-CF.'
+      }
+    })
+    window.dispatchEvent(new Event('erp:preferencias-actualizadas'))
+  })
+
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await menu.getByRole('button', { name: 'Centro de control', exact: true }).click()
+  await page.getByRole('button', { name: 'Ajustes avanzados' }).click()
+  await page.getByRole('button', { name: 'Enlace DGI' }).click()
+  await expect(page.getByText('Estado visual del enlace')).toBeVisible()
+  await expect(page.getByText('No cambia el entorno real; no hay emisión e-CF.')).toBeVisible()
+
+  await menu.getByRole('button', { name: 'Facturación', exact: true }).last().click()
+  await expect(page.locator('[data-dgi-estado="EN_PREPARACION"]')).toBeVisible()
+  await expect(page.getByText('EN_PREPARACION · PRUEBAS')).toBeVisible()
+})

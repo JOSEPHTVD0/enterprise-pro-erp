@@ -169,7 +169,7 @@ describe('Espacio de trabajo — datos reales y permisos', () => {
     }
     expect(diagnostico.calificacion).toBe('ok')
     expect(diagnostico.comprobaciones.every((c) => c.estado === 'ok')).toBe(true)
-    expect(diagnostico.base.ultimaMigracion).toBe(14)
+    expect(diagnostico.base.ultimaMigracion).toBe(15)
 
     expect(() => espacio.reindexar(ctx, { confirmacion: 'OTRO' })).toThrow()
     expect(() => espacio.reindexar(sinPermiso(ctx, 'espacio.mantenimiento'), {

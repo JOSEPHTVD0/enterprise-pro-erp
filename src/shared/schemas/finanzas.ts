@@ -25,6 +25,10 @@ const filtroBase = z.object({
   hasta: fecha.optional(),
   entidadId: id.optional(),
   estado: z.string().trim().max(30).optional(),
+  numero: z.string().trim().max(60).optional(),
+  montoMinCent: z.number().int().nonnegative().optional(),
+  montoMaxCent: z.number().int().nonnegative().optional(),
+  productoId: id.optional(),
   limite: z.number().int().min(1).max(1000).default(300)
 })
 

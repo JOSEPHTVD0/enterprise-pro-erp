@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react'
 import {
-  Hash, Keyboard, Link2, LogOut, PackagePlus, Percent, Plus, ReceiptText,
+  FileClock, Hash, Keyboard, Link2, LogOut, PackagePlus, Percent, Plus, ReceiptText,
   Save, Search, StickyNote, Tag, Trash2, UserRound, Wallet, XCircle
 } from 'lucide-react'
 import { errorInfo } from '@/app/session'
+import { useAjustesStore } from '@/app/ajustes-store'
 import { Modal } from '@/components/ui/Modal'
 import { toast } from '@/components/ui/Toast'
 import { money, number } from '@/lib/format'
@@ -109,6 +110,7 @@ interface Props {
   form: FormularioVenta
   onChange: (form: FormularioVenta) => void
   onGuardar: () => void
+  onGuardarBorrador: () => void
   onSalir: () => void
   guardando: boolean
   cargando: boolean
@@ -121,7 +123,7 @@ interface Props {
 type Editor = 'precio' | 'descuento' | 'cantidad' | null
 
 export function FacturacionEcfPanel({
-  catalogos, form, onChange, onGuardar, onSalir, guardando, cargando,
+  catalogos, form, onChange, onGuardar, onGuardarBorrador, onSalir, guardando, cargando,
   permitirPrecio, permitirDescuento, tipoFactura, onTipoFactura
 }: Props): React.JSX.Element {
   const [moneda, setMoneda] = useState('RD$')
@@ -141,6 +143,7 @@ export function FacturacionEcfPanel({
   const [editorValor, setEditorValor] = useState('')
   const [pedidosOpen, setPedidosOpen] = useState(false)
   const [pedidos, setPedidos] = useState<Fila[]>([])
+  const dgiVisual = useAjustesStore((s) => s.ajustes.dgiEnlace)
 
   const guardarRef = useRef(onGuardar)
   useEffect(() => { guardarRef.current = onGuardar }, [onGuardar])
@@ -396,6 +399,18 @@ export function FacturacionEcfPanel({
               <Link2 size={13} />
             </button>
           </div>
+          {dgiVisual?.mostrarPanel !== false && (
+            <div
+              className="flex max-w-[240px] flex-col rounded-md border border-indigo-500/30 bg-indigo-500/10 px-2 py-1"
+              title={dgiVisual?.notaInformativa || 'Solo visual: sin envío a DGII ni emisión e-CF.'}
+              data-dgi-estado={dgiVisual?.estadoVisual ?? 'SIN_ENLACE'}
+            >
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-indigo-300">Enlace DGI · visual</span>
+              <span className="truncate text-[10px] text-indigo-100">
+                {dgiVisual?.estadoVisual ?? 'SIN_ENLACE'} · {dgiVisual?.ambienteVisual ?? 'NO_APLICA'}
+              </span>
+            </div>
+          )}
         </div>
       </header>
 
@@ -546,6 +561,16 @@ export function FacturacionEcfPanel({
               title="Guardar factura (F7)"
             >
               <Save size={16} /> Salvar F7
+            </button>
+
+            <button
+              type="button"
+              className={ecBoton}
+              onClick={onGuardarBorrador}
+              disabled={guardando || cargando}
+              title="Guardar borrador local sin emitir (no genera NCF ni CxC)"
+            >
+              <FileClock size={14} /> Guardar borrador
             </button>
 
             {editor && (

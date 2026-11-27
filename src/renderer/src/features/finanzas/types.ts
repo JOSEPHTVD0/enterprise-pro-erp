@@ -116,10 +116,15 @@ export interface FiltroFinanzas {
   limite: string
   cuentaId: string
   cajaId: string
+  numero: string
+  montoMin: string
+  montoMax: string
+  productoId: string
 }
 
 export const filtroVacio = (): FiltroFinanzas => ({
-  desde: '', hasta: '', entidadId: '', estado: '', limite: '1000', cuentaId: '', cajaId: ''
+  desde: '', hasta: '', entidadId: '', estado: '', limite: '1000', cuentaId: '', cajaId: '',
+  numero: '', montoMin: '', montoMax: '', productoId: ''
 })
 
 export function payloadFiltro(filtro: FiltroFinanzas, extras: string[] = []): Record<string, unknown> {
@@ -128,6 +133,10 @@ export function payloadFiltro(filtro: FiltroFinanzas, extras: string[] = []): Re
   if (filtro.hasta) salida.hasta = filtro.hasta
   if (filtro.entidadId) salida.entidadId = num(filtro.entidadId)
   if (filtro.estado) salida.estado = filtro.estado
+  if (filtro.numero?.trim()) salida.numero = filtro.numero.trim()
+  if (filtro.montoMin?.trim() && Number(filtro.montoMin) >= 0) salida.montoMinCent = centavos(filtro.montoMin)
+  if (filtro.montoMax?.trim() && Number(filtro.montoMax) >= 0) salida.montoMaxCent = centavos(filtro.montoMax)
+  if (filtro.productoId) salida.productoId = num(filtro.productoId)
   if (extras.includes('cuentaId') && filtro.cuentaId) salida.cuentaId = num(filtro.cuentaId)
   if (extras.includes('cajaId') && filtro.cajaId) salida.cajaId = num(filtro.cajaId)
   return salida

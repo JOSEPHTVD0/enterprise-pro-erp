@@ -213,6 +213,30 @@ test('Ventas y Cobros son áreas separadas en el menú', async () => {
   await menu.getByRole('button', { name: 'Cobros', exact: true }).last().click()
   await expect(page.getByRole('heading', { name: 'Cobros' })).toBeVisible()
   await expect(page.getByText('independiente de Ventas')).toBeVisible()
+  await expect(page.getByText('Número / referencia')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Exportar cartera' })).toBeVisible()
+})
+
+test('Facturación edita borradores locales y muestra el enlace DGI solo visual', async () => {
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await menu.getByRole('button', { name: 'Facturación', exact: true }).last().click()
+  await expect(page.getByRole('heading', { name: 'Facturación', exact: true })).toBeVisible()
+  await expect(page.getByText('Enlace DGI · visual')).toBeVisible()
+  await expect(page.locator('[title*="sin envío a DGII"]')).toBeVisible()
+  await page.getByRole('button', { name: /Borradores/ }).click()
+  await expect(page.getByText('Borradores locales')).toBeVisible()
+  await expect(page.getByText('no reservan NCF')).toBeVisible()
+})
+
+test('el panel comercial unifica ventas, facturación y cobros con filtros', async () => {
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await menu.getByRole('button', { name: 'Panel comercial', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Panel comercial' })).toBeVisible()
+  await expect(page.getByText('Búsqueda filtrada unificada')).toBeVisible()
+  await expect(page.getByText('Número').first()).toBeVisible()
+  await expect(page.getByText('Monto mínimo')).toBeVisible()
+  await expect(page.getByText('Concentración por cliente')).toBeVisible()
+  await expect(page.getByText(/No hay envío ni emisión e-CF/)).toBeVisible()
 })
 
 test('la interfaz y las capas por rol/permiso se configuran desde el centro de control', async () => {

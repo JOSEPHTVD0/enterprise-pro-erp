@@ -164,6 +164,16 @@ export function listarDocumentos(db: Db, empresaId: number, filtro: DocumentosFi
   if (filtro.tipo) { where.push('tipo = ?'); args.push(filtro.tipo) }
   if (filtro.estado) { where.push('estado = ?'); args.push(filtro.estado) }
   if (filtro.clienteId) { where.push('cliente_id = ?'); args.push(filtro.clienteId) }
+  if (filtro.numero) { where.push('numero LIKE ?'); args.push(`%${filtro.numero}%`) }
+  if (filtro.montoMinCent !== undefined) { where.push('total_cent >= ?'); args.push(filtro.montoMinCent) }
+  if (filtro.montoMaxCent !== undefined) { where.push('total_cent <= ?'); args.push(filtro.montoMaxCent) }
+  if (filtro.productoId) {
+    where.push(`EXISTS (
+      SELECT 1 FROM documento_venta_lineas l
+      WHERE l.doc_id = documentos_venta.id AND l.producto_id = ?
+    )`)
+    args.push(filtro.productoId)
+  }
   if (filtro.fechaDesde) { where.push('fecha >= ?'); args.push(filtro.fechaDesde) }
   if (filtro.fechaHasta) { where.push('fecha <= ?'); args.push(filtro.fechaHasta) }
   args.push(filtro.limite ?? 300)

@@ -121,7 +121,8 @@ const grupos: { id: AjustesGrupo; label: string; descripcion: string }[] = [
   { id: 'notificaciones', label: 'Notificaciones', descripcion: 'Sonido, duración y eventos avisados.' },
   { id: 'seguridad', label: 'Seguridad', descripcion: 'Refuerzos visuales; las políticas duras siguen en backend.' },
   { id: 'featureFlags', label: 'Módulos', descripcion: 'Módulos opcionales visibles para todos los perfiles.' },
-  { id: 'interfaz', label: 'Interfaz y menú', descripcion: 'Título, ancho del menú, densidad y elementos ocultables.' }
+  { id: 'interfaz', label: 'Interfaz y menú', descripcion: 'Título, ancho del menú, densidad y elementos ocultables.' },
+  { id: 'dgiEnlace', label: 'Enlace DGI', descripcion: 'Rotulado visual del enlace DGI. No envía ni certifica comprobantes.' }
 ]
 
 const campos: Record<AjustesGrupo, Campo[]> = {
@@ -191,6 +192,20 @@ const campos: Record<AjustesGrupo, Campo[]> = {
     { clave: 'libro606', etiqueta: 'Libro 606', tipo: 'bool' },
     { clave: 'libro607', etiqueta: 'Libro 607', tipo: 'bool' },
     { clave: 'formatoComprobante', etiqueta: 'Formato de comprobante', tipo: 'select', opciones: [{ value: 'NCF', label: 'NCF' }, { value: 'PREPARACION_E_CF', label: 'Preparación para e-CF' }] }
+  ],
+  dgiEnlace: [
+    { clave: 'mostrarPanel', etiqueta: 'Mostrar panel en Facturación', tipo: 'bool', hint: 'Solo controla la visibilidad del bloque informativo.' },
+    { clave: 'estadoVisual', etiqueta: 'Estado visual del enlace', tipo: 'select', opciones: [
+      { value: 'SIN_ENLACE', label: 'Sin enlace' },
+      { value: 'EN_PREPARACION', label: 'En preparación' },
+      { value: 'INACTIVO', label: 'Inactivo' }
+    ], hint: 'Etiqueta informativa; no comprueba conexión real.' },
+    { clave: 'ambienteVisual', etiqueta: 'Ambiente (etiqueta)', tipo: 'select', opciones: [
+      { value: 'NO_APLICA', label: 'No aplica' },
+      { value: 'PRUEBAS', label: 'Pruebas' },
+      { value: 'PRODUCCION', label: 'Producción' }
+    ], hint: 'No cambia el entorno real; no hay emisión e-CF.' },
+    { clave: 'notaInformativa', etiqueta: 'Nota informativa', tipo: 'text', hint: 'Texto mostrado junto al estado en Facturación.' }
   ],
   notificaciones: [
     { clave: 'sonido', etiqueta: 'Sonido', tipo: 'bool' },
@@ -715,6 +730,11 @@ export function CentroControlPage(): React.JSX.Element {
           {bloqueadoGrupo(grupo) && (
             <p className="mb-3 rounded-lg bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
               Su perfil puede consultar estos ajustes pero no modificarlos.
+            </p>
+          )}
+          {grupo === 'dgiEnlace' && (
+            <p className="mb-3 rounded-lg bg-indigo-50 p-3 text-xs text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-300">
+              Configuración únicamente visual: no realiza envíos a DGII, no certifica comprobantes ni emite e-CF.
             </p>
           )}
           <div className="grid gap-4 md:grid-cols-2">

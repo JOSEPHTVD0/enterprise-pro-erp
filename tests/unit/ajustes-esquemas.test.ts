@@ -5,7 +5,7 @@ import {
 
 describe('esquemas del centro de control', () => {
   it('produce defaults válidos para los grupos configurables', () => {
-    expect(Object.keys(defaultAjustes)).toHaveLength(12)
+    expect(Object.keys(defaultAjustes)).toHaveLength(13)
     expect(defaultAjustes.alertas.stockBajoUmbral).toBe(5)
     expect(defaultAjustes.widgets.widgets).toHaveLength(13)
     expect(defaultAjustes.featureFlags.modulos.length).toBeGreaterThan(20)

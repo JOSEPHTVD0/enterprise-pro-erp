@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Ban, Download, Eye, FileDown, FilePlus2, Filter, Printer, RefreshCw, Truck } from 'lucide-react'
+import { Ban, Download, Eye, FileDown, FilePlus2, Pencil, Printer, RefreshCw, Send, Trash2, Truck } from 'lucide-react'
 import { can, errorInfo } from '@/app/session'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
-import { Field, TextInput, inputClass } from '@/components/ui/Field'
+import { Field, TextInput } from '@/components/ui/Field'
 import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
@@ -20,6 +20,14 @@ import { DocumentoForm } from './DocumentoForm'
 import { FacturacionEcfPanel } from './FacturacionEcfPanel'
 import { nuevaLinea, payloadCabecera, primeraLineaIncompleta, totalesCarrito } from './carrito'
 import { ConducesTab } from './ConducesTab'
+import { FiltrosComerciales } from './FiltrosComerciales'
+import {
+  eliminarBorradorLocal, formularioDeBorrador, guardarBorradorLocal, listarBorradores,
+  type BorradorFactura
+} from './borradores'
+import {
+  filtroComercialVacio, payloadFiltroComercial, type FiltroComercial
+} from './filtros-comerciales'
 import { formularioVacio, num, txt, type DatosImpresion, type DetalleDocumento, type Fila } from './types'
 import { useVentasCatalogos } from './useVentasCatalogos'
 
@@ -33,8 +41,10 @@ export function FacturacionPage(): React.JSX.Element {
   const catalogos = useVentasCatalogos('ventas.catalogos')
   const [tab, setTab] = useState('ecf')
   const [documentos, setDocumentos] = useState<Fila[]>([])
-  const [filtro, setFiltro] = useState({ tipo: '', estado: '', cliente: '', desde: '', hasta: '' })
-  const [aplicado, setAplicado] = useState(filtro)
+  const [filtro, setFiltro] = useState<FiltroComercial>(filtroComercialVacio)
+  const [aplicado, setAplicado] = useState<FiltroComercial>(filtroComercialVacio)
+  const [borradores, setBorradores] = useState<BorradorFactura[]>([])
+  const [borradorActivo, setBorradorActivo] = useState<string | null>(null)
   const [cargando, setCargando] = useState(true)
   const [nuevoOpen, setNuevoOpen] = useState(false)
   const [tipoFactura, setTipoFactura] = useState<TipoFactura>('FACTURA_CONTADO')
@@ -56,15 +66,12 @@ export function FacturacionPage(): React.JSX.Element {
     }
   }, [catalogos.almacenes, form.almacenId])
 
+  useEffect(() => { setBorradores(listarBorradores()) }, [])
+
   const cargar = useCallback(async () => {
     setCargando(true)
     try {
-      const payload: Record<string, unknown> = {}
-      if (aplicado.tipo) payload.tipo = aplicado.tipo
-      if (aplicado.estado) payload.estado = aplicado.estado
-      if (aplicado.cliente) payload.clienteId = Number(aplicado.cliente)
-      if (aplicado.desde) payload.fechaDesde = aplicado.desde
-      if (aplicado.hasta) payload.fechaHasta = aplicado.hasta
+      const payload = payloadFiltroComercial(aplicado)
       const filas = await window.api.invoke<Fila[]>('ventas.documentos', payload)
       setDocumentos(filas ?? [])
     } catch (error) {
@@ -81,6 +88,7 @@ export function FacturacionPage(): React.JSX.Element {
     base.lineas = [nuevaLinea(catalogos)]
     setForm(base)
     setTipoFactura('FACTURA_CONTADO')
+    setBorradorActivo(null)
     setNuevoOpen(true)
   }
 
@@ -88,18 +96,26 @@ export function FacturacionPage(): React.JSX.Element {
     setTipoFactura(tipo)
   }
 
-  async function guardar(): Promise<void> {
-    if (!form.clienteId) { toast.warning('Seleccione el cliente.'); return }
-    if (!form.lineas.length) { toast.warning('Agregue al menos una línea.'); return }
-    if (primeraLineaIncompleta(form.lineas)) { toast.warning('Complete o elimine las líneas vacías.'); return }
-    const totales = totalesCarrito(catalogos, form.lineas)
+  async function guardar(draftId?: string, origen?: typeof form, tipoOverride?: TipoFactura): Promise<void> {
+    const destino = origen ?? form
+    const tipoDestino = tipoOverride ?? tipoFactura
+    if (!destino.clienteId) { toast.warning('Seleccione el cliente.'); return }
+    if (!destino.lineas.length) { toast.warning('Agregue al menos una línea.'); return }
+    if (primeraLineaIncompleta(destino.lineas)) { toast.warning('Complete o elimine las líneas vacías.'); return }
+    const totales = totalesCarrito(catalogos, destino.lineas)
     if (totales.totalCent <= 0) { toast.warning('El total debe ser mayor que cero.'); return }
     setGuardando(true)
     try {
       const resultado = await window.api.invoke<{ numero: string }>('ventas.factura.crear', {
-        ...payloadCabecera(form),
-        tipo: tipoFactura
+        ...payloadCabecera(destino),
+        tipo: tipoDestino
       })
+      if (draftId) {
+        eliminarBorradorLocal(draftId)
+        setBorradores(listarBorradores())
+        setBorradorActivo(null)
+        setTab('documentos')
+      }
       toast.success(`Factura ${resultado.numero} guardada correctamente.`)
       setNuevoOpen(false)
       await cargar()
@@ -108,6 +124,37 @@ export function FacturacionPage(): React.JSX.Element {
     } finally {
       setGuardando(false)
     }
+  }
+
+  function guardarBorrador(): void {
+    if (!form.clienteId) { toast.warning('Seleccione el cliente antes de guardar el borrador.'); return }
+    const guardado = guardarBorradorLocal(tipoFactura, form, borradorActivo ?? undefined)
+    setBorradores(listarBorradores())
+    setBorradorActivo(guardado.id)
+    toast.success(`Borrador ${guardado.numero} guardado en este equipo; aún no está emitido.`)
+  }
+
+  function abrirBorrador(borrador: BorradorFactura): void {
+    setForm(formularioDeBorrador(borrador, catalogos))
+    setTipoFactura(borrador.tipo)
+    setBorradorActivo(borrador.id)
+    setTab('ecf')
+    toast.info(`Editando ${borrador.numero}. Solo se emitirá cuando pulse Salvar F7.`)
+  }
+
+  function emitirBorrador(borrador: BorradorFactura): void {
+    const destino = formularioDeBorrador(borrador, catalogos)
+    setForm(destino)
+    setTipoFactura(borrador.tipo)
+    setBorradorActivo(borrador.id)
+    void guardar(borrador.id, destino, borrador.tipo)
+  }
+
+  function borrarBorrador(borrador: BorradorFactura): void {
+    eliminarBorradorLocal(borrador.id)
+    setBorradores(listarBorradores())
+    if (borradorActivo === borrador.id) setBorradorActivo(null)
+    toast.success(`Borrador ${borrador.numero} eliminado.`)
   }
 
   async function verDetalle(id: number): Promise<void> {
@@ -155,12 +202,7 @@ export function FacturacionPage(): React.JSX.Element {
 
   async function exportar(): Promise<void> {
     try {
-      const payload: Record<string, unknown> = {}
-      if (aplicado.tipo) payload.tipo = aplicado.tipo
-      if (aplicado.estado) payload.estado = aplicado.estado
-      if (aplicado.cliente) payload.clienteId = Number(aplicado.cliente)
-      if (aplicado.desde) payload.fechaDesde = aplicado.desde
-      if (aplicado.hasta) payload.fechaHasta = aplicado.hasta
+      const payload = payloadFiltroComercial(aplicado)
       const res = await window.api.invoke<{ filename: string; base64: string }>('ventas.exportar', { filtro: payload })
       descargarArchivo(res.base64, res.filename)
     } catch (error) {
@@ -222,6 +264,24 @@ export function FacturacionPage(): React.JSX.Element {
     { key: 'totalCent', header: 'Total', value: (f) => num(f.totalCent), render: (f) => <span className="tabular-nums">{money(num(f.totalCent))}</span> }
   ]
 
+  const columnasBorradores: Column<BorradorFactura>[] = [
+    { key: 'numero', header: 'Borrador', value: (b) => b.numero, render: (b) => <span className="font-medium">{b.numero}</span> },
+    { key: 'tipo', header: 'Tipo', value: (b) => b.tipo },
+    {
+      key: 'cliente', header: 'Cliente',
+      value: (b) => {
+        const cliente = catalogos.clientes.find((c) => String(c.id) === b.form.clienteId)
+        return txt(cliente?.nombre) || '—'
+      }
+    },
+    {
+      key: 'total', header: 'Total estimado',
+      value: (b) => totalesCarrito(catalogos, b.form.lineas).totalCent,
+      render: (b) => <span className="tabular-nums">{money(totalesCarrito(catalogos, b.form.lineas).totalCent)}</span>
+    },
+    { key: 'actualizadoEn', header: 'Actualizado', value: (b) => b.actualizadoEn.slice(0, 16).replace('T', ' ') }
+  ]
+
   const puedeImprimir = (fila: Fila) => can('ventas.imprimir') || (txt(fila.tipo) === 'POS' && can('pos.imprimir'))
 
   return (
@@ -244,6 +304,7 @@ export function FacturacionPage(): React.JSX.Element {
         tabs={[
           { id: 'ecf', label: 'Facturación ECF' },
           { id: 'documentos', label: 'Documentos' },
+          { id: 'borradores', label: `Borradores (${borradores.length})` },
           { id: 'conduces', label: 'Conduces y entregas' }
         ]}
         active={tab}
@@ -256,7 +317,8 @@ export function FacturacionPage(): React.JSX.Element {
             catalogos={catalogos}
             form={form}
             onChange={setForm}
-            onGuardar={() => void guardar()}
+            onGuardar={() => void guardar(borradorActivo ?? undefined)}
+            onGuardarBorrador={guardarBorrador}
             onSalir={() => setTab('documentos')}
             guardando={guardando}
             cargando={catalogos.cargando}
@@ -270,46 +332,23 @@ export function FacturacionPage(): React.JSX.Element {
 
       {tab === 'documentos' && (
         <TabPanel>
-          <Card className="mb-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <Field label="Tipo">
-                <select className={inputClass} value={filtro.tipo} onChange={(e) => setFiltro({ ...filtro, tipo: e.target.value })}>
-                  <option value="">Todos</option>
-                  <option value="FACTURA_CONTADO">Factura contado</option>
-                  <option value="FACTURA_CREDITO">Factura crédito</option>
-                  <option value="POS">POS</option>
-                  <option value="NOTA_CREDITO">Nota de crédito</option>
-                  <option value="DEVOLUCION_VENTA">Devolución</option>
-                </select>
-              </Field>
-              <Field label="Estado">
-                <select className={inputClass} value={filtro.estado} onChange={(e) => setFiltro({ ...filtro, estado: e.target.value })}>
-                  <option value="">Todos</option>
-                  <option value="ACTIVO">Activo</option>
-                  <option value="PENDIENTE">Pendiente</option>
-                  <option value="CONTABILIZADO">Contabilizado</option>
-                  <option value="ANULADO">Anulado</option>
-                </select>
-              </Field>
-              <Field label="Cliente ID">
-                <TextInput type="number" min="1" value={filtro.cliente} onChange={(e) => setFiltro({ ...filtro, cliente: e.target.value })} />
-              </Field>
-              <Field label="Desde"><TextInput type="date" value={filtro.desde} onChange={(e) => setFiltro({ ...filtro, desde: e.target.value })} /></Field>
-              <Field label="Hasta"><TextInput type="date" value={filtro.hasta} onChange={(e) => setFiltro({ ...filtro, hasta: e.target.value })} /></Field>
-            </div>
-            <div className="mt-3 flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => { const v = { tipo: '', estado: '', cliente: '', desde: '', hasta: '' }; setFiltro(v); setAplicado(v) }}>
-                Limpiar
-              </Button>
-              <Button variant="secondary" onClick={() => setAplicado(filtro)}><Filter size={14} /> Aplicar filtros</Button>
-            </div>
-          </Card>
+          <FiltrosComerciales
+            filtro={filtro}
+            onChange={setFiltro}
+            onAplicar={() => setAplicado(filtro)}
+            onLimpiar={() => setAplicado(filtroComercialVacio())}
+            clientes={catalogos.clientes}
+            productos={catalogos.productos}
+            estados={['ACTIVO', 'PENDIENTE', 'CONTABILIZADO', 'ANULADO']}
+            titulo="Búsqueda filtrada de documentos"
+          />
 
           <Card title="Documentos emitidos" subtitle={`${documentos.length} resultado(s)`}>
             <DataTable
               columns={columnas}
               data={documentos}
               rowKey={(f) => num(f.id)}
+              storageKey="facturacion.documentos"
               searchPlaceholder="Buscar por número, cliente o RNC…"
               emptyText={cargando ? 'Cargando…' : 'No hay documentos con estos filtros.'}
               actions={(fila) => (
@@ -337,6 +376,47 @@ export function FacturacionPage(): React.JSX.Element {
                       <Ban size={15} />
                     </button>
                   )}
+                </div>
+              )}
+            />
+          </Card>
+        </TabPanel>
+      )}
+
+      {tab === 'borradores' && (
+        <TabPanel>
+          <Card
+            title="Borradores locales"
+            subtitle="No están emitidos: no reservan NCF, no generan CxC ni afectan inventario."
+            actions={
+              can('ventas.crear') && <Button size="sm" onClick={() => { const base = formularioVacio(catalogos); base.lineas = [nuevaLinea(catalogos)]; setForm(base); setBorradorActivo(null); setTab('ecf') }}>
+                <FilePlus2 size={14} /> Nuevo borrador
+              </Button>
+            }
+          >
+            <p className="mb-3 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300">
+              Los borradores se guardan solo en este equipo. Edite libremente; al emitir se usa el mismo proceso auditado y el borrador se elimina.
+            </p>
+            <DataTable
+              columns={columnasBorradores}
+              data={borradores}
+              rowKey={(b) => b.id}
+              storageKey="facturacion.borradores"
+              searchPlaceholder="Buscar borradores…"
+              emptyText="No hay borradores guardados en este equipo."
+              actions={(b) => (
+                <div className="flex justify-end gap-1">
+                  <button className="rounded p-1.5 text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/30" onClick={() => abrirBorrador(b)} title="Editar borrador" aria-label="Editar borrador">
+                    <Pencil size={15} />
+                  </button>
+                  {can('ventas.crear') && (
+                    <button className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30" onClick={() => emitirBorrador(b)} title="Emitir borrador" aria-label="Emitir borrador">
+                      <Send size={15} />
+                    </button>
+                  )}
+                  <button className="rounded p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30" onClick={() => borrarBorrador(b)} title="Eliminar borrador" aria-label="Eliminar borrador">
+                    <Trash2 size={15} />
+                  </button>
                 </div>
               )}
             />

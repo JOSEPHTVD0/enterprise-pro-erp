@@ -174,6 +174,22 @@ export const moduleGroups: ModuleGroup[] = [
         ]
       },
       {
+        id: 'panel-comercial',
+        label: 'Panel comercial',
+        icon: BarChart3,
+        permission: 'reportes.consultar',
+        phase: 6,
+        available: true,
+        description: 'Resumen unificado de ventas, facturación, cobros y CxC con filtros avanzados.',
+        features: [
+          'Indicadores y serie de ventas/cobros de reportes reales',
+          'Filtros por cliente, número, estado, fechas, monto y producto',
+          'Detalle unificado de documentos, cartera, recibos y anticipos',
+          'Concentración por cliente y documentos vencidos con datos de SQLite',
+          'Sin cálculos de saldo en la interfaz ni integración DGII'
+        ]
+      },
+      {
         id: 'pos',
         label: 'Punto de Venta',
         icon: ScanBarcode,

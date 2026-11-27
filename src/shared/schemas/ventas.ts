@@ -101,6 +101,10 @@ export const documentosFiltroSchema = conDefaultsDeObjetoVacio(z.object({
   tipo: z.enum(tiposDocumentoVenta).optional(),
   estado: z.enum(estadosDocumentoVenta).optional(),
   clienteId: id.optional(),
+  numero: z.string().trim().max(60).optional(),
+  montoMinCent: z.number().int().nonnegative().optional(),
+  montoMaxCent: z.number().int().nonnegative().optional(),
+  productoId: id.optional(),
   fechaDesde: fecha.optional(),
   fechaHasta: fecha.optional(),
   limite: z.number().int().min(1).max(1000).default(300)

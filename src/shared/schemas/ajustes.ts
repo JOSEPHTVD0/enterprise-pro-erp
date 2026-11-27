@@ -25,7 +25,8 @@ const unique = (valores: string[], nombre: string, ctx: z.RefinementCtx): void =
 
 export const ajustesGrupos = [
   'alertas', 'flujos', 'widgets', 'rendimiento', 'integraciones',
-  'tema', 'fiscal', 'notificaciones', 'seguridad', 'featureFlags', 'interfaz', 'panel2026'
+  'tema', 'fiscal', 'notificaciones', 'seguridad', 'featureFlags', 'interfaz', 'panel2026',
+  'dgiEnlace'
 ] as const
 
 export type AjustesGrupo = (typeof ajustesGrupos)[number]
@@ -37,7 +38,7 @@ export const ajustesGrupoEnum = z.enum(ajustesGrupos as unknown as [AjustesGrupo
  * sus valores se aplican en el backend o se exponen solo como derivados seguros.
  */
 export const ajustesGruposVisuales = [
-  'tema', 'widgets', 'featureFlags', 'interfaz', 'alertas', 'notificaciones', 'panel2026'
+  'tema', 'widgets', 'featureFlags', 'interfaz', 'alertas', 'notificaciones', 'panel2026', 'dgiEnlace'
 ] as const
 
 export const widgetIds = [
@@ -151,6 +152,18 @@ export const fiscalAvanzadoSchema = conDefaultsDeObjetoVacio(z.object({
   formatoComprobante: z.enum(['NCF', 'PREPARACION_E_CF']).default('NCF')
 }))
 
+/**
+ * Enlace DGI meramente visual. No hay envío, certificación, exportación ni
+ * consumo de endpoints; estos valores solo rotulan el panel de facturación.
+ */
+export const dgiEnlaceVisualSchema = conDefaultsDeObjetoVacio(z.object({
+  mostrarPanel: z.boolean().default(true),
+  estadoVisual: z.enum(['SIN_ENLACE', 'EN_PREPARACION', 'INACTIVO']).default('SIN_ENLACE'),
+  ambienteVisual: z.enum(['NO_APLICA', 'PRUEBAS', 'PRODUCCION']).default('NO_APLICA'),
+  notaInformativa: z.string().trim().min(1).max(120)
+    .default('Solo visual: sin envío a DGII ni emisión e-CF.')
+}))
+
 const eventosNotificacion = [
   'VENTA', 'COMPRA', 'STOCK_BAJO', 'CXC_VENCIDO', 'SERIE_ALERTA', 'BACKUP', 'ACTUALIZACION'
 ] as const
@@ -246,7 +259,8 @@ export const ajustesPorGrupo = {
   seguridad: seguridadAvanzadaSchema,
   featureFlags: featureFlagsSchema,
   interfaz: interfazSchema,
-  panel2026: panel2026Schema
+  panel2026: panel2026Schema,
+  dgiEnlace: dgiEnlaceVisualSchema
 } as const
 
 export type Ajustes = { [K in AjustesGrupo]: z.infer<(typeof ajustesPorGrupo)[K]> }
@@ -264,7 +278,8 @@ export const defaultAjustes: Ajustes = {
   seguridad: seguridadAvanzadaSchema.parse({}),
   featureFlags: featureFlagsSchema.parse({}),
   interfaz: interfazSchema.parse({}),
-  panel2026: panel2026Schema.parse({})
+  panel2026: panel2026Schema.parse({}),
+  dgiEnlace: dgiEnlaceVisualSchema.parse({})
 }
 
 export const ajustesGetSchema = z.object({ grupo: ajustesGrupoEnum.optional() }).default({})
@@ -282,7 +297,8 @@ export const ajustesSaveSchema = z.discriminatedUnion('grupo', [
   z.object({ grupo: z.literal('seguridad'), datos: seguridadAvanzadaSchema }),
   z.object({ grupo: z.literal('featureFlags'), datos: featureFlagsSchema }),
   z.object({ grupo: z.literal('interfaz'), datos: interfazSchema }),
-  z.object({ grupo: z.literal('panel2026'), datos: panel2026Schema })
+  z.object({ grupo: z.literal('panel2026'), datos: panel2026Schema }),
+  z.object({ grupo: z.literal('dgiEnlace'), datos: dgiEnlaceVisualSchema })
 ])
 
 export type AjustesSave = z.infer<typeof ajustesSaveSchema>

@@ -39,6 +39,7 @@ import { CatalogosPage } from '@/features/maestros/CatalogosPage'
 import { InventarioPage } from '@/features/inventario/InventarioPage'
 import { StockPanelPage } from '@/features/inventario/StockPanelPage'
 import { FacturacionPage } from '@/features/ventas/FacturacionPage'
+import { PanelComercialPage } from '@/features/ventas/PanelComercialPage'
 import { PosPage } from '@/features/ventas/PosPage'
 import { CotizacionesPage } from '@/features/ventas/CotizacionesPage'
 import { ComprasPage } from '@/features/compras/ComprasPage'
@@ -112,6 +113,7 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'inventario') return <InventarioPage />
   if (activeView === 'control-stock') return <StockPanelPage />
   if (activeView === 'facturacion') return <FacturacionPage />
+  if (activeView === 'panel-comercial') return <PanelComercialPage />
   if (activeView === 'pos') return <PosPage />
   if (activeView === 'cotizaciones') return <CotizacionesPage />
   if (activeView === 'compras') return <ComprasPage />

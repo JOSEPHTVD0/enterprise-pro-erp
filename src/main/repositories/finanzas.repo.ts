@@ -11,6 +11,10 @@ type OpcionesFiltro = {
   entidad?: string
   /** `null` cuando la tabla no tiene columna `estado`. */
   estado?: string | null
+  /** Columna sobre la que se aplica la búsqueda por número/referencia. */
+  numero?: string
+  /** Columna de importe para los filtros de rango. */
+  monto?: string
 }
 
 function filtroBase(
@@ -25,6 +29,9 @@ function filtroBase(
   if (f.hasta) { where.push(`${columnaFecha} <= ?`); args.push(f.hasta) }
   if (f.entidadId && opciones.entidad) { where.push(`${opciones.entidad} = ?`); args.push(f.entidadId) }
   if (f.estado && columnaEstado) { where.push(`${columnaEstado} = ?`); args.push(f.estado) }
+  if (f.numero && opciones.numero) { where.push(`${opciones.numero} LIKE ?`); args.push(`%${f.numero}%`) }
+  if (f.montoMinCent !== undefined && opciones.monto) { where.push(`${opciones.monto} >= ?`); args.push(f.montoMinCent) }
+  if (f.montoMaxCent !== undefined && opciones.monto) { where.push(`${opciones.monto} <= ?`); args.push(f.montoMaxCent) }
   return { where, args, limite: f.limite }
 }
 
@@ -39,14 +46,25 @@ function uno(db: Db, sql: string, args: (string | number)[]): Fila | undefined {
 // ------------------------------- CxC ----------------------------------------
 
 export function listarCxc(db: Db, empresaId: number, filtro?: FinanzasFiltro): Fila[] {
-  const f = filtroBase(filtro, 'c', { entidad: 'c.cliente_id' })
-  const args: (string | number)[] = [empresaId, ...f.args, f.limite]
+  const f = filtroBase(filtro, 'c', {
+    entidad: 'c.cliente_id', numero: 'c.numero_documento', monto: 'c.saldo_cent'
+  })
+  const where = [...f.where]
+  const args: (string | number)[] = [empresaId, ...f.args]
+  if (filtro?.productoId) {
+    where.push(`EXISTS (
+      SELECT 1 FROM documento_venta_lineas l
+      WHERE l.doc_id = c.doc_venta_id AND l.producto_id = ?
+    )`)
+    args.push(filtro.productoId)
+  }
+  args.push(f.limite)
   return lista(db, `
     SELECT c.*, cl.nombre AS clienteNombre, cl.rnc_cedula AS clienteRnc,
       CAST(julianday('now') - julianday(c.fecha) AS INTEGER) AS antiguedadDias
     FROM cxc_documentos c
     JOIN clientes cl ON cl.id = c.cliente_id AND cl.empresa_id = c.empresa_id
-    WHERE c.empresa_id = ? ${f.where.length ? `AND ${f.where.join(' AND ')}` : ''}
+    WHERE c.empresa_id = ? ${where.length ? `AND ${where.join(' AND ')}` : ''}
     ORDER BY c.id DESC LIMIT ?
   `, args)
 }
@@ -60,7 +78,7 @@ export function getCxc(db: Db, empresaId: number, id: number): Fila | undefined 
 }
 
 export function listarRecibosCxc(db: Db, empresaId: number, filtro?: FinanzasFiltro): Fila[] {
-  const f = filtroBase(filtro, 'r', { entidad: 'r.cliente_id' })
+  const f = filtroBase(filtro, 'r', { entidad: 'r.cliente_id', numero: 'r.numero', monto: 'r.monto_cent' })
   const args: (string | number)[] = [empresaId, ...f.args, f.limite]
   return lista(db, `
     SELECT r.*, cl.nombre AS clienteNombre FROM cxc_recibos r
@@ -130,7 +148,7 @@ export function anularReciboCxc(db: Db, empresaId: number, id: number): void {
 }
 
 export function listarAnticipos(db: Db, empresaId: number, tipo: 'CLIENTE' | 'PROVEEDOR', filtro?: FinanzasFiltro): Fila[] {
-  const f = filtroBase(filtro, 'a', { entidad: 'a.entidad_id' })
+  const f = filtroBase(filtro, 'a', { entidad: 'a.entidad_id', numero: 'a.referencia', monto: 'a.saldo_cent' })
   const args: (string | number)[] = [empresaId, tipo, ...f.args, f.limite]
   return lista(db, `
     SELECT a.*, COALESCE(cl.nombre, pr.nombre_comercial) AS entidadNombre

@@ -29,7 +29,7 @@ describe('catálogo de módulos', () => {
       'catalogos', 'centro-control', 'clientes', 'cobros', 'compras', 'configuracion',
       'configuracion-avanzada', 'contabilidad', 'control-stock', 'cotizaciones', 'crm', 'cxc', 'cxp',
       'dashboard', 'dashboard-ejecutivo', 'espacio-trabajo', 'facturacion', 'gastos', 'inteligencia',
-      'inventario', 'panel-2026', 'pos', 'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos',
+      'inventario', 'panel-2026', 'panel-comercial', 'pos', 'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos',
       'roles', 'salud', 'servicios', 'usuarios', 'vendedores'
     ])
   })
@@ -46,6 +46,7 @@ describe('catálogo de módulos', () => {
     expect(modulePermission('apariencia')).toBeUndefined()
     expect(modulePermission('agenda')).toBeUndefined()
     expect(modulePermission('control-stock')).toBe('inventario.consultar')
+    expect(modulePermission('panel-comercial')).toBe('reportes.consultar')
   })
 
   it('findModule encuentra todos los módulos del catálogo', () => {

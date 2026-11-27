@@ -57,6 +57,22 @@ export function CobrosPage(): React.JSX.Element {
   const [anular, setAnular] = useState<{ id: number; numero: string } | null>(null)
   const [motivo, setMotivo] = useState('')
   const [guardando, setGuardando] = useState(false)
+  const [productosVenta, setProductosVenta] = useState<Fila[]>([])
+
+  useEffect(() => {
+    if (!can('ventas.consultar')) return
+    let activo = true
+    void window.api.invoke<{ productos?: Fila[] }>('ventas.catalogos')
+      .then((respuesta) => { if (activo) setProductosVenta(Array.isArray(respuesta?.productos) ? respuesta.productos : []) })
+      .catch(() => { /* el filtro por producto queda disponible por ID */ })
+    return () => { activo = false }
+  }, [])
+
+  const normalizarAnticipo = (fila: Fila): Fila => ({
+    ...fila,
+    clienteId: fila.clienteId ?? fila.entidadId,
+    clienteNombre: fila.clienteNombre ?? fila.entidadNombre
+  })
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -69,7 +85,7 @@ export function CobrosPage(): React.JSX.Element {
       ])
       setFacturas(Array.isArray(docs) ? docs : [])
       setRecibos(Array.isArray(recs) ? recs : [])
-      setAnticipos(Array.isArray(ants) ? ants : [])
+      setAnticipos(Array.isArray(ants) ? ants.map(normalizarAnticipo) : [])
     } catch (error) {
       toast.error(errorInfo(error).message)
     } finally {
@@ -305,8 +321,8 @@ export function CobrosPage(): React.JSX.Element {
             <Accion icono={<RefreshCw size={15} className={cargando ? 'animate-spin' : ''} />} etiqueta="Actualizar listados" onClick={() => void cargar()} />
             {can('cobros.imprimir') && <SelectorFormato value={formato} onChange={setFormato} formatos={formatosDe(catalogos)} />}
             {can('cobros.exportar') && (
-              <Button variant="secondary" onClick={() => void exportar()} title="Exportar cobros a XLSX" aria-label="Exportar cobros a XLSX">
-                <Download size={14} /> Exportar
+              <Button variant="secondary" onClick={() => void exportar()} title="Exporta la cartera CxC (facturas) a XLSX" aria-label="Exportar cartera CxC a XLSX">
+                <Download size={14} /> Exportar cartera
               </Button>
             )}
             {can('cobros.crear') && (
@@ -341,7 +357,49 @@ export function CobrosPage(): React.JSX.Element {
           onLimpiar={() => { const limpio = filtroVacio(); setFiltro(limpio); setAplicado(limpio) }}
           entidades={catalogos.clientes}
           entidadLabel="Cliente"
+          estados={tab === 'facturas'
+            ? ['PENDIENTE', 'PAGADO', 'ANULADO']
+            : tab === 'recibos'
+              ? ['CONTABILIZADO', 'ANULADO']
+              : ['ACTIVO', 'APLICADO', 'ANULADO']}
         />
+
+        <Card className="mb-4" title="Búsqueda avanzada" subtitle="Número, rango de monto y producto (aplica a facturas).">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="Número / referencia">
+              <TextInput value={filtro.numero} maxLength={60} placeholder="Ej. FAC-0001 o RIN-0002"
+                onChange={(e) => setFiltro({ ...filtro, numero: e.target.value })} />
+            </Field>
+            <Field label="Monto mínimo">
+              <TextInput type="number" min="0" step="0.01" value={filtro.montoMin}
+                onChange={(e) => setFiltro({ ...filtro, montoMin: e.target.value })} />
+            </Field>
+            <Field label="Monto máximo">
+              <TextInput type="number" min="0" step="0.01" value={filtro.montoMax}
+                onChange={(e) => setFiltro({ ...filtro, montoMax: e.target.value })} />
+            </Field>
+            <Field label="Producto">
+              {productosVenta.length ? (
+                <select className={inputClass} value={filtro.productoId}
+                  onChange={(e) => setFiltro({ ...filtro, productoId: e.target.value })} aria-label="Producto">
+                  <option value="">Todos</option>
+                  {productosVenta.map((p) => (
+                    <option key={String(p.id)} value={String(p.id)}>
+                      {txt(p.codigo) ? `${txt(p.codigo)} · ` : ''}{txt(p.descripcion) || String(p.id)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <TextInput type="number" min="1" value={filtro.productoId} placeholder="ID de producto"
+                  onChange={(e) => setFiltro({ ...filtro, productoId: e.target.value })} />
+              )}
+            </Field>
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => { const v = { ...filtro, numero: '', montoMin: '', montoMax: '', productoId: '' }; setFiltro(v); setAplicado(v) }}>Limpiar avanzado</Button>
+            <Button variant="secondary" onClick={() => setAplicado(filtro)}>Aplicar filtros</Button>
+          </div>
+        </Card>
 
         <Card
           title={tab === 'facturas' ? 'Facturas por cobrar' : tab === 'recibos' ? 'Recibos' : 'Anticipos de clientes'}
@@ -351,6 +409,7 @@ export function CobrosPage(): React.JSX.Element {
             columns={columnas}
             data={visibles}
             rowKey={(f) => num(f.id)}
+            storageKey={`cobros.${tab}`}
             searchPlaceholder="Buscar por número, cliente o referencia…"
             emptyText={cargando ? 'Cargando…' : 'No hay registros con estos filtros.'}
             actions={acciones}
@@ -420,7 +479,7 @@ export function CobrosPage(): React.JSX.Element {
               placeholder="Ej. transferencia, cheque" />
           </Field>
           <Field label="Comentarios">
-            <TextInput value={formRecibo.comentarios} maxLength={500}
+            <TextInput value={formRecibo.comentarios} maxLength={300}
               onChange={(e) => setFormRecibo({ ...formRecibo, comentarios: e.target.value })} />
           </Field>
         </div>

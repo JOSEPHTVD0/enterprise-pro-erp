@@ -52,7 +52,8 @@ export function createAjustesService(db: Db) {
       seguridad: leerGrupo(ctx.empresaId, 'seguridad'),
       featureFlags: leerGrupo(ctx.empresaId, 'featureFlags'),
       interfaz: leerGrupo(ctx.empresaId, 'interfaz'),
-      panel2026: leerGrupo(ctx.empresaId, 'panel2026')
+      panel2026: leerGrupo(ctx.empresaId, 'panel2026'),
+      dgiEnlace: leerGrupo(ctx.empresaId, 'dgiEnlace')
     }
   }
 
