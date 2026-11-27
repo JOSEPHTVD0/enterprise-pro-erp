@@ -3,7 +3,8 @@ import { Clock3, HardDrive, WifiOff } from 'lucide-react'
 import type { AppInfo } from '@shared/app-info'
 import { useAjustesStore } from '@/app/ajustes-store'
 import { useSessionStore } from '@/app/session'
-import { titleSi, usePreferenciasInterfaz } from '@/lib/format'
+import { formatFecha, titleSi, usePreferenciasInterfaz } from '@/lib/format'
+import { useTexto } from '@/lib/i18n'
 
 export function StatusBar(): React.JSX.Element | null {
   const [info, setInfo] = useState<AppInfo | null>(null)
@@ -14,6 +15,7 @@ export function StatusBar(): React.JSX.Element | null {
   const preferencias = usePreferenciasInterfaz()
   const [now, setNow] = useState(Date.now())
   const [interaccion, setInteraccion] = useState(Date.now())
+  const t = useTexto()
 
   useEffect(() => {
     window.api.app
@@ -47,17 +49,18 @@ export function StatusBar(): React.JSX.Element | null {
   if (ocultos.has('barraEstado')) return null
 
   return (
-    <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-slate-200 bg-white px-4 text-[11px] text-slate-400 dark:border-slate-800 dark:bg-slate-900">
+    <footer className="flex h-7 shrink-0 items-center gap-2 overflow-hidden border-t border-slate-200 bg-white px-4 text-[11px] text-slate-400 sm:gap-4 dark:border-slate-800 dark:bg-slate-900">
       <span className="flex items-center gap-1">
-        <WifiOff size={12} /> Modo local · sin Internet
+        <WifiOff size={12} /> {t('modoLocal')}
       </span>
       {info && (
-        <span className="flex min-w-0 items-center gap-1">
+        <span className="hidden min-w-0 items-center gap-1 lg:flex">
           <HardDrive size={12} />
           <span className="truncate">{info.userDataPath}</span>
         </span>
       )}
-      {pie && <span className="truncate">{pie}</span>}
+      {pie && <span className="hidden max-w-[24rem] truncate xl:inline">{pie}</span>}
+      <span className="hidden truncate md:inline" aria-label={t('fechaLocal')}>{formatFecha(new Date(now))}</span>
       {ctx && (
         <span
           data-aviso-min={preferencias.avisoBloqueoMin}

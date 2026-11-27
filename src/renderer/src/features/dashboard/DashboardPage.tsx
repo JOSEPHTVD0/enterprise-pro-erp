@@ -6,7 +6,10 @@ import { useAppStore } from '@/app/store'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { SkeletonChart } from '@/components/ui/Skeleton'
+import { StatCard } from '@/components/ui/StatCard'
 import { allModules } from '@/app/modules'
 import { money } from '@/lib/format'
 import type { AppInfo } from '@shared/app-info'
@@ -156,36 +159,46 @@ export function DashboardPage(): React.JSX.Element {
           { label: 'Productos agotados', valor: '—' },
           { label: 'Resumen de caja', valor: '—' }
         ]).map((tarjeta) => (
-          <div key={tarjeta.label}
-            className="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-xs text-slate-500 dark:text-slate-400">{tarjeta.label}</p>
-            <p className={`mt-1 text-lg font-semibold ${tarjetas.length ? 'text-slate-800 dark:text-slate-100' : 'text-slate-300 dark:text-slate-600'}`}>
-              {tarjeta.valor}
-            </p>
-            {!tarjetas.length && (
-              <p className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+          <StatCard
+            key={tarjeta.label}
+            label={tarjeta.label}
+            value={tarjeta.valor}
+            tone={tarjetas.length ? 'accent' : 'neutral'}
+            loading={!indicadores}
+            hint={!tarjetas.length ? (
+              <span className="text-amber-600 dark:text-amber-400">
                 {conReportes ? 'Sin datos en el período' : 'Sin permiso de reportes'}
-              </p>
-            )}
-          </div>
+              </span>
+            ) : undefined}
+          />
         ))}
       </div>
 
-      {conReportes && puntosGrafica.length > 0 && (
+      {conReportes && (
         <Card title="Ventas y cobros" subtitle="Últimos 30 días · datos reales" className="mb-4">
-          <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={puntosGrafica} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#94a3b833" />
-                <XAxis dataKey="clave" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={70} />
-                <Tooltip formatter={(valor, nombre) => [money(num(valor) * 100), String(nombre)]} />
-                <Legend />
-                <Area type="monotone" dataKey="Ventas" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.14} />
-                <Area type="monotone" dataKey="Cobros" stroke="#10b981" fill="#10b981" fillOpacity={0.12} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {!serie ? (
+            <SkeletonChart className="h-[260px]" />
+          ) : puntosGrafica.length > 0 ? (
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={puntosGrafica} margin={{ top: 8, right: 8, left: 8, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#94a3b833" />
+                  <XAxis dataKey="clave" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={70} />
+                  <Tooltip formatter={(valor, nombre) => [money(num(valor) * 100), String(nombre)]} />
+                  <Legend />
+                  <Area type="monotone" dataKey="Ventas" stroke="var(--erp-acento)" fill="var(--erp-acento)" fillOpacity={0.14} />
+                  <Area type="monotone" dataKey="Cobros" stroke="#10b981" fill="#10b981" fillOpacity={0.12} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <EmptyState
+              tone="empty"
+              title="Sin movimientos en los últimos 30 días"
+              description="La gráfica se llenará con ventas y cobros reales del período."
+            />
+          )}
         </Card>
       )}
 

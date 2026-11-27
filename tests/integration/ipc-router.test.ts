@@ -59,7 +59,7 @@ describe('Fase 11 — router IPC real', () => {
       'auth.login', 'auth.me', 'auth.changePassword', 'config.get',
       'config.catalog.save', 'dashboard.resumen', 'seguridad.users.create',
       'reportes.imprimir', 'respaldos.crear', 'respaldos.restaurar',
-      'impresoras.listar', 'impresion.ejecutar'
+      'impresoras.listar', 'impresion.ejecutar', 'panel.horizontal.resumen'
     ]) {
       expect(em.handlers.get(canal), canal).toBeTypeOf('function')
     }
@@ -167,12 +167,84 @@ describe('Fase 11 — router IPC real', () => {
     expect(catalogo.code).toBe('VALIDATION')
   })
 
+  it('acepta esquemas con input opcional sin argumentos y sigue exigiendo los obligatorios', async () => {
+    const ajustes = await invoke('config.ajustes.get', { token: tokenAdmin })
+    expect(ajustes).toBeTruthy()
+    const auditoria = await invoke('seguridad.audit.list', { token: tokenAdmin })
+    expect(Array.isArray(auditoria)).toBe(true)
+
+    const obligatorio = await errorOf(invoke('auth.switchCompany', { token: tokenAdmin }))
+    expect(obligatorio.code).toBe('VALIDATION')
+    const sinEsquema = await invoke('seguridad.sessions.list', { token: tokenAdmin })
+    expect(Array.isArray(sinEsquema)).toBe(true)
+  })
+
+  it('conserva los canales del contrato sin consumidor activo con permiso y Zod reales', async () => {
+    for (const canal of [
+      'seguridad.permissions.list', 'seguridad.permissions.custom.list',
+      'maestros.get', 'compras.cabeceras'
+    ]) {
+      expect(em.handlers.get(canal), canal).toBeTypeOf('function')
+    }
+
+    expect((await errorOf(invoke('seguridad.permissions.list', {
+      token: tokenSinPermisos
+    }))).code).toBe('FORBIDDEN')
+    expect((await errorOf(invoke('seguridad.permissions.custom.list', {
+      token: tokenSinPermisos
+    }))).code).toBe('FORBIDDEN')
+    expect((await errorOf(invoke('maestros.get', {
+      token: tokenSinPermisos, input: { entidad: 'clientes', id: 1 }
+    }))).code).toBe('FORBIDDEN')
+    expect((await errorOf(invoke('compras.cabeceras', {
+      token: tokenSinPermisos, input: { tipo: 'FACTURA_COMPRA' }
+    }))).code).toBe('FORBIDDEN')
+
+    expect((await errorOf(invoke('compras.cabeceras', {
+      token: tokenAdmin, input: { tipo: 'INVALIDO' }
+    }))).code).toBe('VALIDATION')
+    expect(await invoke('seguridad.permissions.list', { token: tokenAdmin })).toBeTruthy()
+  })
+
   it('expone impresoras del sistema y valida las opciones de impresión', async () => {
     expect(await invoke('impresoras.listar', { token: tokenAdmin })).toEqual([])
     const invalida = await errorOf(invoke('impresion.ejecutar', {
       token: tokenAdmin, input: { opciones: { copias: 0 } }
     }))
     expect(invalida.code).toBe('VALIDATION')
+
+    const listarSinPermiso = await errorOf(invoke('impresoras.listar', { token: tokenSinPermisos }))
+    expect(listarSinPermiso.code).toBe('FORBIDDEN')
+    const imprimirSinPermiso = await errorOf(invoke('impresion.ejecutar', {
+      token: tokenSinPermisos, input: { opciones: { copias: 1 } }
+    }))
+    expect(imprimirSinPermiso.code).toBe('FORBIDDEN')
+  })
+
+  it('el tablero horizontal devuelve solo las secciones permitidas y valida su filtro', async () => {
+    const admin = await invoke('panel.horizontal.resumen', {
+      token: tokenAdmin, input: { limite: 3, soloUrgentes: true }
+    }) as {
+      permitidos: string[]; denegados: unknown[];
+      datos: Record<string, { filtro: { limite: number; soloUrgentes: boolean } } | null>
+    }
+    expect(admin.permitidos).toHaveLength(5)
+    expect(admin.denegados).toEqual([])
+    for (const seccion of Object.values(admin.datos)) {
+      expect(seccion?.filtro).toMatchObject({ limite: 3, soloUrgentes: true })
+    }
+
+    const sinPermisos = await invoke('panel.horizontal.resumen', {
+      token: tokenSinPermisos
+    }) as { permitidos: string[]; denegados: { id: string; motivo: string }[]; datos: Record<string, null> }
+    expect(sinPermisos.permitidos).toEqual([])
+    expect(sinPermisos.denegados).toHaveLength(5)
+    expect(Object.values(sinPermisos.datos).every((seccion) => seccion === null)).toBe(true)
+
+    const invalido = await errorOf(invoke('panel.horizontal.resumen', {
+      token: tokenAdmin, input: { limite: 999 }
+    }))
+    expect(invalido.code).toBe('VALIDATION')
   })
 
   it('cambia de empresa sin pedir contraseña y emite un token nuevo', async () => {

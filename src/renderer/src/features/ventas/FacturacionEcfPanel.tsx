@@ -532,9 +532,8 @@ export function FacturacionEcfPanel({
                 />
                 <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuento1Cent)} aria-label="Descuento 1" />
               </FilaResumen>
-              <FilaResumen etiqueta="Descuento 2:">
-                <Entrada readOnly className="w-12 text-right" value="" placeholder="%" title="El documento admite un descuento por línea" aria-label="Descuento 2 porcentaje" />
-                <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuento2Cent + totales.descuento3Cent)} aria-label="Descuento 2" />
+              <FilaResumen etiqueta="Otros descuentos:">
+                <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuento2Cent + totales.descuento3Cent)} aria-label="Otros descuentos" />
               </FilaResumen>
               <FilaResumen etiqueta="Desc. Items:">
                 <Entrada readOnly className="text-right tabular-nums" value={money(totales.descuentoCent)} aria-label="Descuento de items" />

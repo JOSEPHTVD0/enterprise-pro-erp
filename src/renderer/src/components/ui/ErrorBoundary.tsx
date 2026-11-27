@@ -40,10 +40,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
     if (this.props.compact) {
       return (
-        <div
-          className="flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-6 text-center"
-          style={{ background: '#fffbeb', color: '#78350f' }}
-        >
+        <div className="flex h-full flex-col items-center justify-center gap-2 rounded-xl border border-amber-300 bg-amber-50 p-6 text-center text-amber-900 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-100">
           <p className="text-sm font-semibold">Esta vista no se pudo mostrar</p>
           <p className="max-w-md text-xs">{error.message}</p>
           <button
@@ -58,12 +55,9 @@ export class ErrorBoundary extends Component<Props, State> {
     }
 
     return (
-      <div
-        className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center"
-        style={{ background: '#f8fafc', color: '#0f172a' }}
-      >
+      <div className="flex h-full flex-col items-center justify-center gap-3 bg-slate-50 p-6 text-center text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <h1 className="text-lg font-semibold">La interfaz encontró un error</h1>
-        <p className="max-w-md text-sm text-slate-600">{error.message}</p>
+        <p className="max-w-md text-sm text-slate-600 dark:text-slate-300">{error.message}</p>
         <button
           type="button"
           onClick={() => void this.recargar()}

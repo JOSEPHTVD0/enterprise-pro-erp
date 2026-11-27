@@ -1,5 +1,12 @@
 # Novedades de la versión 0.5.14
 
+> **Nota histórica:** este documento describe solo su release. La release publicada actual es
+> **`v0.5.16`** (tag `v0.5.16`), verificada con **56 archivos / 386 pruebas** y **31/31
+> E2E**; consulte [37-novedades-0.5.16.md](37-novedades-0.5.16.md). Los cambios descritos en
+> [35-consistencia-ui-ajustes.md](35-consistencia-ui-ajustes.md) y
+> [36-panel-horizontal-avanzado.md](36-panel-horizontal-avanzado.md) ya están publicados en
+> `v0.5.16`.
+
 Publicada el 27 de noviembre de 2026 con autorización explícita. Release:
 https://github.com/JOSEPHTVD0/enterprise-pro-erp/releases/tag/v0.5.14
 

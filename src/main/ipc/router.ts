@@ -31,6 +31,7 @@ import { createInteligenciaService } from '../services/inteligencia.service'
 import { createEspacioService } from '../services/espacio.service'
 import { createImpresionService } from '../services/impresion.service'
 import { serializeError, errors, encodeIpcError } from '@shared/errors'
+import { permisosImpresion } from '@shared/permissions'
 import { assertCanProceed } from './policy'
 import {
   loginSchema, changePasswordSchema, createUserSchema, updateUserSchema,
@@ -103,10 +104,16 @@ import {
   periodoAbrirSchema, periodoCerrarSchema, asientoCrearSchema, asientoEstadoSchema,
   mayorSchema, integrarSchema
 } from '@shared/schemas/contabilidad'
+import {
+  panelHorizontalFiltroSchema, panelHorizontalIds,
+  type PanelHorizontalId, type PanelHorizontalRespuesta
+} from '@shared/schemas/panel-horizontal'
 
 interface Route {
   /** Permiso requerido en el backend. Si se omite, el service verifica uno más específico. */
   permission?: string
+  /** Alternativas válidas: basta con que la sesión tenga una de ellas. */
+  anyPermission?: readonly string[]
   schema?: ZodType
   auth: boolean
   handle: (ctx: SessionContext, input: never) => unknown
@@ -143,9 +150,15 @@ function parseCatalog(name: string, data: unknown): Record<string, unknown> {
 
 function route(
   handle: (ctx: SessionContext, input: never) => unknown,
-  options: { permission?: string; schema?: ZodType; auth?: boolean } = {}
+  options: { permission?: string; anyPermission?: readonly string[]; schema?: ZodType; auth?: boolean } = {}
 ): Route {
-  return { handle, permission: options.permission, schema: options.schema, auth: options.auth !== false }
+  return {
+    handle,
+    permission: options.permission,
+    anyPermission: options.anyPermission,
+    schema: options.schema,
+    auth: options.auth !== false
+  }
 }
 
 /** Registra todos los canales. El renderer jamás envía SQL, rutas ni lógica de negocio. */
@@ -246,6 +259,9 @@ export function registerIpc(
       (ctx, input) => seguridad.deleteRole(ctx, (input as { id: number }).id),
       { schema: deleteRoleSchema }
     ),
+    // Canales del contrato IPC sin consumidor activo en el renderer actual. Se
+    // conservan con permiso y validación para no romper roles o integraciones ya
+    // desplegadas; no se inventa una pantalla ni se relaja su seguridad.
     'seguridad.permissions.list': route((ctx) => seguridad.listPermissions(ctx), { permission: 'seguridad.consultar' }),
     'seguridad.permissions.catalog': route((ctx) => seguridad.permissionCatalog(ctx), { permission: 'seguridad.consultar' }),
     'seguridad.permissions.custom.list': route(
@@ -293,6 +309,7 @@ export function registerIpc(
       (ctx, input) => busqueda.global(ctx, input as BusquedaGlobalInput),
       { schema: busquedaGlobalSchema }
     ),
+    // Sin invocador en la UI actual; se mantiene por compatibilidad del contrato IPC.
     'maestros.get': route(
       (ctx, input) => {
         const i = input as { entidad: MaestroEntidad; id: number }
@@ -561,6 +578,7 @@ export function registerIpc(
       (ctx, input) => compras.documentos(ctx, input as never),
       { schema: documentosFiltroCompraSchema, permission: 'compras.consultar' }
     ),
+    // Sin invocador en la UI actual; se mantiene por compatibilidad del contrato IPC.
     'compras.cabeceras': route(
       (ctx, input) => compras.cabeceras(ctx, (input as { tipo: string }).tipo),
       { schema: z.object({ tipo: z.enum(tiposDocumentoCompra) }), permission: 'compras.consultar' }
@@ -856,11 +874,15 @@ export function registerIpc(
     ),
 
     // Impresoras reales de Windows: solo se consultan y se usa `webContents.print`.
-    // Los datos de cada documento ya fueron validados por sus propios canales.
-    'impresoras.listar': route(() => impresion.listar()),
+    // Cada canal exige permiso: configuración para detectar y cualquier permiso
+    // de impresión de documento para enviar el área ya preparada al motor nativo.
+    'impresoras.listar': route(
+      () => impresion.listar(),
+      { permission: 'configuracion.impresoras.consultar' }
+    ),
     'impresion.ejecutar': route(
       (_ctx, input) => impresion.ejecutar(input as never),
-      { schema: impresionEjecutarSchema }
+      { schema: impresionEjecutarSchema, anyPermission: permisosImpresion }
     ),
 
     // Espacio de trabajo: panel, comprobantes, herramientas y personalización.
@@ -956,6 +978,41 @@ export function registerIpc(
       (ctx, input) => inteligencia.resumen(ctx, input as never),
       { schema: inteligenciaFiltroSchema, permission: 'inteligencia.consultar' }
     ),
+
+    // Tablero horizontal avanzado: una sola llamada, sin permisos nuevos.
+    // Cada sección se resuelve por permiso real; las denegadas se informan
+    // al renderer en lugar de filter datos que el usuario no puede ver.
+    'panel.horizontal.resumen': route((ctx, input) => {
+      const filtro = panelHorizontalFiltroSchema.parse(input ?? {})
+      const datos: PanelHorizontalRespuesta['datos'] = {
+        cobranza: null, inventario: null, agenda: null, presupuesto: null, cuadre: null
+      }
+      const permitidos: PanelHorizontalId[] = []
+      const denegados: PanelHorizontalRespuesta['denegados'] = []
+      const permisos: Record<PanelHorizontalId, string[]> = {
+        cobranza: ['cxc.consultar'],
+        inventario: ['inventario.consultar'],
+        agenda: ['servicios.consultar', 'crm.consultar'],
+        presupuesto: ['presupuestos.consultar'],
+        cuadre: ['cajas.consultar', 'bancos.consultar']
+      }
+      const resolver: Record<PanelHorizontalId, () => void> = {
+        cobranza: () => { datos.cobranza = finanzas.colaCobro(ctx, filtro) },
+        inventario: () => { datos.inventario = inteligencia.rankingAbc(ctx, filtro) },
+        agenda: () => { datos.agenda = modulos2026.agendaOperativa(ctx, filtro) },
+        presupuesto: () => { datos.presupuesto = modulos2026.presupuestoDesviaciones(ctx, filtro) },
+        cuadre: () => { datos.cuadre = finanzas.cuadreOperativo(ctx, filtro) }
+      }
+      for (const id of panelHorizontalIds) {
+        if (permisos[id].some((permiso) => ctx.permisos.includes(permiso))) {
+          resolver[id]()
+          permitidos.push(id)
+        } else {
+          denegados.push({ id, motivo: `Requiere ${permisos[id].join(' o ')}.` })
+        }
+      }
+      return { datos, permitidos, denegados }
+    }, { schema: panelHorizontalFiltroSchema }),
 
     'presupuestos.list': route(
       (ctx, input) => modulos2026.presupuestos(ctx, input as never),
@@ -1128,11 +1185,24 @@ export function registerIpc(
           ctx = buildContext(db, payload.token)
           assertCanProceed(ctx, channel)
           if (r.permission && !ctx.permisos.includes(r.permission)) throw errors.forbidden()
+          if (r.anyPermission && !r.anyPermission.some((p) => ctx.permisos.includes(p))) {
+            throw errors.forbidden()
+          }
         } else {
           ctx = {} as SessionContext
         }
         let input: unknown = payload.input
-        if (r.schema) input = r.schema.parse(input === undefined ? payload : input)
+        if (r.schema) {
+          if (input === undefined) {
+            // Nunca parsear el sobre completo: el token no debe filtrarse al
+            // servicio. Si el esquema admite ausencia, aplica sus defaults; si
+            // no, `{}` conserva el error de validación de los campos exigidos.
+            const sinInput = r.schema.safeParse(undefined)
+            input = sinInput.success ? sinInput.data : r.schema.parse({})
+          } else {
+            input = r.schema.parse(input)
+          }
+        }
         return await r.handle(ctx, input as never)
       } catch (error) {
         throw encodeIpcError(serializeError(error))

@@ -1,7 +1,12 @@
-# Entrega final — ENTERPRISE PRO ERP 0.3.0
+# Entrega final — ENTERPRISE PRO ERP
 
 Fecha: 24 de noviembre de 2026 · Plataforma objetivo: Windows 10/11 x64 ·
 Estado: **12/12 fases del plan + Fase 13 de ampliaciones completadas**.
+
+> **Release publicada actual: `v0.5.16`** (tag `v0.5.16`), verificada con **56 archivos /
+> 386 pruebas** y **31/31 E2E**. Las secciones de fases conservan su contexto histórico
+> original; las novedades de esta release se detallan en
+> [37-novedades-0.5.16.md](37-novedades-0.5.16.md).
 
 ## 1. Resumen ejecutivo
 
@@ -31,12 +36,13 @@ e-CF.**
 
 | Campo | Valor |
 |---|---|
-| Instalador | `EnterpriseProERP-Setup-0.5.13.exe` |
-| Tamaño | 145.543.208 bytes |
-| SHA-256 | `30E25B263B63A89A6B61B2079809A51C26824B494958C1BFD51534A4DA586CE2` |
-| SHA-512 (base64, `release/latest.yml`) | `usyzuG8WIrXsgW5mMNqIuI1aGRRiKGONnuZ9+1VSS7HmyddiQI/0MoAuibGsOumGAFAEQK7xJKcjy7583HM9zg==` |
+| Instalador | `EnterpriseProERP-Setup-0.5.16.exe` |
+| Tamaño | 145.563.768 bytes |
+| SHA-256 | `CCB0EE11CD5DA3B32DB37F5DD227F34473732A49DEE3D4284B671606A927A33F` |
+| SHA-512 (hex) | `252828FE5E648B3D817105AE5663D061850871E48D3998DFC8C51595C6C0940A1814BDAC8338A669098FE90F3D4787B23CDB138AD9219DA4C4372C4631C32B5F` |
+| SHA-512 (base64, `release/latest.yml`) | `JSgo/l5kiz2BcQWuVmPQYYUIceSNOZjfyMUVlcbAlAoYFL2sgzimaQmP6Q89R4eyPNsTitkhnaTENyxGMcMrXw==` |
 | Tipo | NSIS 3 Unicode, x64, per-usuario, carpeta configurable |
-| Producto | ENTERPRISE PRO ERP 0.5.13 |
+| Producto | ENTERPRISE PRO ERP 0.5.16 |
 | AppID | `com.enterprisepro.erp` |
 | Firma digital | **Autofirmada** (SHA-256, sin timestamp: no había acceso al servidor de tiempo) |
 | Huella SHA-1 del certificado | `60B08EC13A4D8B0B5039A1F9698994D55312CD0C` |
@@ -53,18 +59,18 @@ instalador publicado. Código fuente y documentación: `C:\Users\ferre\Downloads
 | Comando / comprobación | Resultado |
 |---|---|
 | `npm.cmd run typecheck` | Sin errores (`tsc --noEmit`). |
-| `npm.cmd test` | **337/337** pruebas, **47 archivos** (integración + unitarios). |
-| `npm.cmd run test:e2e` | **26/26** pruebas reales sobre Electron por CDP (login, IPC PDF, módulos 2026, espacio de trabajo, consola limpia). |
-| `npm.cmd run test:updater` | `electron-updater` detectó `0.5.14` desde un feed efímero con la `0.5.13` instalada y guardó el instalador sin ejecutarlo. |
+| `npm.cmd test` | Release `v0.5.16`: **386/386** pruebas en **56 archivos** (integración + unitarios). |
+| `npm.cmd run test:e2e` | **31/31** pruebas reales sobre Electron por CDP en `v0.5.16`, sin errores de consola inesperados. |
+| `npm.cmd run test:updater` | `electron-updater` detectó y descargó la versión del feed efímero sin ejecutar el instalador. |
 | `npm.cmd run test:instancias` | Dos procesos, misma BD, un solo líder y dos sesiones simultáneas. |
-| `npm.cmd run build` | main 753,32 kB · preload 2,00 kB · renderer 3,18 MB. |
+| `npm.cmd run build` | main 786,84 kB · preload 2,00 kB · renderer 3,29 MB. |
 | `npm.cmd audit` / `npm.cmd audit --omit=dev` | **0 vulnerabilidades** en ambos modos. |
 | `npm.cmd run dist:win` | Instalador NSIS generado con `app.asar`, módulo nativo desempaquetado, icono y desinstalador. |
 | `npm.cmd run release:feed` | `release\latest.yml` generado con SHA-512 del instalador firmado. |
 | Firma | `Get-AuthenticodeSignature`: firmante `CN=Enterprise Pro ERP (autofirmado)`. Estado `UnknownError` por cadena no confiable, esperado en autofirmado. |
-| Módulos | 30 activos, 0 pendientes (`src\renderer\src\app\modules.ts`). |
+| Módulos (verificación original de 0.3.0) | 30 activos, 0 pendientes (`src\renderer\src\app\modules.ts`). |
 | Código sin marcadores | Sin `TODO`/`FIXME` funcionales en `src`. |
-| Arranque real instalado | Electron 45.4.1, BD creada, `integrity_check = ok`, versión 0.3.0, token no expuesto y sin errores propios de consola. |
+| Arranque real instalado | Electron 45.4.1, BD creada, `integrity_check = ok`, token no expuesto y sin errores propios de consola (evidencia histórica de Fase 12 con `0.3.0`). |
 | Desinstalación | Mensaje Sí/No visible; **No conserva** y **Sí elimina** el directorio de datos; comprobado con centinela en la Fase 12. |
 
 Evidencias anteriores de fases:
@@ -99,8 +105,17 @@ como "sesión no iniciada" y se separó explícitamente de los errores reales en
 | Panel ejecutivo y salud del sistema | Completa. |
 | Presupuestos, servicios, activos y CRM (migración 007) | Completa. |
 
-Adaptación República Dominicana: DOP/RD$, RNC/cédula, ITBIS configurable, NCF, libros 606/607
-y arquitectura preparada para e-CF. **No se afirma certificación DGII.**
+La release `v0.5.16` añade primitivos `Skeleton`/`EmptyState`/`LoadingState`/`StatCard`,
+`DataTable` con `loading`, acento único desde `--erp-acento`, escala de fuente real, i18n
+del shell, preferencias fiscales (moneda/decimales/fecha) conectadas, flags vigentes en
+capacidades y `vistasPersonalizables` completas. También incorpora el tablero horizontal
+avanzado con cinco paneles operativos sobre SQLite y permisos por sección resueltos en el
+canal de solo lectura `panel.horizontal.resumen`.
+
+Adaptación República Dominicana: DOP/RD$, RNC/cédula, ITBIS configurable, NCF y libros
+606/607 como borradores locales. **DGI es solo rotulado visual**: no hay emisión,
+exportación ni simulación de e-CF, envío a DGII ni certificación. Los borradores de
+facturación se guardan en `localStorage`; los comprobantes emitidos son inmutables.
 
 ## 5. Seguridad y operación
 
@@ -130,6 +145,7 @@ y arquitectura preparada para e-CF. **No se afirma certificación DGII.**
 
 | Documento | Contenido |
 |---|---|
+| [00-indice.md](00-indice.md) | Índice navegable por tema y avisos de estado. |
 | [README.md](../README.md) | Resumen, fases, ejecución y primeros pasos. |
 | [01-arquitectura.md](01-arquitectura.md) | Capas, IPC, seguridad y decisiones técnicas. |
 | [02-modelo-datos.md](02-modelo-datos.md) | Esquema SQLite, entidades e integridad. |
@@ -140,13 +156,16 @@ y arquitectura preparada para e-CF. **No se afirma certificación DGII.**
 | [07-cierre-limitaciones.md](07-cierre-limitaciones.md) | PDF, E2E, feed, firma, Git y e-CF. |
 | [08-guia-uso-y-publicacion.md](08-guia-uso-y-publicacion.md) | Instalación, uso, compilación, firma y publicación. |
 | [09-novedades-0.3.0.md](09-novedades-0.3.0.md) | Cambios, verificación y artefacto de 0.3.0. |
+| [34-novedades-0.5.15.md](34-novedades-0.5.15.md) | Release anterior `0.5.15`: cambios, verificación y artefacto. |
+| [37-novedades-0.5.16.md](37-novedades-0.5.16.md) | Release publicada actual: cambios, verificación y artefacto. |
 | [adr/](adr/) | Decisiones 0001 a 0004. |
 
 ## 7. Limitaciones conocidas
 
 - **SmartScreen**: la firma es autofirmada; no reduce advertencias sin certificado de CA pública.
-- **Feed de actualizaciones**: el configurado es local (`http://127.0.0.1:8080/`) para pruebas.
-  Para producción debe publicarse en HTTPS y sustituirse `build.publish.url` o `ERP_UPDATE_URL`.
+- **Feed de actualizaciones**: el valor por defecto es la URL HTTPS de GitHub Releases
+  (`URL_FEED_PUBLICADO` en `src/shared/actualizaciones.ts`); el feed local
+  (`http://127.0.0.1:8080/`) se usa solo con `ERP_UPDATE_URL` en pruebas.
 - **Auditoría de dependencias**: 0 vulnerabilidades en modo producción y de desarrollo tras las
   actualizaciones mayores aplicadas en 0.3.0.
 - **e-CF**: solo preparación arquitectónica y borradores 606/607; no hay emisión, certificación

@@ -3,6 +3,10 @@
 Este documento describe el trabajo adicional autorizado tras cerrar las 12 fases. No cambia
 esquemas de BD, flujos financieros ni el bloque genérico del router IPC.
 
+> **Estado actual:** release publicada `v0.5.16` (tag `v0.5.16`), con **56 archivos /
+> 386 pruebas** y **31/31 E2E**. `typecheck` correcto. Las publicaciones futuras requieren
+> autorización explícita.
+
 ## 1. Auditoría de dependencias
 
 - `zod@4.6.7` y `overrides.uuid=11.1.1` corrigen los avisos de producción.
@@ -24,6 +28,8 @@ esquemas de BD, flujos financieros ni el bloque genérico del router IPC.
 - Descarga: `src/renderer/src/lib/pdf.ts` reutiliza `descargarArchivo()` de inventario.
 - Botones «Guardar PDF» en Facturación, Cotizaciones, POS, Compras, CxC, CxP, Bancos, Cajas
   y Reportes. La impresión con `window.print()` sigue disponible.
+- La impresión nativa de `v0.5.15` usa `webContents.print` por IPC seguro. El modo por
+  defecto es `DIALOGO`; `SILENCIOSA` es **opcional** y se configura por documento o estación.
 - Formatos: `CARTA`, `MEDIA`, `TICKET_80` y `TICKET_58`. Los tickets usan puntos numéricos en
   `pageSize` por una limitación de pdfmake 0.3 con cadenas `mm`.
 - Pruebas: `tests/unit/pdf.test.ts` (4 pruebas) y la prueba E2E del botón de Reportes.
@@ -45,8 +51,9 @@ npm.cmd run test:e2e
 ## 4. Actualización automática
 
 - Dependencia: `electron-updater@6.8.11`, proveedor `generic`.
-- Fuente: variable `ERP_UPDATE_URL` (prioridad) o `build.publish.url` de `package.json`.
-  Valor por defecto para pruebas: `http://127.0.0.1:8080/`.
+- Fuente: variable `ERP_UPDATE_URL` (prioridad) o `URL_FEED_PUBLICADO` en
+  `src/shared/actualizaciones.ts` (equivalente a `build.publish.url`). El valor por defecto
+  es la URL HTTPS de GitHub Releases; `http://127.0.0.1:8080/` solo se usa en pruebas.
 - Servicio: `src/main/services/updater.service.ts`. `autoDownload = false`;
   `autoInstallOnAppQuit = false`; `forceDevUpdateConfig = true` permite probar sin empaquetar.
   El instalador se copia a `Descargas` y la instalación es manual; vea
@@ -113,14 +120,18 @@ firmado.
 
 ## 6. Git
 
-- El proyecto no tenía repositorio. Se inicializó Git y se dejó **un único commit** con todo el
-  código y la documentación. `node_modules`, `out`, `dist`, `release`, `build/certs` y
-  `test-results` están en `.gitignore`.
+- El proyecto no tenía repositorio. Se inicializó Git con **un único commit** con todo el
+  código y la documentación; las releases posteriores crearon sus propios commits (la
+  `v0.5.16` corresponde al tag `v0.5.16` y la `v0.5.15` a `2b68bc4`). `node_modules`, `out`,
+  `dist`, `release`, `build/certs` y `test-results` están en `.gitignore`.
 - Para consultar el hash: `git log -1 --format=%H`.
 
-## 7. e-CF (solo preparación)
+## 7. DGI solo visual / e-CF no emitido
 
 - Se conservan DOP/RD$, RNC/cédula, ITBIS configurable, NCF y libros 606/607 como borradores
   locales derivados de documentos reales.
-- No hay emisión de e-CF, firma fiscal, envío a DGII ni certificación. Cualquier avance en esa
-  área requiere autorización y análisis fiscal previo.
+- El enlace DGI es **solo rotulado visual**: parámetros de presentación y un estado mostrado
+  en pantalla. No hay credenciales, certificados, endpoints, emisión, exportación ni
+  simulación de e-CF, firma fiscal, envío a DGII ni certificación.
+- Los borradores de facturación viven en `localStorage`; los comprobantes emitidos son
+  inmutables. Cualquier avance en materia fiscal requiere autorización y análisis previo.

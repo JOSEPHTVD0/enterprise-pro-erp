@@ -29,18 +29,33 @@ export interface ResultadoImpresion {
  * y se invoca `webContents.print` con el nombre definido por el SO.
  */
 export function createImpresionService(obtenerWebContents: () => WebContents | null) {
+  /** La consulta de impresoras es best-effort: nunca debe tumbar la configuración. */
+  function webContentsDisponible(): WebContents | null {
+    try {
+      const wc = obtenerWebContents()
+      return wc && !wc.isDestroyed() ? wc : null
+    } catch {
+      return null
+    }
+  }
+
   function ventana(): WebContents {
-    const wc = obtenerWebContents()
-    if (!wc || wc.isDestroyed()) {
+    const wc = webContentsDisponible()
+    if (!wc) {
       throw errors.validation('La ventana principal no está disponible para imprimir.')
     }
     return wc
   }
 
   async function listar(): Promise<ImpresoraInfo[]> {
-    const wc = obtenerWebContents()
-    if (!wc || wc.isDestroyed()) return []
-    const impresoras = await wc.getPrintersAsync()
+    const wc = webContentsDisponible()
+    if (!wc || typeof wc.getPrintersAsync !== 'function') return []
+    let impresoras: Awaited<ReturnType<WebContents['getPrintersAsync']>>
+    try {
+      impresoras = await wc.getPrintersAsync()
+    } catch {
+      return []
+    }
     return impresoras.map((impresora, indice) => impresoraInfoSchema.parse({
       name: impresora.name,
       displayName: impresora.displayName || impresora.name,

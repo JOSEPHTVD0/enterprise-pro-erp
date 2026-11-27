@@ -6,27 +6,118 @@
   --font-sans: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
 }
 
+/* El acento elegido por el usuario redefine la rampa indigo que usa la interfaz.
+   Así el color configurado afecta a botones, enlaces, gráficas y badges sin
+   duplicar estilos en cada componente. */
+@theme inline {
+  --color-indigo-50: color-mix(in oklab, var(--erp-acento) 6%, white);
+  --color-indigo-100: color-mix(in oklab, var(--erp-acento) 12%, white);
+  --color-indigo-200: color-mix(in oklab, var(--erp-acento) 20%, white);
+  --color-indigo-300: color-mix(in oklab, var(--erp-acento) 35%, white);
+  --color-indigo-400: color-mix(in oklab, var(--erp-acento) 65%, white);
+  --color-indigo-500: var(--erp-acento);
+  --color-indigo-600: var(--erp-acento);
+  --color-indigo-700: color-mix(in oklab, var(--erp-acento) 85%, black);
+  --color-indigo-800: color-mix(in oklab, var(--erp-acento) 70%, black);
+  --color-indigo-900: color-mix(in oklab, var(--erp-acento) 55%, black);
+  --color-indigo-950: color-mix(in oklab, var(--erp-acento) 40%, black);
+  --color-erp-accent: var(--erp-acento);
+}
+
 /* Variables administradas desde el centro de control (valores validados por Zod). */
 :root {
+  color-scheme: light;
   --erp-escala: 1;
   --erp-radio: 10px;
   --erp-acento: #4f46e5;
   --erp-font: var(--font-sans);
+  --erp-tamano-fuente: 14px;
+  --erp-acento-soft: color-mix(in oklab, var(--erp-acento) 14%, transparent);
+  --erp-acento-ring: color-mix(in oklab, var(--erp-acento) 55%, transparent);
 }
+
+.dark { color-scheme: dark; }
+
+html { font-size: calc(var(--erp-tamano-fuente) * var(--erp-escala)); }
 
 .erp-card { border-radius: var(--erp-radio); }
 .erp-acento { color: var(--erp-acento); }
 .erp-ecf { color-scheme: dark; }
-body { font-family: var(--erp-font); font-size: calc(14px * var(--erp-escala)); }
+body { font-family: var(--erp-font); font-size: 1rem; }
+
+.erp-focus:focus-visible {
+  outline: 2px solid var(--erp-acento-ring);
+  outline-offset: 2px;
+}
+.erp-interactive {
+  transition: color 150ms ease-out, background-color 150ms ease-out,
+    border-color 150ms ease-out, box-shadow 150ms ease-out, transform 150ms ease-out;
+}
+.erp-interactive:active { transform: scale(0.99); }
+.erp-tabular { font-variant-numeric: tabular-nums; }
+
+@keyframes erp-pop {
+  from { opacity: 0; transform: scale(0.98) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-erp-pop { animation: erp-pop 180ms ease-out both; }
+
+@keyframes erp-shimmer {
+  to { background-position: 200% 0; }
+}
+.erp-skeleton {
+  border-radius: var(--erp-radio);
+  background-color: rgb(148 163 184 / 0.22);
+  background-image: linear-gradient(90deg, transparent, rgb(148 163 184 / 0.22), transparent);
+  background-size: 200% 100%;
+  animation: erp-shimmer 1.4s linear infinite;
+}
+.erp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: rgb(100 116 139);
+}
+.dark .erp-empty { color: rgb(148 163 184); }
 
 .erp-reducir-movimiento *,
 .erp-reducir-movimiento *::before,
 .erp-reducir-movimiento *::after {
-  animation: none !important;
-  transition: none !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
+/* El spinner es la única señal de carga cuando se desactivan las animaciones. */
+.erp-reducir-movimiento .animate-spin {
+  animation: spin 1s linear infinite !important;
+  animation-duration: 1s !important;
+  animation-iteration-count: infinite !important;
+}
+.erp-reducir-movimiento .erp-skeleton { background-image: none; animation: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite !important;
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
+  }
 }
 
-.erp-alto-contraste .erp-card {
+.erp-alto-contraste .erp-card,
+.erp-alto-contraste button,
+.erp-alto-contraste input,
+.erp-alto-contraste select,
+.erp-alto-contraste [role='dialog'] {
   border-width: 2px;
   border-color: var(--erp-acento);
 }
@@ -44,7 +135,6 @@ body,
 
 body {
   @apply bg-slate-100 text-slate-800 antialiased dark:bg-slate-950 dark:text-slate-200;
-  font-family: var(--font-sans);
   user-select: none;
 }
 

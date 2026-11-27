@@ -7,6 +7,9 @@ import { Download, RefreshCw, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { SkeletonChart } from '@/components/ui/Skeleton'
+import { StatCard } from '@/components/ui/StatCard'
 import { Field, TextInput, inputClass } from '@/components/ui/Field'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { money, number, usePreferenciasInterfaz } from '@/lib/format'
@@ -63,7 +66,7 @@ interface Datos {
   alertas: { nivel: string; texto: string }[]
 }
 
-const colores = ['#4f46e5', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6']
+const colores = ['var(--erp-acento)', '#10b981', '#f59e0b', '#06b6d4', '#ec4899', '#8b5cf6']
 
 function descargarCsv(datos: Datos): void {
   const filas = [
@@ -176,7 +179,11 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
     { id: 'kpi-pagos' as const, label: 'Pagos', valor: money(kpis.pagosCent), tono: 'neutral' as const },
     { id: 'kpi-cxc' as const, label: 'CxC saldo', valor: money(kpis.cxcSaldoCent), tono: 'warning' as const },
     { id: 'kpi-cxp' as const, label: 'CxP saldo', valor: money(kpis.cxpSaldoCent), tono: 'warning' as const }
-  ].filter((t) => (t.id !== 'kpi-utilidad' || preferencias.verUtilidad) && visible(t.id))
+  ].filter((t) =>
+    (t.id !== 'kpi-utilidad' || (preferencias.verUtilidad && preferencias.verCostos)) &&
+    (t.id !== 'kpi-margen' || preferencias.verCostos) &&
+    visible(t.id)
+  )
     .sort((a, b) => orden(a.id) - orden(b.id))) : []
 
   return (
@@ -233,17 +240,36 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
           { id: 'kpi-pagos' as const, label: 'Pagos' },
           { id: 'kpi-cxc' as const, label: 'CxC' },
           { id: 'kpi-cxp' as const, label: 'CxP' }
-        ] as const).filter((t) => (t.id !== 'kpi-utilidad' || preferencias.verUtilidad) && visible(t.id))
+        ] as const).filter((t) =>
+          (t.id !== 'kpi-utilidad' || (preferencias.verUtilidad && preferencias.verCostos)) &&
+          (t.id !== 'kpi-margen' || preferencias.verCostos) &&
+          visible(t.id)
+        )
           .sort((a, b) => orden(a.id) - orden(b.id)).map((t) => ({
           ...t, valor: '—', tono: 'neutral' as const
         }))).map((t) => (
-          <div key={t.label} className={`erp-card rounded-xl border border-slate-200 bg-white ${compacta ? 'p-2.5' : 'p-3.5'} dark:border-slate-800 dark:bg-slate-900`}>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{t.label}</p>
-            <p className="mt-1 text-lg font-semibold text-slate-800 dark:text-slate-100">{t.valor}</p>
-            <div className="mt-1"><Badge tone={t.tono}>Real</Badge></div>
-          </div>
+          <StatCard
+            key={t.label}
+            label={t.label}
+            value={t.valor}
+            tone={t.tono}
+            dense={compacta}
+            loading={cargando && !datos}
+            hint={<Badge tone={t.tono}>Real</Badge>}
+          />
         ))}
       </div>
+
+      {cargando && !datos && (
+        <div className="mb-4 grid gap-4 sm:grid-cols-2">
+          <Card title="Tendencia" subtitle="Preparando series reales…">
+            <SkeletonChart className="h-[260px]" />
+          </Card>
+          <Card title="Formas de pago" subtitle="Preparando distribución real…">
+            <SkeletonChart className="h-[260px]" />
+          </Card>
+        </div>
+      )}
 
       {datos && (
         <>
@@ -263,13 +289,16 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                     <YAxis tick={{ fontSize: 10 }} width={80} />
                     <Tooltip formatter={(v) => money(Number(v))} />
                     <Legend />
-                    <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.16} />
+                    <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="var(--erp-acento)" fill="var(--erp-acento)" fillOpacity={0.16} />
                   </AreaChart>
                 </ResponsiveContainer>
                 ) : (
-                  <p className="flex h-full items-center justify-center text-sm text-slate-400">
-                    Sin datos de tendencia para el período seleccionado.
-                  </p>
+                  <EmptyState
+                    className="h-full"
+                    tone="empty"
+                    title="Sin datos de tendencia"
+                    description="No hay ventas en el período seleccionado."
+                  />
                 )}
               </div>
             </Card>
@@ -289,7 +318,7 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                     </PieChart>
                   </ResponsiveContainer>
                 ) : (
-                  <p className="flex h-full items-center justify-center text-sm text-slate-400">Sin pagos registrados.</p>
+                  <EmptyState className="h-full" tone="empty" title="Sin pagos registrados" />
                 )}
               </div>
             </Card>
@@ -313,7 +342,7 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
             </Card>
             </div>}
 
-            {visible('alertas') && <div className={ancho('alertas')} style={{ order: orden('alertas') }}>
+            {visible('alertas') && preferencias.verSalud && <div className={ancho('alertas')} style={{ order: orden('alertas') }}>
             <Card
               className={compacta ? 'p-2' : ''}
               title="Alertas y módulos 2026"
@@ -343,9 +372,6 @@ export function DashboardEjecutivoPage(): React.JSX.Element {
                 <p className="flex items-center gap-1.5 pt-2 text-xs text-slate-400">
                   <TrendingUp size={13} /> Clientes activos: {number(kpis?.clientesActivos ?? 0)} ·
                   Productos: {number(kpis?.productosActivos ?? 0)}
-                </p>
-                <p className="pt-1 text-xs text-slate-400">
-                  Aviso de presupuesto al {preferenciasInterfaz.alertas.presupuestoPct}%: no disponible en esta vista.
                 </p>
               </div>
             </Card>

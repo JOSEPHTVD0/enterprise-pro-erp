@@ -13,6 +13,8 @@ import { useSessionStore } from '@/app/session'
 import { Toaster, toast } from '@/components/ui/Toast'
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { Card } from '@/components/ui/Card'
+import { EmptyState } from '@/components/ui/EmptyState'
+import { LoadingState } from '@/components/ui/LoadingState'
 import { ModulePlaceholder } from '@/components/ui/ModulePlaceholder'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { DashboardEjecutivoPage } from '@/features/dashboard/DashboardEjecutivoPage'
@@ -133,7 +135,17 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'espacio-trabajo') return <EspacioTrabajoPage />
   const module = findModule(activeView)
   if (module) return <ModulePlaceholder module={module} />
-  return <DashboardPage />
+  return (
+    <EmptyState
+      tone="error"
+      title="Vista no encontrada"
+      description={`El identificador «${activeView}» no corresponde a un módulo disponible.`}
+      action={{
+        label: 'Volver al inicio',
+        onClick: () => useAppStore.getState().setActiveView('dashboard')
+      }}
+    />
+  )
 }
 
 const NOOP = (): void => {}
@@ -201,9 +213,7 @@ export default function App(): React.JSX.Element {
 
   if (!hydrated || status === 'loading') {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-slate-400">Cargando ENTERPRISE PRO ERP…</p>
-      </div>
+      <LoadingState label="Cargando ENTERPRISE PRO ERP…" />
     )
   }
 

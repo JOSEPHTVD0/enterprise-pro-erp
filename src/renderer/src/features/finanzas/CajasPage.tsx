@@ -299,7 +299,8 @@ export function CajasPage(): React.JSX.Element {
               data={sesiones}
               rowKey={(f) => num(f.id)}
               searchPlaceholder="Buscar por número, caja o estado…"
-              emptyText={cargando ? 'Cargando…' : 'No hay sesiones con estos filtros.'}
+              loading={cargando}
+              emptyText='No hay sesiones con estos filtros.'
               actions={(fila) => {
                 const id = num(fila.id)
                 return (

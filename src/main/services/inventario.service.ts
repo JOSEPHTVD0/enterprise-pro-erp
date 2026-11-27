@@ -43,7 +43,7 @@ const TIPO_DOC_AJUSTE: Record<string, string> = {
 export function createInventarioService(db: Db) {
   function audit(
     ctx: SessionContext, operacion: string, entidad: string,
-    id: number, antes: unknown, despues: unknown
+    id: number | null, antes: unknown, despues: unknown
   ): void {
     writeAudit(db, {
       empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
@@ -515,14 +515,16 @@ export function createInventarioService(db: Db) {
         if (!ctx.permisos.includes('inventario.costo')) {
           for (const fila of filas) delete fila.valorCent
         }
-        return {
-          filename: `existencias_${fecha}.xlsx`,
-          base64: await workbook(filas, [
-            { header: 'Código', key: 'codigo' }, { header: 'Producto', key: 'descripcion' },
-            { header: 'Almacén', key: 'almacenNombre' }, { header: 'Cantidad', key: 'cantidad' },
-            { header: 'Mínimo', key: 'existenciaMin' }, { header: 'Valor (centavos)', key: 'valorCent' }
-          ])
-        }
+        const filename = `existencias_${fecha}.xlsx`
+        const base64 = await workbook(filas, [
+          { header: 'Código', key: 'codigo' }, { header: 'Producto', key: 'descripcion' },
+          { header: 'Almacén', key: 'almacenNombre' }, { header: 'Cantidad', key: 'cantidad' },
+          { header: 'Mínimo', key: 'existenciaMin' }, { header: 'Valor (centavos)', key: 'valorCent' }
+        ])
+        audit(ctx, 'EXPORTAR', 'existencias', null, filtro ?? {}, {
+          registros: filas.length, filename
+        })
+        return { filename, base64 }
       }
       const filas = repo.listarKardex(db, ctx.empresaId, (filtro ?? { limite: 1000 }) as KardexFiltroInput)
       const columnas = [
@@ -541,7 +543,12 @@ export function createInventarioService(db: Db) {
         { header: 'Saldo cantidad', key: 'saldoCantidad' },
         { header: 'Documento', key: 'docTipo' }, { header: 'Motivo', key: 'motivo' }
       )
-      return { filename: `kardex_${fecha}.xlsx`, base64: await workbook(filas, columnas) }
+      const filename = `kardex_${fecha}.xlsx`
+      const base64 = await workbook(filas, columnas)
+      audit(ctx, 'EXPORTAR', 'kardex', null, filtro ?? {}, {
+        registros: filas.length, filename
+      })
+      return { filename, base64 }
     }
   }
 }

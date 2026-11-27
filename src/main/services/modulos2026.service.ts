@@ -9,6 +9,10 @@ import type {
   ServicioCatalogo, OrdenServicioCrear, ActivoCrear, ActivoDepreciar,
   LeadCrear, LeadEstado, SeguimientoCrear, LeadConvertir
 } from './tipos-modulos2026'
+import {
+  panelHorizontalFiltroSchema,
+  type AgendaDatos, type PresupuestoDatos
+} from '@shared/schemas/panel-horizontal'
 
 type Fila = Record<string, unknown>
 const n = (f: Fila | undefined, k: string): number => Number(f?.[k] ?? 0)
@@ -457,10 +461,175 @@ export function createModulos2026Service(
     })()
   }
 
+  /** Desviación presupuestaria: cada línea compara ejecución real contra su presupuesto. */
+  function presupuestoDesviaciones(
+    ctx: SessionContext,
+    entrada?: Parameters<typeof panelHorizontalFiltroSchema.parse>[0]
+  ): PresupuestoDatos {
+    exigir(ctx, 'presupuestos.consultar')
+    const filtro = panelHorizontalFiltroSchema.parse(entrada ?? {})
+    const umbralPct = Number(ajustes.leerGrupo(ctx.empresaId, 'alertas').presupuestoPct)
+    const where = ['l.empresa_id = ?', "p.estado <> 'ANULADO'"]
+    const args: unknown[] = [ctx.empresaId]
+    if (filtro.texto) {
+      where.push('(p.numero LIKE ? OR l.descripcion LIKE ? OR l.categoria LIKE ?)')
+      args.push(`%${filtro.texto}%`, `%${filtro.texto}%`, `%${filtro.texto}%`)
+    }
+    if (filtro.desde) { where.push('p.periodo >= ?'); args.push(filtro.desde) }
+    if (filtro.hasta) { where.push('p.periodo <= ?'); args.push(filtro.hasta) }
+    args.push(filtro.limite)
+    const filas: PresupuestoDatos['filas'] = (db.prepare(`
+      SELECT l.presupuesto_id AS presupuestoId, p.numero, l.categoria, l.descripcion,
+        l.monto_cent AS montoCent, l.ejecutado_cent AS ejecutadoCent, p.estado
+      FROM presupuesto_lineas l
+      JOIN presupuestos p ON p.id = l.presupuesto_id AND p.empresa_id = l.empresa_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY p.periodo DESC, p.numero ASC, l.id ASC LIMIT ?
+    `).all(...args) as Fila[]).map((fila) => {
+      const montoCent = n(fila, 'montoCent')
+      const ejecutadoCent = n(fila, 'ejecutadoCent')
+      const pctEjecutado = montoCent > 0 ? Math.round((ejecutadoCent / montoCent) * 100) : 0
+      return {
+        presupuestoId: n(fila, 'presupuestoId'),
+        numero: txt(fila, 'numero'),
+        categoria: txt(fila, 'categoria'),
+        descripcion: txt(fila, 'descripcion'),
+        montoCent,
+        ejecutadoCent,
+        disponibleCent: Math.max(0, montoCent - ejecutadoCent),
+        pctEjecutado,
+        nivel: pctEjecutado >= 100 ? 'CRITICO' : pctEjecutado >= umbralPct ? 'ALERTA' : 'NORMAL',
+        estado: txt(fila, 'estado')
+      }
+    })
+    const visibles = filtro.soloUrgentes
+      ? filas.filter((fila) => fila.nivel !== 'NORMAL')
+      : filas
+    visibles.sort((a, b) => b.pctEjecutado - a.pctEjecutado)
+    return {
+      filtro,
+      umbralPct,
+      resumen: {
+        lineas: visibles.length,
+        enAlerta: visibles.filter((fila) => fila.nivel !== 'NORMAL').length,
+        disponibleCent: visibles.reduce((suma, fila) => suma + fila.disponibleCent, 0)
+      },
+      filas: visibles.slice(0, filtro.limite)
+    }
+  }
+
+  /** Agenda operativa de servicios y CRM; cada sección se filtra por permiso real. */
+  function agendaOperativa(
+    ctx: SessionContext,
+    entrada?: Parameters<typeof panelHorizontalFiltroSchema.parse>[0]
+  ): AgendaDatos {
+    const verServicios = ctx.permisos.includes('servicios.consultar')
+    const verCrm = ctx.permisos.includes('crm.consultar')
+    if (!verServicios && !verCrm) throw errors.forbidden()
+    const filtro = panelHorizontalFiltroSchema.parse(entrada ?? {})
+    const hoy = new Date().toISOString().slice(0, 10)
+    const ordenes: AgendaDatos['ordenes'] = []
+    const leads: AgendaDatos['leads'] = []
+    const cargaTecnicoMap = new Map<string, { ordenes: number; minutos: number }>()
+
+    if (verServicios) {
+      const where = ["o.estado NOT IN ('ANULADA','FINALIZADA','ENTREGADA')"]
+      const args: unknown[] = [ctx.empresaId]
+      if (filtro.desde) { where.push('o.fecha_compromiso >= ?'); args.push(filtro.desde) }
+      if (filtro.hasta) { where.push('o.fecha_compromiso <= ?'); args.push(filtro.hasta) }
+      if (filtro.texto) { where.push('(o.numero LIKE ? OR c.nombre LIKE ?)'); args.push(`%${filtro.texto}%`, `%${filtro.texto}%`) }
+      args.push(filtro.limite)
+      const filas = db.prepare(`
+        SELECT o.id, o.numero, o.fecha_compromiso AS fechaCompromiso, o.estado, o.prioridad,
+          c.nombre AS cliente, u.nombre AS tecnico,
+          COALESCE(SUM(s.duracion_min * ol.cantidad), 0) AS minutos
+        FROM ordenes_servicio o
+        LEFT JOIN clientes c ON c.id = o.cliente_id AND c.empresa_id = o.empresa_id
+        LEFT JOIN usuarios u ON u.id = o.tecnico_id
+        LEFT JOIN orden_servicio_lineas ol ON ol.orden_id = o.id AND ol.empresa_id = o.empresa_id
+        LEFT JOIN servicios_catalogo s ON s.id = ol.servicio_id AND s.empresa_id = o.empresa_id
+        WHERE o.empresa_id = ? AND ${where.join(' AND ')}
+        GROUP BY o.id ORDER BY o.fecha_compromiso ASC LIMIT ?
+      `).all(...args) as Fila[]
+      for (const fila of filas) {
+        const fechaCompromiso = txt(fila, 'fechaCompromiso')
+        const vencida = Boolean(fechaCompromiso && fechaCompromiso < hoy)
+        if (filtro.soloUrgentes && !vencida && fechaCompromiso !== hoy) continue
+        const tecnico = txt(fila, 'tecnico') || 'SIN_ASIGNAR'
+        const minutos = n(fila, 'minutos')
+        const carga = cargaTecnicoMap.get(tecnico) ?? { ordenes: 0, minutos: 0 }
+        carga.ordenes += 1
+        carga.minutos += minutos
+        cargaTecnicoMap.set(tecnico, carga)
+        ordenes.push({
+          id: n(fila, 'id'),
+          numero: txt(fila, 'numero'),
+          cliente: txt(fila, 'cliente'),
+          fechaCompromiso,
+          estado: txt(fila, 'estado'),
+          prioridad: txt(fila, 'prioridad'),
+          tecnico,
+          minutos,
+          vencida
+        })
+      }
+    }
+
+    if (verCrm) {
+      const where = ["l.estado NOT IN ('GANADO','PERDIDO')"]
+      const args: unknown[] = [ctx.empresaId]
+      if (filtro.texto) { where.push('(l.numero LIKE ? OR l.nombre LIKE ?)'); args.push(`%${filtro.texto}%`, `%${filtro.texto}%`) }
+      args.push(filtro.limite)
+      const filas = db.prepare(`
+        SELECT l.id, l.numero, l.nombre, l.empresa, l.estado, l.probabilidad,
+          l.valor_estimado_cent AS valorEstimadoCent, l.proximo_seguimiento AS proximoSeguimiento,
+          (SELECT MAX(s.fecha) FROM crm_seguimientos s
+            WHERE s.lead_id = l.id AND s.empresa_id = l.empresa_id) AS ultimoContacto
+        FROM crm_leads l
+        WHERE l.empresa_id = ? AND ${where.join(' AND ')}
+        ORDER BY l.proximo_seguimiento ASC, l.id DESC LIMIT ?
+      `).all(...args) as Fila[]
+      for (const fila of filas) {
+        const proximoSeguimiento = txt(fila, 'proximoSeguimiento')
+        const vencido = Boolean(proximoSeguimiento && proximoSeguimiento.slice(0, 10) < hoy)
+        if (filtro.soloUrgentes && !vencido) continue
+        leads.push({
+          id: n(fila, 'id'),
+          nombre: `${txt(fila, 'numero')} · ${txt(fila, 'nombre')}`,
+          empresa: txt(fila, 'empresa'),
+          estado: txt(fila, 'estado'),
+          probabilidad: n(fila, 'probabilidad'),
+          valorEstimadoCent: n(fila, 'valorEstimadoCent'),
+          proximoSeguimiento,
+          ultimoContacto: txt(fila, 'ultimoContacto'),
+          vencido
+        })
+      }
+    }
+
+    return {
+      filtro,
+      secciones: { servicios: verServicios, crm: verCrm },
+      resumen: {
+        ordenesVencidas: ordenes.filter((fila) => fila.vencida).length,
+        ordenesHoy: ordenes.filter((fila) => fila.fechaCompromiso === hoy).length,
+        leadsVencidos: leads.filter((fila) => fila.vencido).length,
+        minutos: ordenes.reduce((suma, fila) => suma + fila.minutos, 0)
+      },
+      ordenes: ordenes.slice(0, filtro.limite),
+      leads: leads.slice(0, filtro.limite),
+      cargaTecnico: [...cargaTecnicoMap.entries()]
+        .map(([tecnico, carga]) => ({ tecnico, ...carga }))
+        .sort((a, b) => b.minutos - a.minutos)
+        .slice(0, filtro.limite)
+    }
+  }
+
   return {
     presupuestos, presupuestoDetalle, presupuestoCrear, cambiarPresupuestoEstado, presupuestoEjecutar,
+    presupuestoDesviaciones,
     serviciosCatalogo, servicioCatalogoCrear, ordenesServicio, ordenServicioDetalle,
-    ordenServicioCrear, ordenServicioEstado,
+    ordenServicioCrear, ordenServicioEstado, agendaOperativa,
     activos, activoDetalle, activoCrear, activoDepreciar, activoBaja,
     leads, leadCrear, leadEstado, seguimientoCrear, leadConvertir
   }

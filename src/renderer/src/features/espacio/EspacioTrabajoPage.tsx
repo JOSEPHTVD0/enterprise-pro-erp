@@ -20,6 +20,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { TabPanel, Tabs } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { descargarArchivo } from '@/features/inventario/descargar'
+import { PanelHorizontalAvanzado } from '@/features/paneles/PanelHorizontalAvanzado'
 import type { ConfigData } from '@/features/configuracion/types'
 import { confirmarAccion, money, number } from '@/lib/format'
 
@@ -239,7 +240,7 @@ function PanelTab(): ReactNode {
                   <YAxis tick={{ fontSize: 10 }} width={80} />
                   <Tooltip formatter={(valor) => money(Number(valor))} />
                   <Legend />
-                  <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.16} />
+                  <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="var(--erp-acento)" fill="var(--erp-acento)" fillOpacity={0.16} />
                   <Area type="monotone" dataKey="comprasCent" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.14} />
                 </AreaChart>
               </ResponsiveContainer>
@@ -257,7 +258,7 @@ function PanelTab(): ReactNode {
                       <Tooltip formatter={(valor) => money(Number(valor))} />
                       <Bar dataKey="totalCent" name="Ventas">
                         {datos.detalle.topProductos.map((_, i) => (
-                          <Cell key={i} fill="#4f46e5" />
+                          <Cell key={i} fill="var(--erp-acento)" />
                         ))}
                       </Bar>
                     </BarChart>
@@ -951,7 +952,8 @@ export function EspacioTrabajoPage(): ReactNode {
           { id: 'comprobantes', label: 'Comprobantes' },
           { id: 'parametros', label: 'Parámetros' },
           { id: 'herramientas', label: 'Herramientas' },
-          { id: 'personalizacion', label: 'Personalización' }
+          { id: 'personalizacion', label: 'Personalización' },
+          { id: 'horizontal', label: 'Panel horizontal' }
         ]}
       />
       {tab === 'panel' && <PanelTab />}
@@ -959,6 +961,7 @@ export function EspacioTrabajoPage(): ReactNode {
       {tab === 'parametros' && <ParametrosTab />}
       {tab === 'herramientas' && <HerramientasTab />}
       {tab === 'personalizacion' && <PersonalizacionTab />}
+      {tab === 'horizontal' && <PanelHorizontalAvanzado />}
     </div>
   )
 }

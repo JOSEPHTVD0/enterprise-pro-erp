@@ -1,4 +1,8 @@
-# Guía de uso, compilación y publicación — ENTERPRISE PRO ERP 0.3.0
+# Guía de uso, compilación y publicación — ENTERPRISE PRO ERP
+
+Guía original de `0.3.0`; **release publicada actual: `v0.5.16`** (tag `v0.5.16`,
+**56 archivos / 386 pruebas**, **31/31 E2E**). Las publicaciones futuras requieren
+autorización explícita.
 
 Esta guía complementa [docs/06-entrega-final.md](06-entrega-final.md) y
 [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md). Está escrita para el usuario final
@@ -15,14 +19,14 @@ que instala el ERP y para el mantenedor que quiere reconstruirlo o publicarlo en
 - Espacio libre aproximado: 400 MB durante la instalación.
 
 ### Obtener e instalar
-1. Descargar `EnterpriseProERP-Setup-0.3.0.exe` desde la sección *Releases* de este repositorio.
+1. Descargar `EnterpriseProERP-Setup-0.5.16.exe` desde la sección *Releases* de este repositorio.
 2. Comprobar el hash (opcional pero recomendado):
 
    ```powershell
-   Get-FileHash .\EnterpriseProERP-Setup-0.3.0.exe -Algorithm SHA256
+   Get-FileHash .\EnterpriseProERP-Setup-0.5.16.exe -Algorithm SHA256
    ```
 
-   Valor esperado: `D508A61277EC5971A04A5AD0D9E970D07160F09CE4851A99E3FFBB18D3728C75`.
+   Valor esperado: `CCB0EE11CD5DA3B32DB37F5DD227F34473732A49DEE3D4284B671606A927A33F`.
 
 3. Ejecutar el instalador. Es NSIS **por usuario**: no pide permisos de administrador.
    Se puede cambiar la carpeta de destino en el asistente.
@@ -32,7 +36,7 @@ que instala el ERP y para el mantenedor que quiere reconstruirlo o publicarlo en
 
 ### Instalación silenciosa (despliegue)
 ```powershell
-.\EnterpriseProERP-Setup-0.3.0.exe /S /ND /NM /D=C:\ERP\EnterprisePro
+.\EnterpriseProERP-Setup-0.5.16.exe /S /ND /NM /D=C:\ERP\EnterprisePro
 ```
 - `/S`: sin interfaz.
 - `/ND`: sin acceso directo de escritorio.
@@ -79,7 +83,9 @@ Los datos **no** están dentro de la carpeta del programa: reinstalar o actualiz
 | **Respaldos** | Copia manual, programador y restauración con doble confirmación. |
 
 ### Impresión y PDF
-- **Imprimir** usa el diálogo nativo de Electron (`window.print()`) y CSS `@media print`.
+- **Imprimir** usa el servicio nativo de Electron por IPC seguro desde `v0.5.15`, con
+  CSS `@media print` para las áreas de impresión. El modo por defecto es `DIALOGO`;
+  la impresión `SILENCIOSA` es opcional y se configura por documento o estación.
 - **Guardar PDF** genera un archivo real con pdfmake en el proceso principal. Está disponible en
   Facturación, Cotizaciones, POS, Compras, CxC, CxP, Bancos, Cajas y Reportes.
 - Formatos: carta, media página, ticket 80 mm y ticket 58 mm.
@@ -127,8 +133,8 @@ npm.cmd run release:serve
 | Script | Qué hace |
 |---|---|
 | `npm.cmd run typecheck` | TypeScript estricto (`tsc --noEmit`). |
-| `npm.cmd test` | 314 pruebas unitarias y de integración sobre SQLite real. |
-| `npm.cmd run test:e2e` | 25 pruebas E2E con Playwright conectado por CDP a Electron. |
+| `npm.cmd test` | Release `v0.5.16`: 386 pruebas en 56 archivos; release anterior `v0.5.15`: 353 en 51 archivos. |
+| `npm.cmd run test:e2e` | 31/31 pruebas E2E con Playwright conectado por CDP a Electron (31/31 también tras rebuild en el árbol actual). |
 | `npm.cmd run test:updater` | Levanta un feed efímero, verifica el parche siguiente y que el instalador se guarde sin ejecutarse. |
 | `npm.cmd run test:instancias` | Abre dos procesos con la misma BD y comprueba dos sesiones simultáneas. |
 | `npm.cmd run dist:win` | Compila y genera el NSIS x64. Usa `scripts/dist-win.mjs` + `compat-execfile.cjs`. |
@@ -156,7 +162,9 @@ No modifica dependencias ni cambia el instalador.
 
 ## 5. Publicación en GitHub
 
-El repositorio se publica con un único commit inicial. Si vas a republicar desde cero:
+El repositorio se inicializó con un único commit; las releases posteriores añadieron sus
+propios commits. **No ejecute ningún paso de esta sección sin autorización explícita.** La
+release `v0.5.16` ya está publicada; el bloque siguiente documenta el procedimiento usado.
 
 ```powershell
 # 1. Verificar que no queden artefactos generados
@@ -182,12 +190,12 @@ gh repo create enterprise-pro-erp --public --source=. --remote=origin --push
 Para publicar el instalador como *Release* (el binario no se versiona en Git):
 
 ```powershell
-gh release create v0.5.13 `
-  dist\EnterpriseProERP-Setup-0.5.13.exe `
-  dist\EnterpriseProERP-Setup-0.5.13.exe.blockmap `
+gh release create v0.5.16 `
+  dist\EnterpriseProERP-Setup-0.5.16.exe `
+  dist\EnterpriseProERP-Setup-0.5.16.exe.blockmap `
   release\latest.yml `
-  --title "ENTERPRISE PRO ERP 0.5.13" `
-  --notes-file docs\32-novedades-0.5.13.md
+  --title "ENTERPRISE PRO ERP 0.5.16" `
+  --notes-file docs\37-novedades-0.5.16.md
 ```
 
 > Antes de publicar una versión nueva, actualiza el hash en `README.md`, `docs/05` y `docs/06`,
@@ -200,7 +208,7 @@ gh release create v0.5.13 `
 | Síntoma | Causa / solución |
 |---|---|
 | SmartScreen al instalar | Firma autofirmada. Se requiere certificado de CA pública para eliminarlo. |
-| “No hay actualizaciones” | El feed por defecto es local. Publicar `latest.yml` en HTTPS y definir `ERP_UPDATE_URL`. |
+| “No hay actualizaciones” | El feed por defecto es la URL HTTPS de GitHub Releases. Revise `latest.yml` publicado o defina `ERP_UPDATE_URL` para un feed propio. |
 | `spawn UNKNOWN` al compilar | Usar `npm.cmd run dist:win` (aplica el shim de compatibilidad). |
 | La app no inicia | Verificar que `better-sqlite3` quedó desempaquetado (`asarUnpack`) y revisar la consola por `database is locked`. |
 | Pantalla negra al entrar | La ventana se recarga sola hasta 3 veces; si persiste, use **Recargar interfaz** y vuelva a iniciar sesión. Vea [docs/25](25-instancias-y-pantalla-negra.md). |
@@ -212,9 +220,13 @@ gh release create v0.5.13 `
 
 ## 7. Límites y avisos legales
 
-- **No se afirma certificación DGII ni emisión de e-CF.** Solo hay preparación arquitectónica,
-  NCF y libros 606/607 derivados de documentos reales.
+- **DGI es solo rotulado visual.** No se afirma certificación DGII ni emisión, exportación
+  o simulación de e-CF: solo NCF como referencia y libros 606/607 derivados de documentos
+  reales. Los borradores de facturación se guardan en `localStorage`; los comprobantes
+  emitidos son inmutables.
 - **SmartScreen permanece** mientras se use el certificado autofirmado.
 - **Auditoría:** 0 vulnerabilidades tanto en producción como en desarrollo tras las
   actualizaciones mayores y los overrides aplicados en 0.3.0.
-- Cual cambio de esquema, BD, dependencias mayores o flujos financieros requiere autorización previa.
+- **No se publica nada sin autorización explícita**, incluidos commits, tags, pushes y
+  releases. Cual cambio de esquema, BD, dependencias mayores o flujos financieros requiere
+  autorización previa.

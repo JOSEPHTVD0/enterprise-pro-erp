@@ -22,8 +22,12 @@ import type {
   GastoCategoriaInput, GastoCrearInput, GastoPagarInput, GastoRecurrenteInput,
   ComisionCrearInput, ComisionPagarInput
 } from '@shared/schemas/finanzas'
+import {
+  panelHorizontalFiltroSchema,
+  type CobranzaDatos, type CobranzaFila, type CuadreDatos
+} from '@shared/schemas/panel-horizontal'
 
-type Operacion = 'CREAR' | 'MODIFICAR' | 'ANULAR'
+type Operacion = 'CREAR' | 'MODIFICAR' | 'ANULAR' | 'EXPORTAR'
 type Direccion = 'INGRESO' | 'EGRESO'
 type TipoFinanzas = 'cxc' | 'cxp' | 'bancos' | 'cajas'
 
@@ -54,6 +58,16 @@ function hoy(): string {
 
 function num(fila: Fila | undefined, campo: string): number {
   return Number(fila?.[campo] ?? 0)
+}
+
+/** Días naturales transcurridos hasta hoy; fechas inválidas cuentan como 0. */
+function diasHastaHoy(fecha: unknown): number {
+  const texto = String(fecha ?? '')
+  if (!/^\d{4}-\d{2}-\d{2}/.test(texto)) return 0
+  const tiempo = Date.parse(`${texto.slice(0, 10)}T00:00:00Z`)
+  if (!Number.isFinite(tiempo)) return 0
+  const hoyMs = Date.parse(`${hoy()}T00:00:00Z`)
+  return Math.max(0, Math.floor((hoyMs - tiempo) / 86400000))
 }
 
 function referencia(input: ReferenciaFinanzasInput): { id: number; tipo: 'DOCUMENTO' | 'RECIBO' | 'PAGO' } {
@@ -302,13 +316,203 @@ export function createFinanzasService(
       })
     }
     const buffer = await wb.xlsx.writeBuffer()
+    const filename = `${tipo}_${hoy()}.xlsx`
+    audit(ctx, 'EXPORTAR', tipo, null, filtro, {
+      registros: filas.length, filename, permiso: opciones.exportar ?? `${tipo}.exportar`
+    })
+    return { filename, base64: Buffer.from(buffer).toString('base64') }
+  }
+
+  /** Cola de cobranza priorizada: antigüedad, exposición y recencia reales. */
+  function colaCobro(
+    ctx: SessionContext,
+    entrada?: Parameters<typeof panelHorizontalFiltroSchema.parse>[0]
+  ): CobranzaDatos {
+    exigir(ctx, 'cxc.consultar')
+    const filtro = panelHorizontalFiltroSchema.parse(entrada ?? {})
+    const umbralDias = Number(ajustes.leerGrupo(ctx.empresaId, 'alertas').cxcDiasVencimiento)
+    const where = ["c.estado <> 'ANULADO'", 'c.saldo_cent > 0']
+    const args: unknown[] = [ctx.empresaId]
+    if (filtro.desde) { where.push('c.vencimiento >= ?'); args.push(filtro.desde) }
+    if (filtro.hasta) { where.push('c.vencimiento <= ?'); args.push(filtro.hasta) }
+    if (filtro.texto) {
+      where.push('(c.numero_documento LIKE ? OR cl.nombre LIKE ?)')
+      args.push(`%${filtro.texto}%`, `%${filtro.texto}%`)
+    }
+    const filas: CobranzaFila[] = (db.prepare(`
+      SELECT c.id, c.numero_documento AS numero, cl.nombre AS cliente,
+        c.saldo_cent AS saldoCent, c.vencimiento AS vencimiento,
+        cl.limite_credito_cent AS limiteCent, cl.balance_cent AS balanceCent,
+        (SELECT MAX(r.fecha) FROM cxc_recibo_aplicaciones a
+           JOIN cxc_recibos r ON r.id = a.recibo_id AND r.empresa_id = a.empresa_id
+          WHERE a.cxc_documento_id = c.id) AS ultimoRecibo
+      FROM cxc_documentos c
+      JOIN clientes cl ON cl.id = c.cliente_id AND cl.empresa_id = c.empresa_id
+      WHERE c.empresa_id = ? AND ${where.join(' AND ')}
+      ORDER BY c.vencimiento ASC, c.saldo_cent DESC LIMIT 1000
+    `).all(...args) as Fila[]).map((fila) => {
+      const diasVencido = diasHastaHoy(fila.vencimiento)
+      const limiteCent = num(fila, 'limiteCent')
+      const excesoCreditoCent = limiteCent > 0
+        ? Math.max(0, num(fila, 'balanceCent') - limiteCent)
+        : 0
+      const ultimoRecibo = String(fila.ultimoRecibo ?? '')
+      const score = Math.min(100,
+        diasVencido * 2 + (excesoCreditoCent > 0 ? 25 : 0) + (ultimoRecibo ? 0 : 10)
+      )
+      const urgente = diasVencido >= umbralDias || excesoCreditoCent > 0 || score >= 60
+      const sugerencia = `${urgente ? 'Cobranza prioritaria' : diasVencido > 0 ? 'Contacto preventivo' : 'Al día'}${
+        excesoCreditoCent > 0 ? ' · excede crédito' : ''
+      }`
+      return {
+        id: num(fila, 'id'),
+        numero: String(fila.numero ?? ''),
+        cliente: String(fila.cliente ?? ''),
+        saldoCent: num(fila, 'saldoCent'),
+        vencimiento: String(fila.vencimiento ?? ''),
+        diasVencido,
+        bucket: diasVencido <= 0 ? 'CORRIENTE'
+          : diasVencido <= 15 ? '1_15'
+            : diasVencido <= 30 ? '16_30'
+              : diasVencido <= 60 ? '31_60' : 'MAS_60',
+        ultimoRecibo,
+        excesoCreditoCent,
+        score,
+        sugerencia,
+        urgente
+      }
+    })
+    const visibles = filtro.soloUrgentes ? filas.filter((fila) => fila.urgente) : filas
     return {
-      filename: `${tipo}_${hoy()}.xlsx`,
-      base64: Buffer.from(buffer).toString('base64')
+      filtro,
+      umbralDias,
+      resumen: {
+        documentos: visibles.length,
+        saldoCent: visibles.reduce((suma, fila) => suma + fila.saldoCent, 0),
+        urgentes: visibles.filter((fila) => fila.urgente).length,
+        vencidos: visibles.filter((fila) => fila.diasVencido > 0).length
+      },
+      filas: visibles.slice(0, filtro.limite)
+    }
+  }
+
+  /** Cuadre operativo de caja y banca: solo lectura; cada sección respeta su permiso. */
+  function cuadreOperativo(
+    ctx: SessionContext,
+    entrada?: Parameters<typeof panelHorizontalFiltroSchema.parse>[0]
+  ): CuadreDatos {
+    const verCajas = ctx.permisos.includes('cajas.consultar')
+    const verBancos = ctx.permisos.includes('bancos.consultar')
+    if (!verCajas && !verBancos) throw errors.forbidden()
+    const filtro = panelHorizontalFiltroSchema.parse(entrada ?? {})
+    const caja: CuadreDatos['caja'] = []
+    const banco: CuadreDatos['banco'] = []
+    const movimientosSinSoporte: CuadreDatos['movimientosSinSoporte'] = []
+
+    if (verCajas) {
+      const where = ['s.empresa_id = ?']
+      const args: unknown[] = [ctx.empresaId]
+      if (filtro.desde) { where.push('date(s.fecha_apertura) >= ?'); args.push(filtro.desde) }
+      if (filtro.hasta) { where.push('date(s.fecha_apertura) <= ?'); args.push(filtro.hasta) }
+      if (filtro.texto) { where.push('s.estado LIKE ?'); args.push(`%${filtro.texto}%`) }
+      args.push(filtro.limite)
+      const sesiones = db.prepare(`
+        SELECT s.*, COALESCE(SUM(CASE WHEN m.tipo = 'INGRESO'
+          THEN m.monto_cent ELSE -m.monto_cent END), 0) AS teoricoCent
+        FROM caja_sesiones s
+        LEFT JOIN caja_movimientos m
+          ON m.caja_sesion_id = s.id AND m.empresa_id = s.empresa_id
+        WHERE ${where.join(' AND ')}
+        GROUP BY s.id ORDER BY s.id DESC LIMIT ?
+      `).all(...args) as Fila[]
+      for (const sesion of sesiones) {
+        const teoricoCent = num(sesion, 'teoricoCent')
+        const arqueoCent = num(sesion, 'arqueo_efectivo_cent') + num(sesion, 'arqueo_otros_cent')
+          || num(sesion, 'monto_cierre_cent')
+        const diferenciaCent = arqueoCent - teoricoCent
+        const estado = String(sesion.estado ?? '')
+        if (filtro.soloUrgentes && diferenciaCent === 0 && estado !== 'ABIERTA') continue
+        caja.push({
+          sesionId: num(sesion, 'id'),
+          cajaId: num(sesion, 'caja_id'),
+          fechaApertura: String(sesion.fecha_apertura ?? ''),
+          estado,
+          teoricoCent,
+          arqueoCent,
+          diferenciaCent
+        })
+      }
+    }
+
+    if (verBancos) {
+      const cuentas = db.prepare(`
+        SELECT c.id, c.nombre, c.saldo_cent AS saldoCent
+        FROM bancos_cuentas c
+        WHERE c.empresa_id = ? AND c.activa = 1
+        ORDER BY c.id LIMIT ?
+      `).all(ctx.empresaId, filtro.limite) as Fila[]
+      for (const cuenta of cuentas) {
+        const cuentaId = num(cuenta, 'id')
+        const conciliacion = db.prepare(`
+          SELECT saldo_banco_cent AS saldoBancoCent FROM bancos_conciliaciones
+          WHERE empresa_id = ? AND cuenta_id = ? ORDER BY id DESC LIMIT 1
+        `).get(ctx.empresaId, cuentaId) as Fila | undefined
+        const saldoBancoCent = conciliacion ? num(conciliacion, 'saldoBancoCent') : null
+        const argsNoConciliados: unknown[] = [ctx.empresaId, cuentaId]
+        let sqlNoConciliados = `SELECT id, fecha, tipo, monto_cent AS montoCent, referencia
+          FROM bancos_movimientos
+          WHERE empresa_id = ? AND cuenta_id = ? AND conciliado = 0
+            AND (doc_tipo = '' OR doc_id IS NULL)`
+        if (filtro.desde) { sqlNoConciliados += ' AND fecha >= ?'; argsNoConciliados.push(filtro.desde) }
+        if (filtro.hasta) { sqlNoConciliados += ' AND fecha <= ?'; argsNoConciliados.push(filtro.hasta) }
+        if (filtro.texto) { sqlNoConciliados += ' AND referencia LIKE ?'; argsNoConciliados.push(`%${filtro.texto}%`) }
+        const movimientos = db.prepare(`${sqlNoConciliados} ORDER BY fecha DESC LIMIT ?`)
+          .all(...argsNoConciliados, filtro.limite) as Fila[]
+        const diferenciaCent = saldoBancoCent === null ? null : num(cuenta, 'saldoCent') - saldoBancoCent
+        const noConciliados = movimientos.length
+        if (filtro.soloUrgentes && !diferenciaCent && noConciliados === 0) continue
+        banco.push({
+          cuentaId,
+          cuenta: String(cuenta.nombre ?? ''),
+          saldoLibroCent: num(cuenta, 'saldoCent'),
+          saldoBancoCent,
+          diferenciaCent,
+          noConciliados
+        })
+        for (const movimiento of movimientos) {
+          movimientosSinSoporte.push({
+            id: num(movimiento, 'id'),
+            cuentaId,
+            fecha: String(movimiento.fecha ?? ''),
+            tipo: String(movimiento.tipo ?? ''),
+            montoCent: num(movimiento, 'montoCent'),
+            referencia: String(movimiento.referencia ?? '')
+          })
+        }
+      }
+    }
+
+    return {
+      filtro,
+      secciones: { cajas: verCajas, bancos: verBancos },
+      resumen: {
+        sesionesAbiertas: caja.filter((fila) => fila.estado === 'ABIERTA').length,
+        diferenciasCent: caja.reduce((suma, fila) => suma + Math.abs(fila.diferenciaCent), 0)
+          + banco.reduce((suma, fila) => suma + Math.abs(fila.diferenciaCent ?? 0), 0),
+        sinSoporte: movimientosSinSoporte.length,
+        cuentas: banco.length
+      },
+      caja,
+      banco,
+      movimientosSinSoporte: movimientosSinSoporte.slice(0, filtro.limite)
     }
   }
 
   return {
+    // Tablero horizontal avanzado (solo lectura).
+    colaCobro,
+    cuadreOperativo,
+
     catalogos(ctx: SessionContext) {
       exigir(
         ctx, 'cxc.consultar', 'cxp.consultar', 'bancos.consultar',

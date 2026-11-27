@@ -451,7 +451,8 @@ export function ComprasPage(): React.JSX.Element {
             data={filtrados}
             rowKey={(f) => num(f.id)}
             searchPlaceholder="Buscar por número, proveedor o NCF…"
-            emptyText={cargando ? 'Cargando…' : 'No hay documentos con estos filtros.'}
+            loading={cargando}
+            emptyText='No hay documentos con estos filtros.'
             actions={(fila) => (
               <div className="flex justify-end gap-1">
                 <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"

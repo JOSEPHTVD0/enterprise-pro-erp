@@ -11,6 +11,7 @@ import type { AjustesAmbito } from '@shared/schemas/personalizacion'
 import { coincideTexto, normalizarTexto } from '@shared/texto'
 import { ajustesConDefaults, useAjustesStore } from '@/app/ajustes-store'
 import { aplicarTemaAvanzado } from '@/lib/tema-avanzado'
+import { recargarPreferencias } from '@/lib/format'
 import { can, errorInfo, useSessionStore } from '@/app/session'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
@@ -130,7 +131,6 @@ const campos: Record<AjustesGrupo, Campo[]> = {
     { clave: 'stockBajoUmbral', etiqueta: 'Umbral de stock bajo', tipo: 'num', min: 0, max: 100000 },
     { clave: 'seriesRestantes', etiqueta: 'Avisar series restantes', tipo: 'num', min: 0, max: 1000 },
     { clave: 'cxcDiasVencimiento', etiqueta: 'Días de CxC para aviso', tipo: 'num', min: 1, max: 365 },
-    { clave: 'presupuestoPct', etiqueta: 'Porcentaje de presupuesto', tipo: 'num', min: 1, max: 100 },
     { clave: 'nivelMinimo', etiqueta: 'Nivel mínimo', tipo: 'select', opciones: ['INFO', 'MEDIO', 'ALTO'].map((v) => ({ value: v, label: v })) },
     { clave: 'destinos', etiqueta: 'Destinos', tipo: 'multi', opciones: opcionesSiNo }
   ],
@@ -165,10 +165,8 @@ const campos: Record<AjustesGrupo, Campo[]> = {
   ],
   rendimiento: [
     { clave: 'limiteFilas', etiqueta: 'Límite de filas', tipo: 'num', min: 10, max: 500 },
-    { clave: 'cacheSegundos', etiqueta: 'Caché (segundos)', tipo: 'num', min: 0, max: 3600 },
     { clave: 'vacuumProgramado', etiqueta: 'VACUUM programado', tipo: 'select', opciones: ['DESACTIVADO', 'SEMANAL', 'MENSUAL'].map((v) => ({ value: v, label: v })) },
-    { clave: 'modoBajoConsumo', etiqueta: 'Modo bajo consumo', tipo: 'bool' },
-    { clave: 'lazyCargaModulos', etiqueta: 'Carga diferida de módulos', tipo: 'bool' }
+    { clave: 'modoBajoConsumo', etiqueta: 'Modo bajo consumo', tipo: 'bool' }
   ],
   integraciones: [
     { clave: 'carpetaExportacion', etiqueta: 'Carpeta de exportación', tipo: 'text', hint: 'Nombre relativo bajo userData; sin rutas absolutas.' },
@@ -191,7 +189,7 @@ const campos: Record<AjustesGrupo, Campo[]> = {
     { clave: 'ncfAvisoDias', etiqueta: 'Aviso NCF (días)', tipo: 'num', min: 1, max: 90 },
     { clave: 'libro606', etiqueta: 'Libro 606', tipo: 'bool' },
     { clave: 'libro607', etiqueta: 'Libro 607', tipo: 'bool' },
-    { clave: 'formatoComprobante', etiqueta: 'Formato de comprobante', tipo: 'select', opciones: [{ value: 'NCF', label: 'NCF' }, { value: 'PREPARACION_E_CF', label: 'Preparación para e-CF' }] }
+    { clave: 'formatoComprobante', etiqueta: 'Formato de comprobante', tipo: 'select', opciones: [{ value: 'NCF', label: 'NCF' }, { value: 'PREPARACION_E_CF', label: 'Preparación para e-CF' }], hint: 'Informativo: el ERP solo gestiona NCF locales; no emite e-CF.' }
   ],
   dgiEnlace: [
     { clave: 'mostrarPanel', etiqueta: 'Mostrar panel en Facturación', tipo: 'bool', hint: 'Solo controla la visibilidad del bloque informativo.' },
@@ -214,7 +212,6 @@ const campos: Record<AjustesGrupo, Campo[]> = {
   ],
   seguridad: [
     { clave: 'ocultarCostosEnListados', etiqueta: 'Ocultar costos en listados', tipo: 'bool' },
-    { clave: 'confirmarAnulaciones', etiqueta: 'Confirmar anulaciones', tipo: 'bool' },
     { clave: 'mascararRnc', etiqueta: 'Enmascarar RNC/cédula', tipo: 'bool' },
     { clave: 'avisoAntesDeBloqueoMin', etiqueta: 'Aviso antes de bloqueo (min)', tipo: 'num', min: 1, max: 30 }
   ],
@@ -471,6 +468,7 @@ export function CentroControlPage(): React.JSX.Element {
       const guardados = gruposCambiados.length - fallidos.length
       await cargarAjustes()
       aplicarTemaAvanzado(useAjustesStore.getState().ajustes.tema ?? defaultAjustes.tema)
+      await recargarPreferencias()
       if (fallidos.length === 0) {
         toast.success(`${guardados} grupo(s) guardados y auditados.`)
       } else {
@@ -504,6 +502,7 @@ export function CentroControlPage(): React.JSX.Element {
       ])
       await cargarAjustes()
       aplicarTemaAvanzado(useAjustesStore.getState().ajustes.tema ?? defaultAjustes.tema)
+      await recargarPreferencias()
       setAjustes(ajustesConDefaults(useAjustesStore.getState().ajustes))
       setCambios(new Set())
       toast.success(`Plantilla «${plantilla.label}» aplicada y auditada.`)
@@ -515,6 +514,7 @@ export function CentroControlPage(): React.JSX.Element {
       await window.api.invoke('config.ajustes.reset', { grupo })
       await cargarAjustes()
       if (grupo === 'tema') aplicarTemaAvanzado(defaultAjustes.tema)
+      await recargarPreferencias()
       toast.success('Grupo restaurado a sus valores por defecto.')
     } catch (e) { toast.error(errorInfo(e).message) }
   }

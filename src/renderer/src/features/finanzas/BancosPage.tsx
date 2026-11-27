@@ -352,7 +352,8 @@ export function BancosPage(): React.JSX.Element {
             data={tab === 'cuentas' ? cuentas : tab === 'movimientos' ? movimientosVisibles : conciliaciones}
             rowKey={(f) => num(f.id)}
             searchPlaceholder="Buscar por cuenta, referencia o tipo…"
-            emptyText={cargando ? 'Cargando…' : 'No hay registros con estos filtros.'}
+            loading={cargando}
+            emptyText='No hay registros con estos filtros.'
             actions={acciones}
           />
         </Card>

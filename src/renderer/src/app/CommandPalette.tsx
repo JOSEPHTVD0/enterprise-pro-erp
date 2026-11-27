@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   Search, CornerDownLeft, X, Users, Package, Truck, UserRound, Tags, Ruler, List
 } from 'lucide-react'
-import { moduleGroups, type ModuleDef } from '@/app/modules'
+import { moduleGroups, modulePermission, type ModuleDef } from '@/app/modules'
 import { useAppStore } from '@/app/store'
 import { useAjustesStore } from '@/app/ajustes-store'
 import { can, useSessionStore } from '@/app/session'
@@ -38,6 +38,7 @@ export function CommandPalette(): React.JSX.Element {
   const setActiveView = useAppStore((s) => s.setActiveView)
   const ctx = useSessionStore((s) => s.ctx)
   const moduloActivo = useAjustesStore((s) => s.moduloActivo)
+  const listaId = useId()
 
   useEffect(() => {
     function alPulsar(evento: KeyboardEvent): void {
@@ -58,7 +59,10 @@ export function CommandPalette(): React.JSX.Element {
   }, [abierto])
 
   const modulos = useMemo(() => moduleGroups.flatMap((grupo) => grupo.modules)
-    .filter((modulo) => (!modulo.permission || can(modulo.permission)) && moduloActivo(modulo.id))
+    .filter((modulo) => {
+      const permiso = modulePermission(modulo.id)
+      return (permiso === undefined || can(permiso)) && moduloActivo(modulo.id)
+    })
     .map((modulo) => ({
       id: `modulo:${modulo.id}`,
       titulo: modulo.label,
@@ -106,7 +110,12 @@ export function CommandPalette(): React.JSX.Element {
       role="presentation"
       onMouseDown={(evento) => { if (evento.target === evento.currentTarget) setAbierto(false) }}
     >
-      <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Búsqueda global"
+        className="w-full max-w-2xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+      >
         <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-700">
           <Search size={18} className="text-slate-400" />
           <input
@@ -119,12 +128,16 @@ export function CommandPalette(): React.JSX.Element {
             }}
             placeholder="Buscar módulos, clientes, productos, proveedores…"
             aria-label="Buscar en todo el ERP"
+            role="combobox"
+            aria-expanded={resultados.length > 0}
+            aria-controls={listaId}
+            aria-autocomplete="list"
           />
           <button className="rounded p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setAbierto(false)} aria-label="Cerrar búsqueda">
             <X size={16} />
           </button>
         </div>
-        <div className="max-h-[55vh] overflow-y-auto p-2">
+        <div id={listaId} aria-label="Resultados" className="max-h-[55vh] overflow-y-auto p-2">
           {resultados.length === 0 && (
             <p className="px-3 py-6 text-center text-sm text-slate-500">Sin resultados con sus permisos.</p>
           )}

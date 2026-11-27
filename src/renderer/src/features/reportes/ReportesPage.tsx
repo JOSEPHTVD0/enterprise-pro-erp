@@ -4,6 +4,7 @@ import {
 } from 'recharts'
 import { Download, FileDown, FileSpreadsheet, FileText, Printer, RefreshCw } from 'lucide-react'
 import { can, errorInfo } from '@/app/session'
+import { useAppStore } from '@/app/store'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
@@ -58,6 +59,8 @@ export function ReportesPage(): React.JSX.Element {
   const [impresion, setImpresion] = useState<DatosImpresionReporte | null>(null)
   const [cargando, setCargando] = useState(false)
   const [procesando, setProcesando] = useState(false)
+  const libro606 = useAppStore((s) => s.settings.fiscal.libro606)
+  const libro607 = useAppStore((s) => s.settings.fiscal.libro607)
 
   const cargar = useCallback(async () => {
     setCargando(true)
@@ -91,6 +94,14 @@ export function ReportesPage(): React.JSX.Element {
   }, [tab, filtro])
 
   useEffect(() => { void cargar() }, [cargar])
+
+  // Los libros auxiliares son opcionales en la estación; si se desactivan, se
+  // ocultan y se vuelve al resumen para no consultar un reporte invisible.
+  useEffect(() => {
+    if ((tab === 'LIBRO606' && !libro606) || (tab === 'LIBRO607' && !libro607)) {
+      cambiarTab('RESUMEN')
+    }
+  }, [tab, libro606, libro607])
 
   const columnas = useMemo<Column<FilaReporte>[]>(() => {
     if (!datos) return []
@@ -194,11 +205,13 @@ export function ReportesPage(): React.JSX.Element {
     <div className="animate-fade-in">
       <PageHeader
         title="Reportes"
-        subtitle="Totales reconcilian con documentos reales de SQLite. Libros 606/607 en formato borrador local, sin certificación DGII."
+        subtitle="Totales reconcilian con documentos reales de SQLite. Los libros auxiliares son borradores locales, sin certificación DGII."
       />
 
       <Tabs
-        tabs={reportesDisponibles.map((reporte) => ({ id: reporte.id, label: reporte.label }))}
+        tabs={reportesDisponibles
+          .filter((reporte) => (reporte.id !== 'LIBRO606' || libro606) && (reporte.id !== 'LIBRO607' || libro607))
+          .map((reporte) => ({ id: reporte.id, label: reporte.label }))}
         active={tab}
         onChange={cambiarTab}
       />
@@ -300,7 +313,7 @@ export function ReportesPage(): React.JSX.Element {
                     <YAxis tick={{ fontSize: 11 }} width={72} />
                     <Tooltip formatter={(valor, nombre) => [money(num(valor) * 100), String(nombre)]} />
                     <Legend />
-                    <Area type="monotone" dataKey="Ventas" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.14} />
+                    <Area type="monotone" dataKey="Ventas" stroke="var(--erp-acento)" fill="var(--erp-acento)" fillOpacity={0.14} />
                     <Area type="monotone" dataKey="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.12} />
                     <Area type="monotone" dataKey="Cobros" stroke="#10b981" fill="#10b981" fillOpacity={0.12} />
                     <Area type="monotone" dataKey="Pagos" stroke="#ef4444" fill="#ef4444" fillOpacity={0.10} />

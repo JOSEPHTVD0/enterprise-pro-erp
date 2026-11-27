@@ -2,6 +2,9 @@ import type { Db } from '../db/connection'
 import type { SessionContext } from './context'
 import type { Ajustes } from '@shared/schemas/ajustes'
 import type { InteligenciaFiltro } from '@shared/schemas/paneles'
+import {
+  panelHorizontalFiltroSchema, type InventarioDatos, type InventarioFila
+} from '@shared/schemas/panel-horizontal'
 import { requirePermission } from './context'
 import type { createAjustesService } from './ajustes.service'
 
@@ -279,5 +282,89 @@ export function createInteligenciaService(db: Db, ajustes: ReturnType<typeof cre
     }
   }
 
-  return { resumen }
+  /** Ranking ABC y reposición por almacén sobre existencias y kardex (solo lectura). */
+  function rankingAbc(
+    ctx: SessionContext,
+    entrada?: Parameters<typeof panelHorizontalFiltroSchema.parse>[0]
+  ): InventarioDatos {
+    requirePermission(ctx, 'inventario.consultar')
+    const filtro = panelHorizontalFiltroSchema.parse(entrada ?? {})
+    const umbralStock = Number(ajustes.leerGrupo(ctx.empresaId, 'alertas').stockBajoUmbral)
+    const where = ['e.empresa_id = ?']
+    const args: unknown[] = [ctx.empresaId]
+    if (filtro.texto) {
+      where.push('(p.codigo LIKE ? OR p.descripcion LIKE ?)')
+      args.push(`%${filtro.texto}%`, `%${filtro.texto}%`)
+    }
+    const filas: InventarioFila[] = (db.prepare(`
+      SELECT e.producto_id AS productoId, e.almacen_id AS almacenId,
+        p.codigo, p.descripcion AS producto, p.existencia_min AS existenciaMin,
+        a.nombre AS almacen, e.cantidad AS existencia, e.valor_cent AS valorCent,
+        COALESCE((
+          SELECT SUM(-m.cantidad) FROM movimientos_inventario m
+          WHERE m.empresa_id = e.empresa_id AND m.producto_id = e.producto_id
+            AND m.almacen_id = e.almacen_id AND m.tipo = 'VENTA'
+            AND m.cantidad < 0 AND m.fecha >= ? AND m.fecha <= ?
+        ), 0) AS consumo
+      FROM existencias e
+      JOIN productos p ON p.id = e.producto_id AND p.empresa_id = e.empresa_id
+      JOIN almacenes a ON a.id = e.almacen_id AND a.empresa_id = e.empresa_id
+      WHERE ${where.join(' AND ')}
+      ORDER BY p.descripcion ASC, a.nombre ASC LIMIT 1000
+    `).all(filtro.desde ?? '0000-01-01', filtro.hasta ?? '9999-12-31', ...args) as Fila[]).map((fila) => {
+      const consumo = Math.max(0, n(fila, 'consumo'))
+      const existencia = n(fila, 'existencia')
+      const coberturaDias = consumo > 0 ? Math.round((existencia / consumo) * 30) : null
+      const minimo = n(fila, 'existenciaMin')
+      const nivel: InventarioFila['nivel'] = existencia <= 0 || existencia < umbralStock
+        ? 'CRITICO'
+        : existencia <= minimo ? 'BAJO' : 'NORMAL'
+      return {
+        productoId: n(fila, 'productoId'),
+        almacenId: n(fila, 'almacenId'),
+        codigo: txt(fila, 'codigo'),
+        producto: txt(fila, 'producto'),
+        almacen: txt(fila, 'almacen'),
+        existencia,
+        consumo,
+        coberturaDias,
+        clase: 'C',
+        nivel,
+        valorReposicionCent: Math.max(0, Math.ceil(minimo - existencia)) * Math.round(n(fila, 'valorCent') / (existencia || 1)),
+        costoOculto: !ctx.permisos.includes('productos.costo') && !ctx.permisos.includes('inventario.costo')
+      }
+    })
+    const porProducto = new Map<number, number>()
+    for (const fila of filas) {
+      porProducto.set(fila.productoId, (porProducto.get(fila.productoId) ?? 0) + fila.consumo)
+    }
+    const consumoTotal = [...porProducto.values()].reduce((suma, valor) => suma + valor, 0)
+    const ordenado = [...porProducto.entries()].sort((a, b) => b[1] - a[1])
+    let acumulado = 0
+    const clases = new Map<number, InventarioFila['clase']>()
+    for (const [idProducto, consumoProducto] of ordenado) {
+      // Se clasifica con la participación acumulada *anterior*: el primer
+      // producto siempre entra en A aunque concentre el 100% del consumo.
+      const previo = consumoTotal > 0 ? acumulado / consumoTotal : 0
+      clases.set(idProducto, previo < 0.8 ? 'A' : previo < 0.95 ? 'B' : 'C')
+      acumulado += consumoProducto
+    }
+    for (const fila of filas) fila.clase = clases.get(fila.productoId) ?? 'C'
+    const visibles = filtro.soloUrgentes
+      ? filas.filter((fila) => fila.nivel !== 'NORMAL')
+      : filas
+    visibles.sort((a, b) => a.clase.localeCompare(b.clase) || b.consumo - a.consumo)
+    return {
+      filtro,
+      umbralStock,
+      resumen: {
+        productos: visibles.length,
+        criticos: visibles.filter((fila) => fila.nivel === 'CRITICO').length,
+        valorReposicionCent: visibles.reduce((suma, fila) => suma + fila.valorReposicionCent, 0)
+      },
+      filas: visibles.slice(0, filtro.limite)
+    }
+  }
+
+  return { resumen, rankingAbc }
 }

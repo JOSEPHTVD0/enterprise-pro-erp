@@ -129,7 +129,7 @@ export function InteligenciaOperativaPage(): React.JSX.Element {
                       <YAxis tick={{ fontSize: 10 }} width={80} tickFormatter={(v) => `${Math.round(Number(v) / 100)}`} />
                       <Tooltip formatter={(v) => money(Number(v))} />
                       <Legend />
-                      <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.16} />
+                      <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="var(--erp-acento)" fill="var(--erp-acento)" fillOpacity={0.16} />
                       <Area type="monotone" dataKey="comprasCent" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.12} />
                     </AreaChart>
                   </ResponsiveContainer>

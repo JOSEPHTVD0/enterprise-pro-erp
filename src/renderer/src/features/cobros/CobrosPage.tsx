@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Download, Eye, FileDown, FilePlus2, Printer, RefreshCw, Wallet } from 'lucide-react'
 import { can, errorInfo } from '@/app/session'
 import { Badge } from '@/components/ui/Badge'
@@ -415,7 +415,8 @@ export function CobrosPage(): React.JSX.Element {
             rowKey={(f) => num(f.id)}
             storageKey={`cobros.${tab}`}
             searchPlaceholder="Buscar por número, cliente o referencia…"
-            emptyText={cargando ? 'Cargando…' : 'No hay registros con estos filtros.'}
+            loading={cargando}
+            emptyText='No hay registros con estos filtros.'
             actions={acciones}
           />
         </Card>

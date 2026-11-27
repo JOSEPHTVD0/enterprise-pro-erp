@@ -1,8 +1,6 @@
 import { defaultAjustes, type Ajustes } from '@shared/schemas/ajustes'
 
-const acentos: Record<Ajustes['tema']['colorAcento'], string> = {
-  INDIGO: '#4f46e5', VERDE: '#059669', AZUL: '#0284c7', AMBAR: '#d97706'
-}
+const coloresAcento: NonNullable<Ajustes['tema']['colorAcento']>[] = ['INDIGO', 'VERDE', 'AZUL', 'AMBAR']
 
 const fuentes: Record<Ajustes['tema']['fuente'], string> = {
   SISTEMA: 'var(--font-sans)',
@@ -21,7 +19,7 @@ export function normalizarTemaAvanzado(tema?: Partial<Ajustes['tema']>): Ajustes
     escala: Number.isFinite(escala) ? Math.min(1.3, Math.max(0.8, escala)) : base.escala,
     radio: radio === 'NINGUNO' || radio === 'SUAVE' || radio === 'REDONDO' ? radio : base.radio,
     fuente: fuente === 'SISTEMA' || fuente === 'SANS' || fuente === 'SERIF' ? fuente : base.fuente,
-    colorAcento: colorAcento && colorAcento in acentos ? colorAcento : base.colorAcento,
+    colorAcento: colorAcento && coloresAcento.includes(colorAcento) ? colorAcento : base.colorAcento,
     reducirMovimiento: Boolean(tema?.reducirMovimiento),
     altoContraste: Boolean(tema?.altoContraste)
   }
@@ -34,7 +32,8 @@ export function aplicarTemaAvanzado(tema?: Ajustes['tema']): void {
   const root = document.documentElement
   root.style.setProperty('--erp-escala', String(valido.escala))
   root.style.setProperty('--erp-radio', valido.radio === 'NINGUNO' ? '0px' : valido.radio === 'REDONDO' ? '18px' : '10px')
-  root.style.setProperty('--erp-acento', acentos[valido.colorAcento])
+  // El acento lo resuelve `aplicarPreferenciasGlobal` con la precedencia
+  // estación/empresa; este módulo solo administra forma, radio, fuente y movimiento.
   root.style.setProperty('--erp-font', fuentes[valido.fuente])
   root.classList.toggle('erp-reducir-movimiento', valido.reducirMovimiento)
   root.classList.toggle('erp-alto-contraste', valido.altoContraste)

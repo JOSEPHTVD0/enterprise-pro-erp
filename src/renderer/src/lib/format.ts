@@ -9,13 +9,48 @@ import { useAppStore } from '@/app/store'
 import { normalizarAjustesEfectivos, useAjustesStore } from '@/app/ajustes-store'
 import { aplicarPreferenciasImpresion } from '@/lib/formato-impresion'
 
-const moneyFormatter = new Intl.NumberFormat('es-DO', {
-  style: 'currency', currency: 'DOP', minimumFractionDigits: 2
-})
+const moneyFormatters = new Map<string, Intl.NumberFormat>()
 
-/** El backend guarda centavos enteros; la UI muestra RD$. */
+function formatterMoneda(): Intl.NumberFormat {
+  const { moneda, decimalesDinero } = useAppStore.getState().settings.fiscal
+  const clave = `${moneda}|${decimalesDinero}`
+  let formatter = moneyFormatters.get(clave)
+  if (!formatter) {
+    formatter = new Intl.NumberFormat('es-DO', {
+      style: 'currency', currency: moneda,
+      minimumFractionDigits: decimalesDinero, maximumFractionDigits: decimalesDinero
+    })
+    moneyFormatters.set(clave, formatter)
+  }
+  return formatter
+}
+
+/** El backend guarda centavos enteros; la UI usa la moneda y decimales de la estación. */
 export function money(centavos: number): string {
-  return moneyFormatter.format((Number(centavos) || 0) / 100)
+  return formatterMoneda().format((Number(centavos) || 0) / 100)
+}
+
+const localesFecha: Record<Settings['fiscal']['formatoFecha'], string> = {
+  'dd/MM/yyyy': 'es-DO', 'yyyy-MM-dd': 'en-CA', 'MM/dd/yyyy': 'en-US'
+}
+const dateFormatters = new Map<Settings['fiscal']['formatoFecha'], Intl.DateTimeFormat>()
+
+/** Formato de fecha configurable en Ajustes avanzados → Fiscal. */
+export function formatFecha(
+  fecha: string | number | Date,
+  formato: Settings['fiscal']['formatoFecha'] = useAppStore.getState().settings.fiscal.formatoFecha
+): string {
+  let formatter = dateFormatters.get(formato)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(localesFecha[formato], {
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    })
+    dateFormatters.set(formato, formatter)
+  }
+  const valor = typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)
+    ? new Date(`${fecha}T00:00:00`)
+    : new Date(fecha)
+  return Number.isNaN(valor.getTime()) ? '—' : formatter.format(valor)
 }
 
 export function number(value: unknown): string {
@@ -90,7 +125,7 @@ export function useAjustesOperativosCargados(): Operativos {
 }
 
 const acentos = {
-  indigo: '#4f46e5', verde: '#059669', azul: '#0284c7', ambar: '#d97706'
+  indigo: '#4f46e5', verde: '#059669', azul: '#0284c7', ambar: '#b45309'
 } as const
 
 export type DensidadEfectiva = 'compacta' | 'normal' | 'amplia'
@@ -259,7 +294,6 @@ export function aplicarPreferenciasGlobal(pref: PreferenciasInterfaz): void {
   root.dataset.erpTooltips = String(pref.tooltips)
   root.dataset.erpConfirmarAcciones = String(pref.confirmarAcciones)
   root.dataset.erpModoBajoConsumo = String(pref.modoBajoConsumo)
-  document.body.style.fontSize = `${pref.tamanoFuente}px`
   root.classList.toggle('erp-reducir-movimiento', pref.reducirMovimiento)
   aplicarDensidadTablas(pref.densidad)
   aplicarPreferenciasImpresion(useAppStore.getState().settings, pref.mascararRnc)

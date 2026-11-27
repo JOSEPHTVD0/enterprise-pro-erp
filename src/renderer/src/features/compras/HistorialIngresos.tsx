@@ -102,7 +102,8 @@ export function HistorialIngresos(): React.JSX.Element {
           columns={columnas}
           data={datos.documentos}
           rowKey={(f) => num(f.id)}
-          emptyText={cargando ? 'Cargando…' : 'No hay ingresos con estos criterios.'}
+          loading={cargando}
+          emptyText='No hay ingresos con estos criterios.'
           actions={(fila) => (
             <button
               className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"

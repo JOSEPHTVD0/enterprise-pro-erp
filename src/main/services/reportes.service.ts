@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import type { Db } from '../db/connection'
+import { writeAudit } from '../repositories/auditoria.repo'
 import type { SessionContext } from './context'
 import { errors } from '@shared/errors'
 import { getEmpresa } from '../repositories/configuracion.repo'
@@ -59,6 +60,15 @@ export function createReportesService(db: Db) {
 
   function exigir(ctx: SessionContext, ...permisos: string[]): void {
     if (!tiene(ctx, ...permisos)) throw errors.forbidden()
+  }
+
+  function audit(
+    ctx: SessionContext, operacion: string, entidad: string, id: number | null,
+    antes: unknown, despues: unknown
+  ): void {
+    writeAudit(db, {
+      empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
+    }, operacion, entidad, id, antes, despues)
   }
 
   function consultar(sql: string, ...args: unknown[]): Fila[] {
@@ -501,14 +511,21 @@ export function createReportesService(db: Db) {
     const filasExportables = datos.filas.map((fila) => Object.fromEntries(
       datos.columnas.map((columna) => [columna.key, valorExportable(fila[columna.key] ?? '', columna.key)])
     ))
+    const registrar = (filename: string): void => {
+      audit(ctx, 'EXPORTAR', input.reporte, null, input.filtro ?? {}, {
+        registros: datos.filas.length, filename, formato: input.formato
+      })
+    }
 
     if (input.formato === 'CSV') {
       const lineas = [
         datos.columnas.map((c) => escaparCsv(c.header)).join(';'),
         ...filasExportables.map((fila) => datos.columnas.map((c) => escaparCsv(fila[c.key])).join(';'))
       ]
+      const filename = `${nombre}.csv`
+      registrar(filename)
       return {
-        filename: `${nombre}.csv`,
+        filename,
         base64: Buffer.from(`\uFEFF${lineas.join('\r\n')}`, 'utf8').toString('base64'),
         mime: 'text/csv;charset=utf-8'
       }
@@ -522,8 +539,10 @@ export function createReportesService(db: Db) {
     hoja.getRow(1).font = { bold: true }
     for (const fila of filasExportables) hoja.addRow(fila)
     const buffer = await libro.xlsx.writeBuffer()
+    const filename = `${nombre}.xlsx`
+    registrar(filename)
     return {
-      filename: `${nombre}.xlsx`,
+      filename,
       base64: Buffer.from(buffer).toString('base64'),
       mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     }

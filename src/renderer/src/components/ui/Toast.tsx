@@ -106,7 +106,8 @@ export function Toaster(): React.JSX.Element {
         return (
           <div
             key={t.id}
-            role="status"
+            role={t.kind === 'error' || t.kind === 'warning' ? 'alert' : 'status'}
+            aria-live={t.kind === 'error' || t.kind === 'warning' ? 'assertive' : 'polite'}
             className={`animate-toast-in pointer-events-auto flex items-start gap-2 rounded-lg border bg-white/95 px-3 py-2.5 shadow-lg backdrop-blur dark:bg-slate-900/95 ${styles[t.kind]}`}
           >
             <Icon size={18} className="mt-0.5 shrink-0" />

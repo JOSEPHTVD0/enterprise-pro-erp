@@ -20,7 +20,7 @@ const referencias: Partial<Record<MaestroEntidad, Record<string, MaestroEntidad 
 }
 
 export function createMaestrosService(db: Db) {
-  function audit(ctx: SessionContext, operacion: string, entidad: string, id: number, antes: unknown, despues: unknown): void {
+  function audit(ctx: SessionContext, operacion: string, entidad: string, id: number | null, antes: unknown, despues: unknown): void {
     writeAudit(db, {
       empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
     }, operacion, entidad, id, antes, despues)
@@ -176,7 +176,12 @@ export function createMaestrosService(db: Db) {
       requirePermission(ctx, `${maestroModule(entidad)}.exportar`)
       const filas = repo.listar(db, entidad, ctx.empresaId, true) as Record<string, unknown>[]
       const fecha = new Date().toISOString().slice(0, 10)
-      return { filename: `${entidad}_${fecha}.xlsx`, base64: await workbook(ctx, entidad, filas) }
+      const filename = `${entidad}_${fecha}.xlsx`
+      const base64 = await workbook(ctx, entidad, filas)
+      audit(ctx, 'EXPORTAR', entidad, null, { entidad, incluirInactivos: true }, {
+        registros: filas.length, filename
+      })
+      return { filename, base64 }
     },
 
     async importar(ctx: SessionContext, entidad: MaestroEntidad, base64: string) {

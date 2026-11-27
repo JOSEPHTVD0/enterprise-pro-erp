@@ -353,7 +353,8 @@ export function FacturacionPage(): React.JSX.Element {
               rowKey={(f) => num(f.id)}
               storageKey="facturacion.documentos"
               searchPlaceholder="Buscar por número, cliente o RNC…"
-              emptyText={cargando ? 'Cargando…' : 'No hay documentos con estos filtros.'}
+              loading={cargando}
+              emptyText='No hay documentos con estos filtros.'
               actions={(fila) => (
                 <div className="flex justify-end gap-1">
                   <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => void verDetalle(num(fila.id))} title="Ver detalle" aria-label="Ver detalle">

@@ -10,6 +10,7 @@ import {
   type ReglaFiltro, type VistaGuardada
 } from '@/lib/filtros-avanzados'
 import { confirmarEliminacion, titleSi, usePreferenciasInterfaz } from '@/lib/format'
+import { SkeletonTable } from './Skeleton'
 
 export interface Column<T> {
   key: string
@@ -26,6 +27,10 @@ interface DataTableProps<T> {
   searchPlaceholder?: string
   pageSize?: number
   emptyText?: string
+  /** Estado de carga real: sustituye las filas por esqueletos accesibles. */
+  loading?: boolean
+  /** Estado vacío enriquecido; `emptyText` sigue siendo el fallback. */
+  emptyState?: ReactNode
   actions?: (row: T) => ReactNode
   /** Identificador estable para recordar columnas, reglas y vistas guardadas. */
   storageKey?: string
@@ -39,7 +44,7 @@ function texto<T>(fila: T, columna: Column<T>): string {
 /** Tabla con búsqueda por términos, reglas, vistas guardadas, orden, paginación y CSV. */
 export function DataTable<T>({
   columns, data, rowKey, searchPlaceholder = 'Buscar…', emptyText = 'No hay registros.',
-  actions, storageKey
+  loading = false, emptyState, actions, storageKey
 }: DataTableProps<T>): React.JSX.Element {
   const preferencias = useAjustesStore((s) => s.ajustes.widgets)
   const preferenciasInterfaz = usePreferenciasInterfaz()
@@ -407,40 +412,58 @@ export function DataTable<T>({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
-            <tr>
-              {columnasVisibles.map((c) => (
-                <th key={c.key} className={`whitespace-nowrap px-3 py-2.5 font-medium ${c.className ?? ''}`}>
-                  <button
-                    className="inline-flex items-center gap-1 hover:text-indigo-500"
-                    onClick={() => { setSort((s) => ({ key: c.key, asc: s?.key === c.key ? !s.asc : true })); setVistaActiva('') }}
-                  >
-                    {c.header}
-                    {sort?.key === c.key && (sort.asc ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
-                  </button>
-                </th>
-              ))}
-              {actions && <th className="px-3 py-2.5 text-right">Acciones</th>}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {visibles.map((fila) => (
-              <tr key={rowKey(fila)} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+      <div
+        className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800"
+        aria-busy={loading}
+      >
+        {loading ? (
+          <SkeletonTable rows={5} cols={Math.max(2, columnasVisibles.length)} />
+        ) : (
+          <table className="w-full text-left text-sm">
+            <caption className="sr-only">{searchPlaceholder}</caption>
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+              <tr>
                 {columnasVisibles.map((c) => (
-                  <td key={c.key} className={`whitespace-nowrap px-3 py-2.5 ${c.className ?? ''}`}>
-                    {c.render ? c.render(fila) : texto(fila, c)}
-                  </td>
+                  <th
+                    key={c.key}
+                    scope="col"
+                    aria-sort={sort?.key === c.key ? (sort.asc ? 'ascending' : 'descending') : 'none'}
+                    className={`whitespace-nowrap px-3 py-2.5 font-medium ${c.className ?? ''}`}
+                  >
+                    <button
+                      className="erp-focus inline-flex items-center gap-1 hover:text-indigo-500"
+                      aria-label={`Ordenar por ${c.header}`}
+                      onClick={() => { setSort((s) => ({ key: c.key, asc: s?.key === c.key ? !s.asc : true })); setVistaActiva('') }}
+                    >
+                      {c.header}
+                      {sort?.key === c.key && (sort.asc ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+                    </button>
+                  </th>
                 ))}
-                {actions && <td className="px-3 py-2.5 text-right">{actions(fila)}</td>}
+                {actions && <th scope="col" className="px-3 py-2.5 text-right">Acciones</th>}
               </tr>
-            ))}
-            {visibles.length === 0 && (
-              <tr><td colSpan={columnasVisibles.length + (actions ? 1 : 0)} className="px-3 py-8 text-center text-slate-400">{emptyText}</td></tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {visibles.map((fila) => (
+                <tr key={rowKey(fila)} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  {columnasVisibles.map((c) => (
+                    <td key={c.key} className={`whitespace-nowrap px-3 py-2.5 ${c.className ?? ''}`}>
+                      {c.render ? c.render(fila) : texto(fila, c)}
+                    </td>
+                  ))}
+                  {actions && <td className="px-3 py-2.5 text-right">{actions(fila)}</td>}
+                </tr>
+              ))}
+              {visibles.length === 0 && (
+                <tr>
+                  <td colSpan={columnasVisibles.length + (actions ? 1 : 0)} className="px-3 py-8">
+                    {emptyState ?? <p className="text-center text-slate-400 dark:text-slate-500">{emptyText}</p>}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-2 text-xs text-slate-500">
@@ -450,7 +473,7 @@ export function DataTable<T>({
           className="rounded-md border border-slate-300 p-1 disabled:opacity-40 dark:border-slate-700"
           aria-label="Página anterior"
         ><ChevronLeft size={14} /></button>
-        <span>Página {actual + 1} de {paginas}</span>
+        <span aria-current="page">Página {actual + 1} de {paginas}</span>
         <button
           onClick={() => setPage(Math.min(paginas - 1, actual + 1))}
           disabled={actual >= paginas - 1}

@@ -356,7 +356,8 @@ export function CxcPage(): React.JSX.Element {
             data={visibles}
             rowKey={(f) => num(f.id)}
             searchPlaceholder="Buscar por número, cliente o referencia…"
-            emptyText={cargando ? 'Cargando…' : 'No hay registros con estos filtros.'}
+            loading={cargando}
+            emptyText='No hay registros con estos filtros.'
             actions={acciones}
           />
         </Card>

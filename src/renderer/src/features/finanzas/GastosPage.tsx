@@ -414,7 +414,8 @@ export function GastosPage(): React.JSX.Element {
             data={tab === 'categorias' ? categorias : visibles}
             rowKey={(f) => num(f.id)}
             searchPlaceholder="Buscar por concepto, categoría o proveedor…"
-            emptyText={cargando ? 'Cargando…' : 'No hay registros con estos filtros.'}
+            loading={cargando}
+            emptyText='No hay registros con estos filtros.'
             actions={acciones}
           />
         </Card>

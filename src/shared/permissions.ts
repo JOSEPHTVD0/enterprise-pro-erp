@@ -35,6 +35,11 @@ const operationModules: Record<Operation, readonly ModuleKey[]> = {
   cerrar_caja: ['cajas', 'pos']
 }
 
+/** Permisos que autorizan enviar el área de impresión ya preparada al motor nativo. */
+export const permisosImpresion: readonly string[] = operationModules.imprimir.map(
+  (modulo) => `${modulo}.imprimir`
+)
+
 const configResources = [
   'empresa', 'parametros', 'impuestos', 'monedas', 'series',
   'almacenes', 'cajas', 'impresoras', 'formatos'

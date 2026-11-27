@@ -1,11 +1,12 @@
-# Instalación y mantenimiento — ENTERPRISE PRO ERP 0.3.0
+# Instalación y mantenimiento — ENTERPRISE PRO ERP
 
+Guía original de `0.3.0`; **release publicada actual: `v0.5.16`** (tag `v0.5.16`).
 Windows 10/11 x64. El usuario final **no necesita Node.js ni instalar dependencias**: el
 instalador incluye Electron 45.4.1, el renderer compilado y el módulo SQLite nativo.
 
 ## 1. Obtener el instalador
 
-El artefacto generado es:
+Artefacto original de `0.3.0` (histórico):
 
 ```text
 EnterpriseProERP-Setup-0.3.0.exe   (145.429.840 bytes)
@@ -33,10 +34,12 @@ primera vez Windows SmartScreen **puede seguir mostrando una advertencia**: solo
 de código de una CA pública confiable permite eliminarla. Esto no afecta la operación local.
 Detalles en [docs/07-cierre-limitaciones.md](07-cierre-limitaciones.md).
 
-Versión publicada actual: `0.5.13` — `EnterpriseProERP-Setup-0.5.13.exe` (145.543.208 bytes),
-SHA-256 `30E25B263B63A89A6B61B2079809A51C26824B494958C1BFD51534A4DA586CE2`,
-SHA-512 `usyzuG8WIrXsgW5mMNqIuI1aGRRiKGONnuZ9+1VSS7HmyddiQI/0MoAuibGsOumGAFAEQK7xJKcjy7583HM9zg==`.
-Novedades: [docs/32](32-novedades-0.5.13.md).
+Versión publicada actual: `0.5.16` — `EnterpriseProERP-Setup-0.5.16.exe` (145.563.768 bytes),
+SHA-256 `CCB0EE11CD5DA3B32DB37F5DD227F34473732A49DEE3D4284B671606A927A33F`,
+SHA-512 `252828FE5E648B3D817105AE5663D061850871E48D3998DFC8C51595C6C0940A1814BDAC8338A669098FE90F3D4787B23CDB138AD9219DA4C4372C4631C32B5F`.
+Novedades: [docs/37](37-novedades-0.5.16.md). La release se verificó con **56 archivos /
+386 pruebas** y **31/31 E2E**; la versión anterior `0.5.15` se documenta en
+[docs/34](34-novedades-0.5.15.md).
 
 ## 2. Primer arranque
 
@@ -113,7 +116,14 @@ instalación) muestra primero una pantalla de bienvenida y luego pregunta:
 En desinstalación silenciosa (`/S`) se aplica la respuesta predeterminada **No**, por
 seguridad. Las actualizaciones nunca muestran la pregunta.
 
-## 6. Verificación realizada
+## 6. Verificación
+
+| Estado | Resultado |
+|---|---|
+| Release publicada `v0.5.16` (tag `v0.5.16`) | `typecheck` correcto; **56 archivos / 386 pruebas**; **31/31 E2E**. |
+| Release anterior `v0.5.15` (commit `2b68bc4`) | `typecheck` correcto; **51 archivos / 353 pruebas**; **31/31 E2E**. |
+
+### Verificación histórica de 0.3.0
 
 | Comprobación | Resultado |
 |---|---|

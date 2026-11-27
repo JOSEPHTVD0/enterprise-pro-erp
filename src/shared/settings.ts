@@ -52,6 +52,10 @@ export const settingsSchema = z.object({
     mostrarSesiones: z.boolean().default(true),
     tiempoAvisoMin: z.number().int().min(1).max(60).default(5),
     enmascararRnc: z.boolean().default(false),
+    /**
+     * Legacy: se conserva para migrar preferencias antiguas, pero no se ofrece en
+     * la interfaz porque la verificación de identidad se resuelve en el backend.
+     */
     exigirClaveAnulacion: z.boolean().default(false)
   })),
   respaldos: conDefaultsDeObjetoVacio(z.object({

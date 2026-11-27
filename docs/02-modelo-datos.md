@@ -5,6 +5,14 @@
 > códigos visibles únicos por empresa. FKs activas (`PRAGMA foreign_keys=ON`), modo WAL.
 > Borrado: maestros usan `activo` (soft-delete); documentos contabilizados son inmutables.
 
+> **Estado del modelo:** la release publicada es `v0.5.16` (tag `v0.5.16`), verificada
+> con **56 archivos / 386 pruebas** y **31/31 E2E**. La release conecta las preferencias
+> fiscales (moneda/decimales/fecha) al formato de la interfaz, refleja los flags vigentes
+> en capacidades, completa `vistasPersonalizables` y añade el tablero horizontal sobre
+> tablas existentes; no añade tablas ni columnas nuevas a este modelo. Los borradores de
+> facturación viven en `localStorage` y los comprobantes emitidos siguen siendo
+> inmutables. DGI es solo rotulado visual: no emite, exporta ni simula e-CF.
+
 ## Convenciones
 
 - `*_centavos` → INTEGER (dinero). `cantidad` → REAL. Timestamps ISO-8601 UTC TEXT.

@@ -49,6 +49,20 @@ describe('catálogo de módulos', () => {
     expect(modulePermission('panel-comercial')).toBe('reportes.consultar')
   })
 
+  it('todas las vistas del menú aparecen en vistasPersonalizables', async () => {
+    const { vistasPersonalizables } = await import('@shared/schemas/ajustes')
+    const ids = allModules.map((m) => m.id).sort()
+    expect([...vistasPersonalizables].sort()).toEqual(ids)
+  })
+
+  it('el permiso efectivo coincide con el declarado cuando existe', () => {
+    for (const modulo of allModules) {
+      if (modulo.permission) expect(modulePermission(modulo.id)).toBe(modulo.permission)
+    }
+    expect(modulePermission('apariencia')).toBeUndefined()
+    expect(modulePermission('agenda')).toBeUndefined()
+  })
+
   it('findModule encuentra todos los módulos del catálogo', () => {
     for (const g of moduleGroups) {
       for (const m of g.modules) {

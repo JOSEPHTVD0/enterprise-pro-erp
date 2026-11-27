@@ -7,6 +7,7 @@ import { useAjustesStore } from '@/app/ajustes-store'
 import { defaultAjustes } from '@shared/schemas/ajustes'
 import { coincideTexto, normalizarTexto } from '@shared/texto'
 import { titleSi, usePreferenciasInterfaz } from '@/lib/format'
+import { useTexto } from '@/lib/i18n'
 
 interface ModuloMenu {
   id: string
@@ -43,6 +44,7 @@ export function Sidebar(): React.JSX.Element {
   const interfaz = useAjustesStore((s) => s.ajustes.interfaz ?? defaultAjustes.interfaz)
   const preferencias = usePreferenciasInterfaz()
   const anchoSidebar = Math.min(360, Math.max(200, Number(interfaz.anchoSidebar) || 240))
+  const t = useTexto()
   // Suscribirse a los permisos mantiene el menú alineado tras editar roles.
   const permisos = useSessionStore((s) => s.ctx?.permisos) ?? []
 
@@ -154,15 +156,15 @@ export function Sidebar(): React.JSX.Element {
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar módulos…"
-            aria-label="Buscar módulos"
+            placeholder={t('buscarModulos')}
+            aria-label={t('buscarModulosAria')}
             className="h-8 w-full rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-2 text-xs outline-none focus:border-indigo-500 dark:border-slate-700 dark:bg-slate-800"
           />
         </div>
       )}
 
       {/* Navegación */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label="Módulos">
+      <nav className="flex-1 overflow-y-auto px-2 py-3" aria-label={t('modulos')}>
         {!sidebarCollapsed && !q && favoritosVisibles.length > 0 && (
           <section aria-label="Favoritos" className="mb-2 rounded-lg border border-amber-200 bg-amber-50/50 p-2 dark:border-amber-900/60 dark:bg-amber-950/20">
             <div className="mb-1 flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">

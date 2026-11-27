@@ -11,6 +11,7 @@ import { DataTable, type Column } from '@/components/ui/DataTable'
 import { Field, TextInput, inputClass } from '@/components/ui/Field'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useSessionStore } from '@/app/session'
+import { useAjustesStore } from '@/app/ajustes-store'
 
 interface FilaCapacidad {
   id: string
@@ -100,6 +101,8 @@ export function Capacidades2026Page(): React.JSX.Element {
   const [fase, setFase] = useState('Todas')
   const [soloActivos, setSoloActivos] = useState(false)
   const [soloConPermiso, setSoloConPermiso] = useState(false)
+  const moduloActivo = useAjustesStore((s) => s.moduloActivo)
+  const flagsModulo = useAjustesStore((s) => s.ajustes.featureFlags?.modulos ?? defaultAjustes.featureFlags.modulos)
 
   const filtradas = useMemo(() => todasLasFilas.filter((f) => {
     if (grupo !== 'Todos' && f.grupo !== moduleGroups.find((g) => g.id === grupo)?.label) return false
@@ -120,7 +123,7 @@ export function Capacidades2026Page(): React.JSX.Element {
   const pendientes = todasLasFilas.length - activos
   const fase2026 = todasLasFilas.filter((f) => f.fase === 13 || f.fase === 14).length
   const protegidosCount = todasLasFilas.filter((f) => f.protegido).length
-  const flagsActivos = defaultAjustes.featureFlags.modulos.filter((f) => f.activo).length
+  const flagsActivos = flagsModulo.filter((f) => moduloActivo(f.modulo)).length
 
   return (
     <div className="animate-fade-in">
@@ -158,7 +161,7 @@ export function Capacidades2026Page(): React.JSX.Element {
           <label className="flex items-center gap-2 pb-2 text-sm">
             <input type="checkbox" className="h-4 w-4 accent-indigo-600"
               checked={soloActivos} onChange={(e) => setSoloActivos(e.target.checked)} />
-            Solo activos
+            Solo implementados
           </label>
           <label className="flex items-center gap-2 pb-2 text-sm">
             <input type="checkbox" className="h-4 w-4 accent-indigo-600"
@@ -190,7 +193,7 @@ export function Capacidades2026Page(): React.JSX.Element {
             Dominios de permisos: {Object.keys(moduleLabels).length} módulos
             ({[modulosProtegidos[0], modulosProtegidos[1], modulosProtegidos[2], modulosProtegidos[3]]
               .map(etiquetaDominio).join(', ')}).
-            {' '}Feature flags por defecto: {flagsActivos} de {defaultAjustes.featureFlags.modulos.length} activos.
+            {' '}Feature flags vigentes: {flagsActivos} de {flagsModulo.length} activos.
           </p>
         </div>
       </Card>

@@ -93,11 +93,16 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
   const [guardado, setGuardado] = useState(false)
   const [impresoras, setImpresoras] = useState<ImpresoraInfo[]>([])
   const [detectando, setDetectando] = useState(false)
+  const [errorImpresoras, setErrorImpresoras] = useState('')
 
   const detectarImpresoras = async (): Promise<void> => {
     setDetectando(true)
+    setErrorImpresoras('')
     try {
-      setImpresoras(await listarImpresoras())
+      setImpresoras(await listarImpresoras({ estricto: true }))
+    } catch (error) {
+      setImpresoras([])
+      setErrorImpresoras(error instanceof Error ? error.message : 'No se pudieron detectar las impresoras.')
     } finally {
       setDetectando(false)
     }
@@ -211,7 +216,7 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
             subtitle="Impresoras detectadas en este equipo, modos y formatos por documento."
             actions={
               <Button variant="secondary" size="sm"
-                onClick={() => useAppStore.getState().setActiveView('impresion')}>
+                onClick={() => useAppStore.getState().setActiveView('centro-impresion')}>
                 Abrir centro de impresión
               </Button>
             }
@@ -225,6 +230,9 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
                 onDetectar={() => void detectarImpresoras()}
                 onChange={(nombre) => cambiar('impresion', 'impresora', nombre)}
               />
+              {errorImpresoras && (
+                <p className="text-xs text-red-500 md:col-span-2" role="alert">{errorImpresoras}</p>
+              )}
               <Opcion label="Modo de impresión" value={txt('impresion', 'modo')}
                 options={[
                   { value: 'DIALOGO', label: 'Diálogo del sistema' },
@@ -339,8 +347,6 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
                 onChange={(v) => cambiar('seguridad', 'tiempoAvisoMin', v)} />
               <Interruptor label="Enmascarar RNC/cédula en listados" value={bool('seguridad', 'enmascararRnc')}
                 onChange={(v) => cambiar('seguridad', 'enmascararRnc', v)} />
-              <Interruptor label="Exigir clave para anular" value={bool('seguridad', 'exigirClaveAnulacion')}
-                onChange={(v) => cambiar('seguridad', 'exigirClaveAnulacion', v)} />
             </div>
             <p className="mt-3 flex items-center gap-2 text-xs text-slate-400">
               <SlidersHorizontal size={13} />
@@ -382,9 +388,9 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
                   { value: 'MM/dd/yyyy', label: 'MM/dd/yyyy' }
                 ]}
                 onChange={(v) => cambiar('fiscal', 'formatoFecha', v)} />
-              <Interruptor label="Libro 606/607 visible" value={bool('fiscal', 'libro606')}
-                onChange={(v) => { cambiar('fiscal', 'libro606', v); cambiar('fiscal', 'libro607', v) }}
-                hint="Muestra los libros auxiliares derivados de compras y ventas reales." />
+              <Interruptor label="Libros auxiliares 606/607 visibles" value={bool('fiscal', 'libro606')}
+                hint="Muestra u oculta ambas pestañas en Reportes."
+                onChange={(v) => { cambiar('fiscal', 'libro606', v); cambiar('fiscal', 'libro607', v) }} />
               <Interruptor label="Recordatorio de series NCF" value={bool('fiscal', 'recordatorioNcf')}
                 onChange={(v) => cambiar('fiscal', 'recordatorioNcf', v)} />
             </div>

@@ -89,7 +89,8 @@ export function ConducesTab(): React.JSX.Element {
           data={conduces}
           rowKey={(f) => num(f.id)}
           searchPlaceholder="Buscar conduce…"
-          emptyText={cargando ? 'Cargando…' : 'No hay conduces registrados.'}
+          loading={cargando}
+          emptyText='No hay conduces registrados.'
           actions={(fila) => (
             <button
               className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"

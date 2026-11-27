@@ -16,6 +16,7 @@ import {
   aplicarPreferenciasGlobal, instalarObservadorPreferencias, preferenciasActuales,
   recargarPreferencias, titleSi, usePreferenciasInterfaz
 } from '@/lib/format'
+import { useTexto } from '@/lib/i18n'
 
 const themeCycle = { light: 'dark', dark: 'system', system: 'light' } as const
 const themeIcon = { light: Sun, dark: Moon, system: Monitor } as const
@@ -34,10 +35,11 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
   const [update, setUpdate] = useState<EstadoActualizacion | null>(null)
   const ThemeIcon = themeIcon[theme]
   const preferencias = usePreferenciasInterfaz()
+  const t = useTexto()
 
-  // Se aplica en un microtask para que prevalezca sobre el efecto del tema avanzado.
+  // Única fuente de verdad del acento, tamaño y densidad resueltos.
   useEffect(() => {
-    queueMicrotask(() => aplicarPreferenciasGlobal(preferenciasActuales()))
+    aplicarPreferenciasGlobal(preferenciasActuales())
   }, [
     preferencias.acento, preferencias.tamanoFuente, preferencias.densidad,
     preferencias.reducirMovimiento, preferencias.tooltips, preferencias.confirmarAcciones,
@@ -119,7 +121,7 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
           {userMenu && (
             <div className="absolute right-0 top-10 z-30 w-60 rounded-lg border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
               <div className="border-b border-slate-100 px-2 py-2 text-xs dark:border-slate-800">
-                <p className="flex items-center gap-1.5 font-medium"><ShieldCheck size={13} className="text-indigo-500" /> Sesión activa</p>
+                <p className="flex items-center gap-1.5 font-medium"><ShieldCheck size={13} className="text-indigo-500" /> {t('sesionActiva')}</p>
                 <p className="mt-1 text-slate-400">{ctx?.permisos.length ?? 0} permisos efectivos</p>
               </div>
               {companies.length > 1 && (
@@ -143,13 +145,13 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
                 onClick={() => { setUserMenu(false); onChangePassword() }}
                 className="mt-1 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
               >
-                <KeyRound size={15} /> Cambiar contraseña
+                <KeyRound size={15} /> {t('cambiarContrasena')}
               </button>
               <button
                 onClick={() => { setUserMenu(false); void logout() }}
                 className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
               >
-                <LogOut size={15} /> Cerrar sesión
+                <LogOut size={15} /> {t('cerrarSesion')}
               </button>
             </div>
           )}
@@ -169,8 +171,8 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
           <button
             onClick={() => { setUserMenu(false); setUpdatesOpen(true) }}
             className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-            title={titleSi(preferencias.tooltips, 'Actualizaciones')}
-            aria-label="Actualizaciones"
+            title={titleSi(preferencias.tooltips, t('actualizaciones'))}
+            aria-label={t('actualizaciones')}
           >
             <Download size={17} />
             {(update?.disponible || update?.descargada) && (
@@ -182,8 +184,8 @@ export function Topbar({ onChangePassword }: { onChangePassword: () => void }): 
           <button
             onClick={() => setAboutOpen(true)}
             className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
-            title={titleSi(preferencias.tooltips, 'Acerca de')}
-            aria-label="Acerca de"
+            title={titleSi(preferencias.tooltips, t('acercaDe'))}
+            aria-label={t('acercaDe')}
           >
             <Info size={17} />
           </button>

@@ -213,9 +213,9 @@ export const vistasPersonalizables = [
   'dashboard', 'apariencia', 'dashboard-ejecutivo', 'centro-control', 'centro-impresion', 'inteligencia', 'agenda',
   'facturacion', 'pos', 'cotizaciones', 'cobros', 'compras', 'productos', 'inventario', 'control-stock',
   'clientes', 'proveedores', 'vendedores', 'catalogos', 'cxc', 'cxp', 'bancos', 'cajas',
-  'gastos', 'contabilidad', 'reportes', 'presupuestos', 'servicios', 'activos', 'crm',
+  'gastos', 'contabilidad', 'reportes', 'panel-comercial', 'presupuestos', 'servicios', 'activos', 'crm',
   'usuarios', 'roles', 'configuracion', 'configuracion-avanzada', 'salud', 'auditoria', 'respaldos',
-  'espacio-trabajo'
+  'panel-2026', 'capacidades-2026', 'espacio-trabajo'
 ] as const
 
 export const interfazSchema = conDefaultsDeObjetoVacio(z.object({

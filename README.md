@@ -22,7 +22,8 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 | 13 | Ampliaciones 2026 y correcciones de desarrollo | ✅ Completa y verificada |
 | 14 | Numeración consecutiva y contabilidad general | ✅ Completa y verificada |
 
-**Versión publicada: 0.5.13.** [Novedades](docs/32-novedades-0.5.13.md) ·
+**Versión publicada: 0.5.16** (tag `v0.5.16`). [Novedades](docs/37-novedades-0.5.16.md) ·
+[Índice de documentación](docs/00-indice.md) ·
 [Corrección de la pantalla negra y ajustes](docs/22-correcciones-post-0.5.7.md) ·
 [Paneles y ajustes 2026](docs/20-paneles-y-ajustes-2026.md) ·
 [Panel de actualizaciones](docs/18-panel-actualizaciones-progreso.md) ·
@@ -32,14 +33,31 @@ Referencia funcional: SAINT Enterprise Administrativo. Código, diseño e identi
 [Espacio de trabajo](docs/29-espacio-trabajo-local.md) ·
 [Facturación ECF](docs/31-novedades-0.5.12.md) ·
 [Rediseño del panel ECF](docs/32-novedades-0.5.13.md) ·
-`EnterpriseProERP-Setup-0.5.13.exe` · SHA-256
-`30E25B263B63A89A6B61B2079809A51C26824B494958C1BFD51534A4DA586CE2` ·
+`EnterpriseProERP-Setup-0.5.16.exe` (145.563.768 bytes) · SHA-256
+`CCB0EE11CD5DA3B32DB37F5DD227F34473732A49DEE3D4284B671606A927A33F` · SHA-512
+`252828FE5E648B3D817105AE5663D061850871E48D3998DFC8C51595C6C0940A1814BDAC8338A669098FE90F3D4787B23CDB138AD9219DA4C4372C4631C32B5F` ·
 instalador **firmado de forma autofirmada** y sin timestamp (SmartScreen no desaparece
 sin CA confiable). El actualizador solo guarda el instalador en `Descargas`; la
 instalación es manual. Se pueden abrir varias instancias con la misma BD.
-La versión anterior fue `0.5.12`; sus novedades siguen en
-[docs/31-novedades-0.5.12.md](docs/31-novedades-0.5.12.md).
+
+La release publicada `v0.5.16` se verificó con **56 archivos / 386 pruebas** y **31/31
+pruebas E2E** en Electron por CDP. Incluye todo lo publicado en `v0.5.15`; sus novedades
+siguen en [docs/34-novedades-0.5.15.md](docs/34-novedades-0.5.15.md).
+
+Esta release reúne primitivos `Skeleton`/`EmptyState`/`LoadingState`/`StatCard`,
+`DataTable` con `loading`, acento único desde `--erp-acento`, escala de fuente real,
+i18n del shell, preferencias fiscales (moneda/decimales/fecha) conectadas, flags
+vigentes en capacidades y `vistasPersonalizables` completas. Añade además un
+**tablero horizontal avanzado** en Espacio de trabajo con cinco paneles operativos
+sobre SQLite (cobranza, inventario ABC, agenda, presupuestos y cuadre caja/banca),
+con permisos reales por sección, filtros, reordenación, colapso y exportación CSV.
+**DGI es solo rotulado visual**: no emite, exporta ni simula e-CF. Los borradores de
+facturación viven en `localStorage` y los comprobantes emitidos son inmutables.
+
 Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md).
+Detalle de consistencia y ajustes: [docs/35-consistencia-ui-ajustes.md](docs/35-consistencia-ui-ajustes.md).
+Detalle del tablero horizontal: [docs/36-panel-horizontal-avanzado.md](docs/36-panel-horizontal-avanzado.md).
+Detalle de la release: [docs/37-novedades-0.5.16.md](docs/37-novedades-0.5.16.md).
 
 ## Ejecución
 
@@ -47,11 +65,15 @@ Detalle del cierre de limitaciones: [docs/07-cierre-limitaciones.md](docs/07-cie
 npm.cmd install
 npm.cmd run dev        # aplicación Electron en modo desarrollo
 npm.cmd run build      # compilar main + preload + renderer
-npm.cmd test           # 337 pruebas (seguridad, IPC, BD real, PDF, maestros, inventario, ventas, POS, compras, finanzas, reportes, auditoría, respaldos, impresión, rendimiento, persistencia, Excel, UI, módulos 0.4.0/2026, series, contabilidad y espacio de trabajo)
-npm.cmd run test:e2e   # 26 pruebas reales en Electron por CDP (Playwright)
+npm.cmd test           # 386 pruebas en 56 archivos en v0.5.16
+npm.cmd run test:e2e   # 31/31 pruebas reales en Electron por CDP
 npm.cmd run test:updater # verifica el feed local de electron-updater
 npm.cmd run typecheck  # TypeScript estricto
 ```
+
+En `v0.5.16` `typecheck` pasa y la suite es de **386 pruebas en 56 archivos**, con
+**31/31 E2E**. Las cifras de la release anterior `v0.5.15` son **353 pruebas en 51
+archivos** y **31/31 E2E**.
 
 ### Primer arranque
 
@@ -73,13 +95,16 @@ y se almacena hasheado (SHA-256) en la tabla `sesiones`.
   «Guardar PDF» en ventas, compras, finanzas y reportes. La impresión nativa sigue disponible.
 - **E2E:** Playwright se conecta por CDP a Electron; `npm.cmd run test:e2e` valida login, IPC de
   PDF, botón de descarga y consola limpia sin descargar navegadores.
-- **Actualizaciones:** `electron-updater` con proveedor `generic`. El feed local se genera con
-  `npm.cmd run release:feed` y se sirve con `npm.cmd run release:serve`. En producción debe
-  sustituirse `build.publish.url` por una URL HTTPS (o definir `ERP_UPDATE_URL`).
+- **Actualizaciones:** `electron-updater` con proveedor `generic`. El feed por defecto es la
+  URL HTTPS de GitHub Releases (`URL_FEED_PUBLICADO` en `src/shared/actualizaciones.ts`);
+  `ERP_UPDATE_URL` lo sustituye en pruebas o despliegues corporativos. El feed local se
+  genera con `npm.cmd run release:feed` y se sirve con `npm.cmd run release:serve`.
 - **Firma:** el instalador está firmado con certificado autofirmado mediante
   `scripts\firmar-instalador.ps1`. SmartScreen **no desaparece** sin certificado de CA pública.
 - **Git:** repositorio inicializado con un único commit; artefactos y claves ignorados.
-- **e-CF:** solo preparación; no hay emisión ni certificación DGII.
+- **DGI / e-CF:** DGI es solo rotulado visual; no hay emisión, exportación ni simulación
+  de e-CF, envío a DGII ni certificación. Impresión silenciosa es opcional (`DIALOGO` es
+  el modo por defecto).
 
 ## Novedades 0.4.0
 
@@ -341,6 +366,7 @@ inicio muestra indicadores y gráfica con datos reales.
 
 ## Documentación
 
+- [docs/00-indice.md](docs/00-indice.md) — Índice navegable por tema, estado de la release y avisos.
 - [docs/01-arquitectura.md](docs/01-arquitectura.md) — Arquitectura técnica, capas, IPC, seguridad.
 - [docs/adr/](docs/adr/) — Decisiones técnicas aprobadas.
 - [docs/02-modelo-datos.md](docs/02-modelo-datos.md) — Esquema SQLite, entidades, relaciones, reglas de integridad.
@@ -351,6 +377,8 @@ inicio muestra indicadores y gráfica con datos reales.
 - [docs/07-cierre-limitaciones.md](docs/07-cierre-limitaciones.md) — PDF, E2E, updater, firma, Git y e-CF.
 - [docs/08-guia-uso-y-publicacion.md](docs/08-guia-uso-y-publicacion.md) — Guía de instalación, uso, compilación, firma y publicación.
 - [docs/09-novedades-0.3.0.md](docs/09-novedades-0.3.0.md) — Cambios, verificación y artefacto de 0.3.0.
+- [docs/34-novedades-0.5.15.md](docs/34-novedades-0.5.15.md) — Release anterior `0.5.15`: cambios, verificación y artefacto.
+- [docs/37-novedades-0.5.16.md](docs/37-novedades-0.5.16.md) — Release publicada actual: cambios, verificación y artefacto.
 
 ## Stack aprobado (Fase 1)
 
@@ -368,4 +396,4 @@ tras autorizarse las actualizaciones mayores y los overrides necesarios.
 2. Toda operación financiera usa transacciones SQL reales; nada se simula.
 3. Permisos verificados en el proceso principal (backend), no solo en la UI.
 4. Documentos contabilizados nunca se borran: se anulan/reversan con trazabilidad.
-5. Adaptación fiscal RD (DOP, RNC/cédula, ITBIS, NCF) preparada para e-CF, **sin afirmar certificación DGII**.
+5. Adaptación fiscal RD (DOP, RNC/cédula, ITBIS, NCF) con DGI **solo como rotulado visual**; no se emite, exporta ni simula e-CF y no se afirma certificación DGII.

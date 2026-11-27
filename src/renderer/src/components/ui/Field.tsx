@@ -1,7 +1,12 @@
-import { useEffect, useState, type InputHTMLAttributes, type ReactNode } from 'react'
+import {
+  cloneElement, isValidElement, useEffect, useId, useState,
+  type InputHTMLAttributes, type ReactNode
+} from 'react'
 
 export const inputClass =
   'h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition-colors placeholder:text-slate-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 disabled:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:disabled:bg-slate-800'
+
+type ConAria = { id?: string; 'aria-describedby'?: string }
 
 export function Field({
   label,
@@ -14,11 +19,21 @@ export function Field({
   hint?: string
   className?: string
 }): React.JSX.Element {
+  const generado = useId()
+  const hintId = `${generado}-hint`
+  const props = isValidElement<ConAria>(children) ? children.props : undefined
+  const id = props?.id ?? generado
+  const descritoPor = [props?.['aria-describedby'], hint ? hintId : undefined]
+    .filter(Boolean).join(' ') || undefined
+  const control = isValidElement<ConAria>(children)
+    ? cloneElement(children, { id, 'aria-describedby': descritoPor })
+    : children
+
   return (
     <div className={`flex flex-col gap-1 ${className}`}>
-      <label className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</label>
-      {children}
-      {hint && <p className="text-[11px] text-slate-400">{hint}</p>}
+      <label htmlFor={id} className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</label>
+      {control}
+      {hint && <p id={hintId} className="text-[11px] text-slate-400">{hint}</p>}
     </div>
   )
 }
@@ -57,7 +72,7 @@ export function parseNumericDraft(
 
 export function NumberInput({
   label, value, min = 0, max = Number.MAX_SAFE_INTEGER, decimal = false,
-  disabled = false, className = '', onChange
+  disabled = false, className = '', id, 'aria-describedby': ariaDescritoPor, onChange
 }: {
   label: string
   value: number
@@ -66,6 +81,8 @@ export function NumberInput({
   decimal?: boolean
   disabled?: boolean
   className?: string
+  id?: string
+  'aria-describedby'?: string
   onChange: (valor: number) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState(() => String(value))
@@ -87,9 +104,11 @@ export function NumberInput({
 
   return (
     <input
+      id={id}
       type="text"
       inputMode="decimal"
       aria-label={label}
+      aria-describedby={ariaDescritoPor}
       disabled={disabled}
       value={draft}
       className={`${inputClass} ${className}`}

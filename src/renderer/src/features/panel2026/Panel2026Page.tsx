@@ -309,7 +309,7 @@ export function Panel2026Page(): React.JSX.Element {
                       <YAxis tick={{ fontSize: 10 }} width={80} />
                       <Tooltip formatter={(v) => money(Number(v))} />
                       <Legend />
-                      <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="#4f46e5" fill="#4f46e5" fillOpacity={0.16} />
+                      <Area type="monotone" dataKey="ventasCent" name="Ventas" stroke="var(--erp-acento)" fill="var(--erp-acento)" fillOpacity={0.16} />
                       <Area type="monotone" dataKey="comprasCent" name="Compras" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.14} />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -445,7 +445,7 @@ export function Panel2026Page(): React.JSX.Element {
 
           <p className="text-xs text-slate-400">
             * Umbrales aplicados: CxC {preferencias.alertas.cxcDiasVencimiento} días · stock {preferencias.alertas.stockBajoUmbral} ·
-            series restantes {preferencias.alertas.seriesRestantes} · presupuesto {preferencias.alertas.presupuestoPct}% ·
+            series restantes {preferencias.alertas.seriesRestantes} ·
             proyección {datos.config.diasProyeccion} días · filas {datos.config.filas}.
             Los límites se administran en el Centro de control.
           </p>

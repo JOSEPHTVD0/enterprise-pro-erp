@@ -61,7 +61,7 @@ export function createComprasService(
   inventario: InventarioService,
   ajustes: Pick<ReturnType<typeof createAjustesService>, 'leerGrupo'> = createAjustesService(db)
 ) {
-  function audit(ctx: SessionContext, operacion: string, entidad: string, id: number, antes: unknown, despues: unknown): void {
+  function audit(ctx: SessionContext, operacion: string, entidad: string, id: number | null, antes: unknown, despues: unknown): void {
     writeAudit(db, {
       empresaId: ctx.empresaId, userId: ctx.userId, sesionId: ctx.sesionId
     }, operacion, entidad, id, antes, despues)
@@ -1440,7 +1440,11 @@ export function createComprasService(
         })
       }
       const buffer = await wb.xlsx.writeBuffer()
-      return { filename: `compras_${hoy()}.xlsx`, base64: Buffer.from(buffer).toString('base64') }
+      const filename = `compras_${hoy()}.xlsx`
+      audit(ctx, 'EXPORTAR', 'documentos_compra', null, filtro, {
+        registros: filas.length, filename
+      })
+      return { filename, base64: Buffer.from(buffer).toString('base64') }
     }
   }
 }

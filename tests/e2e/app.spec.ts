@@ -289,7 +289,7 @@ test('las plantillas rápidas aplican ajustes visuales auditados', async () => {
 
 test('la paleta global Ctrl+K abre módulos permitidos', async () => {
   await page.keyboard.press('Control+k')
-  const paleta = page.getByRole('textbox', { name: 'Buscar en todo el ERP' })
+  const paleta = page.getByRole('combobox', { name: 'Buscar en todo el ERP' })
   await expect(paleta).toBeVisible()
   await paleta.fill('cobros')
   await expect(page.getByRole('button', { name: /Cobros/ }).first()).toBeVisible()
@@ -356,6 +356,14 @@ test('el espacio de trabajo muestra panel, herramientas y personalización reale
   await expect(page.getByText('Herramientas de mantenimiento')).toBeVisible()
   await page.getByRole('button', { name: 'Personalización', exact: true }).click()
   await expect(page.getByText('Personalización de la estación')).toBeVisible()
+  await page.getByRole('button', { name: 'Panel horizontal', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Tablero horizontal avanzado' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Cola de cobranza' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Reposición ABC' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Desviación presupuestaria' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Mover Cola de cobranza a la derecha/ })).toBeEnabled()
+  await page.getByRole('button', { name: /Colapsar Cola de cobranza/ }).click()
+  await expect(page.getByRole('button', { name: /Expandir Cola de cobranza/ })).toBeVisible()
 })
 
 test('el árbol de React sigue presente tras autenticar y navegar', async () => {

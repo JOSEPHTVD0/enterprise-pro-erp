@@ -200,7 +200,8 @@ export function CotizacionesPage(): React.JSX.Element {
           data={documentos}
           rowKey={(f) => num(f.id)}
           searchPlaceholder="Buscar por número o cliente…"
-          emptyText={cargando ? 'Cargando…' : 'No hay documentos.'}
+          loading={cargando}
+          emptyText='No hay documentos.'
           actions={(fila) => (
             <div className="flex justify-end gap-1">
               <button className="rounded p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => void verDetalle(num(fila.id))} title="Ver detalle" aria-label="Ver detalle"><Eye size={15} /></button>

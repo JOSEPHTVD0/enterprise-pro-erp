@@ -9,7 +9,10 @@ import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { DataTable, type Column } from '@/components/ui/DataTable'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { SkeletonChart } from '@/components/ui/Skeleton'
+import { StatCard } from '@/components/ui/StatCard'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
@@ -212,19 +215,23 @@ export function PanelComercialPage(): React.JSX.Element {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        {tarjetas.map((tarjeta) => (
-          <div key={tarjeta.etiqueta}
-            className="rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{tarjeta.etiqueta}</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{tarjeta.valor}</p>
-          </div>
+        {tarjetas.map((tarjeta, i) => (
+          <StatCard
+            key={tarjeta.etiqueta}
+            label={tarjeta.etiqueta}
+            value={tarjeta.valor}
+            tone={i < 2 ? 'accent' : i === 6 ? 'warning' : 'neutral'}
+            loading={cargando && !indicadores}
+          />
         ))}
       </div>
 
       <div className="mb-4 grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2" title="Evolución de ventas y cobros"
           subtitle={can('reportes.consultar') ? `Granularidad ${granularidad.toLowerCase()}` : 'Sin permiso de reportes'}>
-          {puntosGrafica.length ? (
+          {cargando && !serie ? (
+            <SkeletonChart className="h-56" />
+          ) : puntosGrafica.length ? (
             <div className="h-56">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={puntosGrafica} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
@@ -233,13 +240,13 @@ export function PanelComercialPage(): React.JSX.Element {
                   <YAxis tick={{ fontSize: 10 }} />
                   <Tooltip />
                   <Legend />
-                  <Area type="monotone" dataKey="Ventas" stroke="#6366f1" fill="#6366f1" fillOpacity={0.16} />
+                  <Area type="monotone" dataKey="Ventas" stroke="var(--erp-acento)" fill="var(--erp-acento)" fillOpacity={0.16} />
                   <Area type="monotone" dataKey="Cobros" stroke="#10b981" fill="#10b981" fillOpacity={0.16} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
           ) : (
-            <p className="py-16 text-center text-sm text-slate-500">No hay serie disponible para este período.</p>
+            <EmptyState tone="empty" title="Sin serie disponible" description="No hay ventas ni cobros para este período." />
           )}
         </Card>
 
@@ -262,7 +269,7 @@ export function PanelComercialPage(): React.JSX.Element {
               ))}
             </div>
           ) : (
-            <p className="py-16 text-center text-sm text-slate-500">Sin ventas en el filtro actual.</p>
+            <EmptyState tone="filtered" title="Sin ventas en el filtro actual" description="Ajuste los filtros para ver resultados." />
           )}
         </Card>
       </div>
@@ -285,7 +292,8 @@ export function PanelComercialPage(): React.JSX.Element {
             rowKey={(f) => `${txt(f.origen)}-${num(f.id)}-${txt(f.numero)}`}
             storageKey={`panel-comercial.${vista}`}
             searchPlaceholder="Buscar por número, cliente o estado…"
-            emptyText={cargando ? 'Cargando…' : 'No hay registros con estos filtros.'}
+            loading={cargando}
+            emptyText='No hay registros con estos filtros.'
           />
           <p className="mt-3 text-xs text-slate-500">
             Los importes vienen de los servicios reales. El filtro por producto se aplica en backend contra las líneas de venta; el estado y el saldo no se recalculan en la interfaz.

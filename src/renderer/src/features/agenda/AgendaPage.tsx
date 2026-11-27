@@ -42,6 +42,7 @@ export function AgendaPage(): React.JSX.Element {
   const verCobros = can('cobros.consultar')
   const verPagos = can('cxp.consultar')
   const verSalud = can('salud.consultar')
+  const recordatorioNcf = useAppStore((s) => s.settings.fiscal.recordatorioNcf)
 
   useEffect(() => {
     if (verCobros) {
@@ -93,6 +94,7 @@ export function AgendaPage(): React.JSX.Element {
         `cxc-agenda:${vencidos}`)
     }
     for (const comprobacion of salud) {
+      if (!recordatorioNcf) break
       if (comprobacion.estado === 'ok') continue
       if (!/serie|correlativo|ncf/i.test(`${comprobacion.nombre} ${comprobacion.detalle}`)) continue
       const coincidencia = comprobacion.detalle.match(/(\d+)\s*(?:número|numero)/i)
@@ -103,7 +105,7 @@ export function AgendaPage(): React.JSX.Element {
       toast.evento('SERIE_ALERTA', comprobacion.detalle,
         `serie:${comprobacion.nombre}:${comprobacion.detalle}`)
     }
-  }, [vencidos, salud, preferencias.alertas.cxcDiasVencimiento,
+  }, [vencidos, salud, recordatorioNcf, preferencias.alertas.cxcDiasVencimiento,
     preferencias.alertas.seriesRestantes, preferencias.alertas.nivelMinimo])
 
   const columnas = (esCobro: boolean): Column<Fila>[] => [
