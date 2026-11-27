@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { money, number } from '@/lib/format'
+import { imprimirDocumento } from '@/lib/impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { formatoGuardado, type FormatoImpresion } from '@/lib/formato-impresion'
 import { descargarArchivo } from '@/features/inventario/descargar'
@@ -169,7 +170,9 @@ export function FacturacionPage(): React.JSX.Element {
     try {
       const formato = await formatoGuardado(tipoDoc ?? 'FACTURA_CONTADO', fallback)
       setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id, formato }))
-      window.setTimeout(() => window.print(), 80)
+      if (!await imprimirDocumento('FACTURA', { formato })) {
+        toast.warning('La impresión fue cancelada.')
+      }
     } catch (error) {
       toast.error(errorInfo(error).message)
     }

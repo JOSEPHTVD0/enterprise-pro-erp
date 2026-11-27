@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
+import { imprimirDocumento } from '@/lib/impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { descargarArchivo } from '@/features/inventario/descargar'
 import { AreaImpresionReportes } from './AreaImpresionReportes'
@@ -135,7 +136,9 @@ export function ReportesPage(): React.JSX.Element {
         reporte: tab, filtro: payloadFiltro(filtro)
       })
       setImpresion(respuesta)
-      window.setTimeout(() => window.print(), 80)
+      if (!await imprimirDocumento('REPORTE')) {
+        toast.warning('La impresión fue cancelada.')
+      }
     } catch (error) {
       toast.error(errorInfo(error).message)
     } finally {

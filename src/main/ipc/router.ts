@@ -29,6 +29,7 @@ import { createContabilidadService } from '../services/contabilidad.service'
 import { createAjustesService } from '../services/ajustes.service'
 import { createInteligenciaService } from '../services/inteligencia.service'
 import { createEspacioService } from '../services/espacio.service'
+import { createImpresionService } from '../services/impresion.service'
 import { serializeError, errors, encodeIpcError } from '@shared/errors'
 import { assertCanProceed } from './policy'
 import {
@@ -75,6 +76,7 @@ import {
   respaldosCrearSchema, respaldosHistorialSchema, respaldosIntegridadSchema, respaldosRestaurarSchema
 } from '@shared/schemas/respaldos'
 import { pdfGenerarSchema } from '@shared/schemas/pdf'
+import { impresionEjecutarSchema } from '@shared/schemas/impresion'
 import {
   espacioFiltroSchema, espacioComprobantesFiltroSchema, espacioComprobanteEmitirSchema,
   espacioPresetSchema, espacioPresetIdSchema, espacioReindexSchema,
@@ -150,7 +152,10 @@ function route(
 export function registerIpc(
   db: Db,
   isTrusted: (event: IpcMainInvokeEvent) => boolean,
-  opciones: { instanciasActivas?: () => number } = {}
+  opciones: {
+    instanciasActivas?: () => number
+    webContents?: () => Electron.WebContents | null
+  } = {}
 ): void {
   const auth = createAuthService(db)
   const seguridad = createSeguridadService(db)
@@ -174,6 +179,7 @@ export function registerIpc(
   const contabilidad = createContabilidadService(db)
   const inteligencia = createInteligenciaService(db, ajustes)
   const espacio = createEspacioService(db)
+  const impresion = createImpresionService(() => opciones.webContents?.() ?? null)
   const backups = createBackupsService({
     db,
     userDataPath: app.getPath('userData'),
@@ -847,6 +853,14 @@ export function registerIpc(
     'pdf.generar': route(
       (ctx, input) => generarPdf(ctx, input as never, { ventas, compras, finanzas, cobros, reportes }),
       { schema: pdfGenerarSchema }
+    ),
+
+    // Impresoras reales de Windows: solo se consultan y se usa `webContents.print`.
+    // Los datos de cada documento ya fueron validados por sus propios canales.
+    'impresoras.listar': route(() => impresion.listar()),
+    'impresion.ejecutar': route(
+      (_ctx, input) => impresion.ejecutar(input as never),
+      { schema: impresionEjecutarSchema }
     ),
 
     // Espacio de trabajo: panel, comprobantes, herramientas y personalización.

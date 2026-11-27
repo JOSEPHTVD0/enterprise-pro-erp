@@ -58,7 +58,8 @@ describe('Fase 11 — router IPC real', () => {
     for (const canal of [
       'auth.login', 'auth.me', 'auth.changePassword', 'config.get',
       'config.catalog.save', 'dashboard.resumen', 'seguridad.users.create',
-      'reportes.imprimir', 'respaldos.crear', 'respaldos.restaurar'
+      'reportes.imprimir', 'respaldos.crear', 'respaldos.restaurar',
+      'impresoras.listar', 'impresion.ejecutar'
     ]) {
       expect(em.handlers.get(canal), canal).toBeTypeOf('function')
     }
@@ -164,6 +165,14 @@ describe('Fase 11 — router IPC real', () => {
       token: tokenAdmin, input: { tabla: 'usuarios', data: {} }
     }))
     expect(catalogo.code).toBe('VALIDATION')
+  })
+
+  it('expone impresoras del sistema y valida las opciones de impresión', async () => {
+    expect(await invoke('impresoras.listar', { token: tokenAdmin })).toEqual([])
+    const invalida = await errorOf(invoke('impresion.ejecutar', {
+      token: tokenAdmin, input: { opciones: { copias: 0 } }
+    }))
+    expect(invalida.code).toBe('VALIDATION')
   })
 
   it('cambia de empresa sin pedir contraseña y emite un token nuevo', async () => {

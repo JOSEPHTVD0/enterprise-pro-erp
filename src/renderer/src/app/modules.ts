@@ -27,6 +27,7 @@ import {
   Gauge,
   Map,
   Wrench,
+  Printer,
   type LucideIcon
 } from 'lucide-react'
 
@@ -99,9 +100,24 @@ export const moduleGroups: ModuleGroup[] = [
         description: 'Permisos explicados, ajustes auditados y módulos de la empresa.',
         features: [
           'Editor de permisos por rol con descripción y confirmación de críticos',
-          'Diez grupos de ajustes operativos con validación en backend',
+          'Trece grupos de ajustes operativos con validación en backend',
           'Widgets visibles, ordenables y con intervalo de actualización',
           'Tema avanzado y activación de módulos opcionales'
+        ]
+      },
+      {
+        id: 'centro-impresion',
+        label: 'Centro de impresión',
+        icon: Printer,
+        permission: 'configuracion.consultar',
+        phase: 15,
+        available: true,
+        description: 'Impresoras del sistema, configuración por documento e impresión de lotes.',
+        features: [
+          'Detección de impresoras conectadas al equipo con nombre real del sistema',
+          'Selección de impresora general y por tipo de documento',
+          'Impresión silenciosa o con diálogo según cada documento',
+          'Impresión individual y por lotes desde documentos existentes'
         ]
       },
       {

@@ -117,7 +117,10 @@ function isTrusted(event: Electron.IpcMainInvokeEvent): boolean {
  */
 function registrarRouterConLibrosFiscales(
   db: Db,
-  opciones: { instanciasActivas?: () => number } = {}
+  opciones: {
+    instanciasActivas?: () => number
+    webContents?: () => Electron.WebContents | null
+  } = {}
 ): void {
   const original = ipcMain.handle
   const registrar = ipcMain.handle.bind(ipcMain)
@@ -242,7 +245,10 @@ app.whenReady().then(() => {
   if (liderato.esLider && debeBuscarAlIniciar(loadSettings().actualizaciones, app.isPackaged)) {
     setTimeout(() => { void actualizaciones?.verificar().catch(() => undefined) }, 8_000).unref()
   }
-  registrarRouterConLibrosFiscales(db, { instanciasActivas: registroInstancia.activas })
+  registrarRouterConLibrosFiscales(db, {
+    instanciasActivas: registroInstancia.activas,
+    webContents: () => mainWindow?.webContents ?? null
+  })
   createWindow()
 
   app.on('activate', () => {

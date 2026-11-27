@@ -76,9 +76,8 @@ export function aplicarMascaramientoRnc(activo: boolean): void {
 
 /**
  * Aplica al documento las preferencias que el motor de impresión de Chromium
- * puede honorar: margen de página y visibilidad de logo/pie. Impresora, copias
- * e impresión automática quedan expuestas como estado del documento para que
- * las vistas no prometan un control que el renderer no posee.
+ * puede honorar: margen de página y visibilidad de logo/pie. La impresora,
+ * copias, color y modo se envían al proceso principal desde `lib/impresion`.
  */
 export function aplicarPreferenciasImpresion(
   settings: Settings = useAppStore.getState().settings, mascararRnc = false

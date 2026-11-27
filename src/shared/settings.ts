@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { conDefaultsDeObjetoVacio } from './schemas/defaults'
 import { formatosImpresion } from './schemas/ventas'
+import { modosImpresion, orientacionesImpresion } from './schemas/impresion'
 
 /**
  * Preferencias persistidas en disco (proceso principal). Las políticas duras de
@@ -25,12 +26,20 @@ export const settingsSchema = z.object({
       (valor) => valor === 'TICKET80' ? 'TICKET_80' : valor === 'TICKET58' ? 'TICKET_58' : valor,
       z.enum(formatosImpresion).default('CARTA')
     ),
-    impresora: z.string().max(120).default(''),
+    impresora: z.string().max(200).default(''),
+    modo: z.enum(modosImpresion).default('DIALOGO'),
+    /** Impresora elegida por tipo de documento; prevalece sobre la general. */
+    impresorasPorDocumento: z.record(z.string(), z.string().max(200)).default({}),
+    /** Modo (silencioso o diálogo) por tipo de documento; prevalece sobre el general. */
+    modosPorDocumento: z.record(z.string(), z.enum(modosImpresion)).default({}),
     impresionAutomatica: z.boolean().default(false),
     incluirLogo: z.boolean().default(true),
     incluirPie: z.boolean().default(true),
     copias: z.number().int().min(1).max(5).default(1),
-    margenMm: z.number().int().min(5).max(30).default(12)
+    margenMm: z.number().int().min(5).max(30).default(12),
+    color: z.boolean().default(true),
+    fondo: z.boolean().default(true),
+    orientacion: z.enum(orientacionesImpresion).default('VERTICAL')
   })),
   actualizaciones: conDefaultsDeObjetoVacio(z.object({
     canal: z.enum(['ESTABLE', 'BETA']).default('ESTABLE'),

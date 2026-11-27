@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
+import { imprimirDocumento } from '@/lib/impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { formatoGuardado } from '@/lib/formato-impresion'
 import { descargarArchivo } from '@/features/inventario/descargar'
@@ -132,7 +133,9 @@ export function CotizacionesPage(): React.JSX.Element {
     try {
       const formato = await formatoGuardado(tipo)
       setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id, formato }))
-      window.setTimeout(() => window.print(), 80)
+      if (!await imprimirDocumento('COTIZACION', { formato })) {
+        toast.warning('La impresión fue cancelada.')
+      }
     } catch (error) { toast.error(errorInfo(error).message) }
   }
 

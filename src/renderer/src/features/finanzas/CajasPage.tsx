@@ -11,7 +11,8 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { confirmarAccion, money, titleSi, usePreferenciasInterfaz } from '@/lib/format'
-import { formatoPreferido, opcionesImpresion } from '@/lib/formato-impresion'
+import { formatoPreferido, normalizarFormato, opcionesImpresion } from '@/lib/formato-impresion'
+import { imprimirDocumento } from '@/lib/impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { AreaImpresionFinanzas } from './AreaImpresionFinanzas'
 import {
@@ -186,7 +187,9 @@ export function CajasPage(): React.JSX.Element {
       && !confirmarAccion('¿Enviar este comprobante a la impresora configurada?')) return
     try {
       setImpresion(await window.api.invoke<DatosImpresionFinanzas>('cajas.imprimir.datos', { id, formato }))
-      window.setTimeout(() => window.print(), 80)
+      if (!await imprimirDocumento('CAJA', { formato: normalizarFormato(formato) })) {
+        toast.warning('La impresión fue cancelada.')
+      }
     } catch (error) {
       toast.error(errorInfo(error).message)
     }

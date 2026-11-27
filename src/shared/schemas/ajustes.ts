@@ -210,7 +210,7 @@ export const elementosOcultables = [
 
 /** Vistas del menú que se pueden renombrar sin alterar permisos ni rutas. */
 export const vistasPersonalizables = [
-  'dashboard', 'apariencia', 'dashboard-ejecutivo', 'centro-control', 'inteligencia', 'agenda',
+  'dashboard', 'apariencia', 'dashboard-ejecutivo', 'centro-control', 'centro-impresion', 'inteligencia', 'agenda',
   'facturacion', 'pos', 'cotizaciones', 'cobros', 'compras', 'productos', 'inventario', 'control-stock',
   'clientes', 'proveedores', 'vendedores', 'catalogos', 'cxc', 'cxp', 'bancos', 'cajas',
   'gastos', 'contabilidad', 'reportes', 'presupuestos', 'servicios', 'activos', 'crm',

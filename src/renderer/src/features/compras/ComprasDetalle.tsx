@@ -109,7 +109,7 @@ export function DetalleCompra({
 }
 
 /**
- * Área de impresión nativa de Electron (`window.print()` → webContents.print).
+ * Área de impresión nativa de Electron (`webContents.print` vía IPC seguro).
  * No genera PDF por librería: usa el motor de impresión del sistema.
  */
 export function AreaImpresionCompra({ datos }: { datos: DatosImpresionCompra | null }): React.JSX.Element | null {

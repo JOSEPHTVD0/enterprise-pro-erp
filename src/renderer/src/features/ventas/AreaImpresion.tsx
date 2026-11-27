@@ -2,7 +2,7 @@ import { money, number } from '@/lib/format'
 import { num, txt, type DatosImpresion } from './types'
 
 /**
- * Área de impresión nativa de Electron (`window.print()` → webContents.print).
+ * Área de impresión nativa de Electron (`webContents.print` vía IPC seguro).
  * No genera PDF por librería: usa el motor de impresión del sistema.
  */
 export function AreaImpresion({ datos }: { datos: DatosImpresion | null }): React.JSX.Element | null {

@@ -24,6 +24,7 @@ import { RolesPage } from '@/features/usuarios/RolesPage'
 import { ConfiguracionPage } from '@/features/configuracion/ConfiguracionPage'
 import { ConfiguracionAvanzadaPage } from '@/features/configuracion/ConfiguracionAvanzadaPage'
 import { CentroControlPage } from '@/features/configuracion/CentroControlPage'
+import { CentroImpresionPage } from '@/features/impresion/CentroImpresionPage'
 import { InteligenciaOperativaPage } from '@/features/inteligencia/InteligenciaOperativaPage'
 import { AgendaPage } from '@/features/agenda/AgendaPage'
 import { SaludPage } from '@/features/sistema/SaludPage'
@@ -99,6 +100,7 @@ function ActiveView(): React.JSX.Element {
   if (activeView === 'configuracion') return <ConfiguracionPage />
   if (activeView === 'configuracion-avanzada') return <ConfiguracionAvanzadaPage />
   if (activeView === 'centro-control') return <CentroControlPage />
+  if (activeView === 'centro-impresion') return <CentroImpresionPage />
   if (activeView === 'inteligencia') return <InteligenciaOperativaPage />
   if (activeView === 'agenda') return <AgendaPage />
   if (activeView === 'salud') return <SaludPage />

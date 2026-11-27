@@ -11,6 +11,8 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
+import { normalizarFormato } from '@/lib/formato-impresion'
+import { imprimirDocumento } from '@/lib/impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { descargarArchivo } from '@/features/inventario/descargar'
 import { AreaImpresionFinanzas } from './AreaImpresionFinanzas'
@@ -200,7 +202,9 @@ export function CxcPage(): React.JSX.Element {
       setImpresion(await window.api.invoke<DatosImpresionFinanzas>('cxc.imprimir.datos', {
         id, formato, tipo: tab === 'recibos' ? 'RECIBO' : 'DOCUMENTO'
       }))
-      window.setTimeout(() => window.print(), 80)
+      if (!await imprimirDocumento(tab === 'recibos' ? 'RECIBO' : 'COBRO', { formato: normalizarFormato(formato) })) {
+        toast.warning('La impresión fue cancelada.')
+      }
     } catch (error) {
       toast.error(errorInfo(error).message)
     }

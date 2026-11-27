@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
+import { imprimirDocumento } from '@/lib/impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { formatoGuardado } from '@/lib/formato-impresion'
 import { AreaImpresion } from './AreaImpresion'
@@ -177,7 +178,9 @@ export function PosPage(): React.JSX.Element {
     try {
       const formato = await formatoGuardado('POS', 'TICKET_80')
       setImpresion(await window.api.invoke<DatosImpresion>('ventas.imprimir.datos', { id: ultima.id, formato }))
-      window.setTimeout(() => window.print(), 80)
+      if (!await imprimirDocumento('POS', { formato })) {
+        toast.warning('La impresión fue cancelada.')
+      }
     } catch (error) {
       toast.error(errorInfo(error).message)
     }

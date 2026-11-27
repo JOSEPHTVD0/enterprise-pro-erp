@@ -26,7 +26,7 @@ describe('catálogo de módulos', () => {
     const active = allModules.filter((m) => m.available).map((m) => m.id)
     expect(active.sort()).toEqual([
       'activos', 'agenda', 'apariencia', 'auditoria', 'bancos', 'cajas', 'capacidades-2026',
-      'catalogos', 'centro-control', 'clientes', 'cobros', 'compras', 'configuracion',
+      'catalogos', 'centro-control', 'centro-impresion', 'clientes', 'cobros', 'compras', 'configuracion',
       'configuracion-avanzada', 'contabilidad', 'control-stock', 'cotizaciones', 'crm', 'cxc', 'cxp',
       'dashboard', 'dashboard-ejecutivo', 'espacio-trabajo', 'facturacion', 'gastos', 'inteligencia',
       'inventario', 'panel-2026', 'panel-comercial', 'pos', 'presupuestos', 'productos', 'proveedores', 'reportes', 'respaldos',

@@ -11,6 +11,8 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { money } from '@/lib/format'
+import { normalizarFormato } from '@/lib/formato-impresion'
+import { imprimirDocumento } from '@/lib/impresion'
 import { guardarPdf } from '@/lib/pdf'
 import { AreaImpresionFinanzas } from './AreaImpresionFinanzas'
 import {
@@ -192,7 +194,9 @@ export function BancosPage(): React.JSX.Element {
   async function imprimir(id: number): Promise<void> {
     try {
       setImpresion(await window.api.invoke<DatosImpresionFinanzas>('bancos.imprimir.datos', { id, formato }))
-      window.setTimeout(() => window.print(), 80)
+      if (!await imprimirDocumento('BANCO', { formato: normalizarFormato(formato) })) {
+        toast.warning('La impresión fue cancelada.')
+      }
     } catch (error) {
       toast.error(errorInfo(error).message)
     }

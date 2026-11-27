@@ -39,6 +39,7 @@ const dominioDeVista: Record<string, string> = {
   catalogos: 'configuracion',
   'configuracion-avanzada': 'configuracion',
   'centro-control': 'configuracion',
+  'centro-impresion': 'configuracion',
   usuarios: 'seguridad',
   roles: 'seguridad',
   inteligencia: 'inteligencia',

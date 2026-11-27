@@ -389,6 +389,25 @@ test('un perfil con ajustes parciales no deja la interfaz en negro', async () =>
   expect(hijos).toBeGreaterThan(0)
 })
 
+test('el centro de impresión detecta impresoras reales y prepara lotes', async () => {
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await menu.getByRole('button', { name: 'Centro de impresión', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Centro de impresión' })).toBeVisible()
+  await expect(page.getByText('Impresoras detectadas')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Imprimir lote (0)' })).toBeVisible()
+  const impresoras = await page.evaluate(async () => window.api.invoke('impresoras.listar'))
+  expect(Array.isArray(impresoras)).toBe(true)
+})
+
+test('la configuración avanzada ofrece impresora y modo por documento', async () => {
+  const menu = page.getByRole('navigation', { name: 'Módulos' })
+  await menu.getByRole('button', { name: 'Configuración avanzada', exact: true }).click()
+  await page.getByRole('button', { name: 'Impresión y PDF', exact: true }).click()
+  await expect(page.getByText('Configuración por documento')).toBeVisible()
+  await expect(page.getByLabel('Impresora para Facturas y notas de venta')).toBeVisible()
+  await expect(page.getByLabel('Modo para Punto de venta')).toBeVisible()
+})
+
 test('sin errores de consola inesperados', async () => {
   expect(erroresConsola).toEqual([])
 })

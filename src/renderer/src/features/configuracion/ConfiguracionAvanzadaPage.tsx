@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Save, RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { defaultSettings, type Settings } from '@shared/settings'
+import type { ImpresoraInfo } from '@shared/schemas/impresion'
 import { useAppStore } from '@/app/store'
+import { SelectorImpresora } from '@/components/impresion/SelectorImpresora'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
-import { Field, NumberInput, TextInput, inputClass } from '@/components/ui/Field'
+import { Field, NumberInput, inputClass } from '@/components/ui/Field'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Tabs, TabPanel } from '@/components/ui/Tabs'
 import { toast } from '@/components/ui/Toast'
 import { normalizarFormato } from '@/lib/formato-impresion'
+import { listarImpresoras, tiposDocumentoImpresion } from '@/lib/impresion'
 
 type GrupoObjeto = Exclude<keyof Settings, 'theme' | 'sidebarCollapsed'>
 
@@ -88,9 +91,21 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
   const [tab, setTab] = useState('interfaz')
   const [borrador, setBorrador] = useState<Settings>(() => useAppStore.getState().settings)
   const [guardado, setGuardado] = useState(false)
+  const [impresoras, setImpresoras] = useState<ImpresoraInfo[]>([])
+  const [detectando, setDetectando] = useState(false)
+
+  const detectarImpresoras = async (): Promise<void> => {
+    setDetectando(true)
+    try {
+      setImpresoras(await listarImpresoras())
+    } finally {
+      setDetectando(false)
+    }
+  }
 
   useEffect(() => {
     window.api.settings.get().then(setBorrador).catch(() => setBorrador(defaultSettings))
+    void detectarImpresoras()
   }, [])
 
   const cambiar = (grupo: GrupoObjeto, clave: string, valor: unknown): void => {
@@ -126,6 +141,14 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
   const bool = (g: GrupoObjeto, k: string): boolean => Boolean((borrador[g] as Record<string, unknown>)[k])
   const num = (g: GrupoObjeto, k: string): number => Number((borrador[g] as Record<string, unknown>)[k])
   const txt = (g: GrupoObjeto, k: string): string => String((borrador[g] as Record<string, unknown>)[k] ?? '')
+  const mapa = (clave: 'impresorasPorDocumento' | 'modosPorDocumento'): Record<string, string> =>
+    (borrador.impresion[clave] ?? {}) as Record<string, string>
+  const cambiarMapa = (clave: 'impresorasPorDocumento' | 'modosPorDocumento', id: string, valor: string): void => {
+    const actual = { ...mapa(clave) }
+    if (valor) actual[id] = valor
+    else delete actual[id]
+    cambiar('impresion', clave, actual)
+  }
 
   return (
     <div className="animate-fade-in">
@@ -183,27 +206,100 @@ export function ConfiguracionAvanzadaPage(): React.JSX.Element {
 
       {tab === 'impresion' && (
         <TabPanel>
-          <Card title="Impresión y PDF" subtitle="Formatos y comportamiento de documentos e informes.">
+          <Card
+            title="Impresión y PDF"
+            subtitle="Impresoras detectadas en este equipo, modos y formatos por documento."
+            actions={
+              <Button variant="secondary" size="sm"
+                onClick={() => useAppStore.getState().setActiveView('impresion')}>
+                Abrir centro de impresión
+              </Button>
+            }
+          >
             <div className="grid gap-4 md:grid-cols-2">
+              <SelectorImpresora
+                label="Impresora preferida"
+                value={txt('impresion', 'impresora')}
+                impresoras={impresoras}
+                detectando={detectando}
+                onDetectar={() => void detectarImpresoras()}
+                onChange={(nombre) => cambiar('impresion', 'impresora', nombre)}
+              />
+              <Opcion label="Modo de impresión" value={txt('impresion', 'modo')}
+                options={[
+                  { value: 'DIALOGO', label: 'Diálogo del sistema' },
+                  { value: 'SILENCIOSA', label: 'Silenciosa (sin diálogo)' }
+                ]}
+                onChange={(v) => cambiar('impresion', 'modo', v)}
+                hint="El modo se puede sobrescribir por tipo de documento más abajo." />
               <Opcion label="Formato por defecto" value={normalizarFormato(txt('impresion', 'formato'))}
                 options={[
                   { value: 'CARTA', label: 'Carta' }, { value: 'MEDIA', label: 'Media página' },
                   { value: 'TICKET_80', label: 'Ticket 80 mm' }, { value: 'TICKET_58', label: 'Ticket 58 mm' }
                 ]}
                 onChange={(v) => cambiar('impresion', 'formato', v)} />
-              <Field label="Impresora preferida" hint="Nombre lógico; si está vacía se usa la predeterminada del sistema.">
-                <TextInput value={txt('impresion', 'impresora')} onChange={(e) => cambiar('impresion', 'impresora', e.target.value)} />
-              </Field>
+              <Opcion label="Orientación" value={txt('impresion', 'orientacion')}
+                options={[{ value: 'VERTICAL', label: 'Vertical' }, { value: 'HORIZONTAL', label: 'Horizontal' }]}
+                onChange={(v) => cambiar('impresion', 'orientacion', v)} />
               <Numero label="Copias" value={num('impresion', 'copias')} min={1} max={5}
                 onChange={(v) => cambiar('impresion', 'copias', v)} />
               <Numero label="Margen (mm)" value={num('impresion', 'margenMm')} min={5} max={30}
                 onChange={(v) => cambiar('impresion', 'margenMm', v)} />
               <Interruptor label="Imprimir automáticamente" value={bool('impresion', 'impresionAutomatica')}
-                onChange={(v) => cambiar('impresion', 'impresionAutomatica', v)} />
+                onChange={(v) => cambiar('impresion', 'impresionAutomatica', v)}
+                hint="Omite la confirmación en caja." />
+              <Interruptor label="Color" value={bool('impresion', 'color')}
+                onChange={(v) => cambiar('impresion', 'color', v)} />
+              <Interruptor label="Imprimir fondos" value={bool('impresion', 'fondo')}
+                onChange={(v) => cambiar('impresion', 'fondo', v)} />
               <Interruptor label="Incluir logo" value={bool('impresion', 'incluirLogo')}
                 onChange={(v) => cambiar('impresion', 'incluirLogo', v)} />
               <Interruptor label="Incluir pie de página legal" value={bool('impresion', 'incluirPie')}
                 onChange={(v) => cambiar('impresion', 'incluirPie', v)} />
+            </div>
+          </Card>
+
+          <Card title="Configuración por documento" subtitle="Si se elige una opción, prevalece sobre la preferencia general.">
+            <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-800">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs uppercase text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2">Documento</th>
+                    <th className="px-3 py-2">Impresora</th>
+                    <th className="px-3 py-2">Modo</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {tiposDocumentoImpresion.map((tipo) => (
+                    <tr key={tipo.id}>
+                      <td className="px-3 py-2">{tipo.label}</td>
+                      <td className="px-3 py-2">
+                        <select className={inputClass}
+                          aria-label={`Impresora para ${tipo.label}`}
+                          value={mapa('impresorasPorDocumento')[tipo.id] ?? ''}
+                          onChange={(e) => cambiarMapa('impresorasPorDocumento', tipo.id, e.target.value)}>
+                          <option value="">Usar la general</option>
+                          {impresoras.map((impresora) => (
+                            <option key={impresora.name} value={impresora.name}>
+                              {impresora.displayName || impresora.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2">
+                        <select className={inputClass}
+                          aria-label={`Modo para ${tipo.label}`}
+                          value={mapa('modosPorDocumento')[tipo.id] ?? ''}
+                          onChange={(e) => cambiarMapa('modosPorDocumento', tipo.id, e.target.value)}>
+                          <option value="">Usar el general</option>
+                          <option value="DIALOGO">Diálogo del sistema</option>
+                          <option value="SILENCIOSA">Silenciosa</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </Card>
         </TabPanel>

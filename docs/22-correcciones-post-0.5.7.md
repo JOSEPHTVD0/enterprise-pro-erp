@@ -103,16 +103,18 @@ seguros.
 - Feed público sin cambios: `URL_FEED_PUBLICADO` en `src/shared/actualizaciones.ts`, con
   `ERP_UPDATE_URL` como sustitución opcional.
 
-## 4. Claves que siguen sin consumidor directo
+## 4. Claves de impresión (actualizado en 0.5.15)
 
-Se documenta para no prometer más de lo que hace:
+Desde 0.5.15 estas preferencias se consumen de verdad mediante el servicio nativo:
 
-- `impresion.impresora` e `integraciones.impresoraTicket`: el renderer usa
-  `window.print()` y el IPC de PDF no acepta impresora; el backend resuelve la impresora.
-- `impresion.copias`: no hay campo de copias en el IPC ni API de impresión desde renderer;
-  solo se refleja como dato en el área de impresión.
-- `impresion.impresionAutomatica`: evita la confirmación manual donde existe; no dispara
-  impresión desatendida del sistema operativo desde el renderer.
+- `impresion.impresora` e `impresion.impresorasPorDocumento`: se envían como
+  `deviceName` a `webContents.print` después de detectar las impresoras del equipo.
+- `impresion.modo` e `impresion.modosPorDocumento`: `SILENCIOSA` envía directamente
+  a la impresora elegida; `DIALOGO` abre el diálogo del sistema con esa impresora.
+- `impresion.copias`, `color`, `fondo` y `orientacion`: se validan por Zod y se envían
+  al proceso principal; no se simulan copias en la impresión nativa.
+- `impresion.impresionAutomatica`: sigue evitando la confirmación manual donde existe;
+  la impresión desatendida se controla con el modo `SILENCIOSA`.
 - `impresion.incluirLogo` / `incluirPie`: se aplican al `.print-area`; el servicio PDF del
   backend conserva su propio logo/pie.
 - `alertas.presupuestoPct`: no hay fuente real de porcentaje de presupuesto en las vistas

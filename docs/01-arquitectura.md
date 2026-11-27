@@ -49,7 +49,7 @@ Aplicación de escritorio Electron con tres procesos/capas:
 | Área | Elección | Justificación |
 |---|---|---|
 | Shell escritorio | Electron + **electron-vite** | Build rápido, HMR, empaquetado main/preload/renderer estándar. |
-| UI | React 18 + TypeScript + Tailwind CSS | Requisitos del proyecto; componentes propios reutilizables. |
+| UI | React 19 + TypeScript + Tailwind CSS | Requisitos del proyecto; componentes propios reutilizables. |
 | Estado UI | Zustand (ligero) + React Query para datos IPC | Caché, invalidación y estados de carga consistentes. |
 | **Acceso a BD** | **better-sqlite3** + migraciones SQL versionadas + repositorios tipados | ⚠️ Alternativa a Prisma (permitida por el brief). Prisma añade un motor binario pesado, es asíncrono y complica transacciones síncronas atómicas en Electron. better-sqlite3 es síncrono, rapidísimo, permite `db.transaction()` real y simplifica el costo promedio y el kardex. SQL 100 % parametrizado (anti-inyección). |
 | Validación | Zod (esquemas compartidos `shared/schemas`) | Un solo esquema valida en renderer (formularios) y main (IPC). |
@@ -57,10 +57,10 @@ Aplicación de escritorio Electron con tres procesos/capas:
 | Cantidades | REAL con 4 decimales + unidad de medida | Soporta granel/peso; validado por Zod. |
 | Contraseñas | `crypto.scrypt` (N=16384) + salt aleatorio | Nativo de Node, sin dependencias, resistente. |
 | Sesiones | Token en memoria del main; renderer solo lo referencia | Expiración por inactividad configurable; bloqueo de usuario. |
-| PDF | `window.print()` + CSS `@media print` | Implementado y probado; pdfmake sigue aprobado pero **no instalado**. Plantillas carta/media página/ticket 80 mm/58 mm, offline. |
+| PDF e impresión | `webContents.print` vía IPC seguro + CSS `@media print`; pdfmake para descargas PDF | Detecta impresoras reales, permite impresión silenciosa o con diálogo y lotes. Plantillas carta/media página/ticket 80 mm/58 mm, offline. |
 | Excel/CSV | ExcelJS + export CSV propio | Importación de productos y export de reportes. |
 | Gráficos | Recharts · Iconos: Lucide | Requisitos del proyecto. |
-| Pruebas | Vitest (services/repos sobre SQLite real) + CDP de Electron para UI real | Las reglas financieras se prueban sin mocks de BD. Playwright sigue aprobado pero **no instalado**; no se añadió dependencia solo para e2e. |
+| Pruebas | Vitest (services/repos sobre SQLite real) + Playwright/CDP de Electron para UI real | Las reglas financieras se prueban sin mocks de BD; las E2E usan el ERP empaquetado en modo dev. |
 | Instalador | electron-builder@26.18.1 → NSIS (Win 10/11 x64) | Instala en `%LOCALAPPDATA%\Programs`, datos en `%APPDATA%\enterprise-pro-erp`, desinstalación pregunta antes de borrarlos. Implementado en Fase 12 y actualizado en 0.3.0. |
 
 ## 4. Estructura de carpetas propuesta
